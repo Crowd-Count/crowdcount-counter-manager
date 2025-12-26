@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useMemo, useCallback } from "react";
+import { useEffect, useState, useMemo, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useDevices } from "@/contexts/DevicesContext";
@@ -31,6 +31,11 @@ interface ChartData {
   average?: number;
 }
 
+interface DeviceCredentials {
+  deviceId: string;
+  password: string;
+}
+
 // Format date string (YYYY-MM-DD) for display without timezone issues
 function formatDateForDisplay(dateStr: string): string {
   const [year, month, day] = dateStr.split("-");
@@ -41,6 +46,17 @@ function formatDateForDisplay(dateStr: string): string {
 export default function AggregateHistoryPage() {
   const router = useRouter();
   const { devices, isLoading } = useDevices();
+
+  // Store stable credentials to prevent re-fetching when device state updates from polling
+  const credentialsRef = useRef<DeviceCredentials[]>([]);
+  if (devices.length >= 2 && credentialsRef.current.length === 0) {
+    credentialsRef.current = devices.map((d) => ({
+      deviceId: d.deviceId,
+      password: d.password,
+    }));
+  }
+  const credentials = credentialsRef.current;
+  const deviceCount = devices.length;
 
   // Available dates (intersection of all devices)
   const [availableDates, setAvailableDates] = useState<string[]>([]);
@@ -70,13 +86,13 @@ export default function AggregateHistoryPage() {
 
   // Load available dates from all devices
   const loadAvailableDates = useCallback(async () => {
-    if (devices.length < 2) return;
+    if (credentials.length < 2) return;
     setIsLoadingDates(true);
     try {
       // Get dates from all devices
       const allDatesArrays = await Promise.all(
-        devices.map((device) =>
-          api.getAvailableDates(device.deviceId, device.password)
+        credentials.map((cred) =>
+          api.getAvailableDates(cred.deviceId, cred.password)
         )
       );
 
@@ -101,26 +117,26 @@ export default function AggregateHistoryPage() {
     } finally {
       setIsLoadingDates(false);
     }
-  }, [devices]);
+  }, [credentials]);
 
   useEffect(() => {
-    if (devices.length >= 2) {
+    if (credentials.length >= 2) {
       loadAvailableDates();
     }
-  }, [devices, loadAvailableDates]);
+  }, [credentials, loadAvailableDates]);
 
   // Load aggregated day data
   const loadDayData = useCallback(async () => {
-    if (devices.length < 2 || !selectedDate) return;
+    if (credentials.length < 2 || !selectedDate) return;
     setIsLoadingDay(true);
     try {
       // Fetch data from all devices
       const allData = await Promise.all(
-        devices.map(async (device) => {
+        credentials.map(async (cred) => {
           try {
             const [data, avgData] = await Promise.all([
-              api.getDayData(device.deviceId, device.password, selectedDate),
-              api.getAverageDayData(device.deviceId, device.password, selectedDate),
+              api.getDayData(cred.deviceId, cred.password, selectedDate),
+              api.getAverageDayData(cred.deviceId, cred.password, selectedDate),
             ]);
             return { data, avgData };
           } catch {
@@ -154,25 +170,25 @@ export default function AggregateHistoryPage() {
     } finally {
       setIsLoadingDay(false);
     }
-  }, [devices, selectedDate]);
+  }, [credentials, selectedDate]);
 
   useEffect(() => {
-    if (devices.length >= 2 && selectedDate) {
+    if (credentials.length >= 2 && selectedDate) {
       loadDayData();
     }
-  }, [devices, selectedDate, loadDayData]);
+  }, [credentials, selectedDate, loadDayData]);
 
   // Load aggregated week data
   const loadWeekData = useCallback(async () => {
-    if (devices.length < 2 || !selectedWeekDate) return;
+    if (credentials.length < 2 || !selectedWeekDate) return;
     setIsLoadingWeek(true);
     try {
       const allData = await Promise.all(
-        devices.map(async (device) => {
+        credentials.map(async (cred) => {
           try {
             const [data, avgData] = await Promise.all([
-              api.getWeekData(device.deviceId, device.password, selectedWeekDate),
-              api.getAverageWeekData(device.deviceId, device.password, selectedWeekDate),
+              api.getWeekData(cred.deviceId, cred.password, selectedWeekDate),
+              api.getAverageWeekData(cred.deviceId, cred.password, selectedWeekDate),
             ]);
             return { data, avgData };
           } catch {
@@ -219,26 +235,26 @@ export default function AggregateHistoryPage() {
     } finally {
       setIsLoadingWeek(false);
     }
-  }, [devices, selectedWeekDate]);
+  }, [credentials, selectedWeekDate]);
 
   useEffect(() => {
-    if (devices.length >= 2 && selectedWeekDate) {
+    if (credentials.length >= 2 && selectedWeekDate) {
       loadWeekData();
     }
-  }, [devices, selectedWeekDate, loadWeekData]);
+  }, [credentials, selectedWeekDate, loadWeekData]);
 
   // Load aggregated year data
   const loadYearData = useCallback(async () => {
-    if (devices.length < 2 || !selectedYear) return;
+    if (credentials.length < 2 || !selectedYear) return;
     setIsLoadingYear(true);
     try {
       const dateStr = `${selectedYear}-01-01`;
       const allData = await Promise.all(
-        devices.map(async (device) => {
+        credentials.map(async (cred) => {
           try {
             const [data, avgData] = await Promise.all([
-              api.getYearData(device.deviceId, device.password, dateStr),
-              api.getAverageYearData(device.deviceId, device.password, dateStr),
+              api.getYearData(cred.deviceId, cred.password, dateStr),
+              api.getAverageYearData(cred.deviceId, cred.password, dateStr),
             ]);
             return { data, avgData };
           } catch {
@@ -292,13 +308,13 @@ export default function AggregateHistoryPage() {
     } finally {
       setIsLoadingYear(false);
     }
-  }, [devices, selectedYear]);
+  }, [credentials, selectedYear]);
 
   useEffect(() => {
-    if (devices.length >= 2 && selectedYear) {
+    if (credentials.length >= 2 && selectedYear) {
       loadYearData();
     }
-  }, [devices, selectedYear, loadYearData]);
+  }, [credentials, selectedYear, loadYearData]);
 
   // Get available years from dates
   const availableYears = useMemo(() => {

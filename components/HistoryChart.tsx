@@ -1,15 +1,15 @@
 "use client";
 
 import {
-  BarChart,
+  ComposedChart,
   Bar,
+  Line,
   XAxis,
   YAxis,
   CartesianGrid,
   Tooltip,
   Legend,
   ResponsiveContainer,
-  ReferenceLine,
 } from "recharts";
 
 interface ChartData {
@@ -39,7 +39,7 @@ export function HistoryChart({ data }: HistoryChartProps) {
   return (
     <div className="h-[300px] w-full">
       <ResponsiveContainer width="100%" height="100%">
-        <BarChart
+        <ComposedChart
           data={data}
           margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
         >
@@ -73,19 +73,21 @@ export function HistoryChart({ data }: HistoryChartProps) {
           <Bar
             dataKey="value"
             name="Count"
-            fill="hsl(var(--primary))"
+            fill="#3b82f6"
             radius={[4, 4, 0, 0]}
           />
           {hasAverage && (
-            <Bar
+            <Line
+              type="monotone"
               dataKey="average"
               name="Average"
-              fill="hsl(var(--muted-foreground))"
-              opacity={0.5}
-              radius={[4, 4, 0, 0]}
+              stroke="#f97316"
+              strokeWidth={2}
+              dot={{ fill: "#f97316", strokeWidth: 2, r: 4 }}
+              activeDot={{ r: 6 }}
             />
           )}
-        </BarChart>
+        </ComposedChart>
       </ResponsiveContainer>
     </div>
   );

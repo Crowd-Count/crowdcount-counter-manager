@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useMemo, useCallback } from "react";
+import { useEffect, useState, useMemo, useCallback, useRef } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { useDevices } from "@/contexts/DevicesContext";
@@ -44,6 +44,13 @@ export default function HistoryPage() {
   const { getDevice } = useDevices();
   const device = getDevice(deviceId);
 
+  // Store stable credentials to prevent re-fetching when device state updates from polling
+  const credentialsRef = useRef<{ deviceId: string; password: string } | null>(null);
+  if (device && !credentialsRef.current) {
+    credentialsRef.current = { deviceId: device.deviceId, password: device.password };
+  }
+  const credentials = credentialsRef.current;
+
   // Available dates
   const [availableDates, setAvailableDates] = useState<string[]>([]);
   const [isLoadingDates, setIsLoadingDates] = useState(true);
@@ -65,10 +72,10 @@ export default function HistoryPage() {
 
   // Load available dates
   const loadAvailableDates = useCallback(async () => {
-    if (!device) return;
+    if (!credentials) return;
     setIsLoadingDates(true);
     try {
-      const dates = await api.getAvailableDates(device.deviceId, device.password);
+      const dates = await api.getAvailableDates(credentials.deviceId, credentials.password);
       setAvailableDates(dates);
       if (dates.length > 0) {
         // Set most recent date as default
@@ -84,22 +91,22 @@ export default function HistoryPage() {
     } finally {
       setIsLoadingDates(false);
     }
-  }, [device]);
+  }, [credentials]);
 
   useEffect(() => {
-    if (device) {
+    if (credentials) {
       loadAvailableDates();
     }
-  }, [device, loadAvailableDates]);
+  }, [credentials, loadAvailableDates]);
 
   // Load day data
   const loadDayData = useCallback(async () => {
-    if (!device || !selectedDate) return;
+    if (!credentials || !selectedDate) return;
     setIsLoadingDay(true);
     try {
       const [data, avgData] = await Promise.all([
-        api.getDayData(device.deviceId, device.password, selectedDate),
-        api.getAverageDayData(device.deviceId, device.password, selectedDate),
+        api.getDayData(credentials.deviceId, credentials.password, selectedDate),
+        api.getAverageDayData(credentials.deviceId, credentials.password, selectedDate),
       ]);
 
       // Create chart data for each hour (0-23)
@@ -119,22 +126,22 @@ export default function HistoryPage() {
     } finally {
       setIsLoadingDay(false);
     }
-  }, [device, selectedDate]);
+  }, [credentials, selectedDate]);
 
   useEffect(() => {
-    if (device && selectedDate) {
+    if (credentials && selectedDate) {
       loadDayData();
     }
-  }, [device, selectedDate, loadDayData]);
+  }, [credentials, selectedDate, loadDayData]);
 
   // Load week data
   const loadWeekData = useCallback(async () => {
-    if (!device || !selectedWeekDate) return;
+    if (!credentials || !selectedWeekDate) return;
     setIsLoadingWeek(true);
     try {
       const [data, avgData] = await Promise.all([
-        api.getWeekData(device.deviceId, device.password, selectedWeekDate),
-        api.getAverageWeekData(device.deviceId, device.password, selectedWeekDate),
+        api.getWeekData(credentials.deviceId, credentials.password, selectedWeekDate),
+        api.getAverageWeekData(credentials.deviceId, credentials.password, selectedWeekDate),
       ]);
 
       // Days of week in order
@@ -169,24 +176,24 @@ export default function HistoryPage() {
     } finally {
       setIsLoadingWeek(false);
     }
-  }, [device, selectedWeekDate]);
+  }, [credentials, selectedWeekDate]);
 
   useEffect(() => {
-    if (device && selectedWeekDate) {
+    if (credentials && selectedWeekDate) {
       loadWeekData();
     }
-  }, [device, selectedWeekDate, loadWeekData]);
+  }, [credentials, selectedWeekDate, loadWeekData]);
 
   // Load year data
   const loadYearData = useCallback(async () => {
-    if (!device || !selectedYear) return;
+    if (!credentials || !selectedYear) return;
     setIsLoadingYear(true);
     try {
       // Use first day of selected year for the API call
       const dateStr = `${selectedYear}-01-01`;
       const [data, avgData] = await Promise.all([
-        api.getYearData(device.deviceId, device.password, dateStr),
-        api.getAverageYearData(device.deviceId, device.password, dateStr),
+        api.getYearData(credentials.deviceId, credentials.password, dateStr),
+        api.getAverageYearData(credentials.deviceId, credentials.password, dateStr),
       ]);
 
       // Months in order
@@ -226,13 +233,13 @@ export default function HistoryPage() {
     } finally {
       setIsLoadingYear(false);
     }
-  }, [device, selectedYear]);
+  }, [credentials, selectedYear]);
 
   useEffect(() => {
-    if (device && selectedYear) {
+    if (credentials && selectedYear) {
       loadYearData();
     }
-  }, [device, selectedYear, loadYearData]);
+  }, [credentials, selectedYear, loadYearData]);
 
   // Get available years from dates
   const availableYears = useMemo(() => {
@@ -245,15 +252,15 @@ export default function HistoryPage() {
 
   // Handle CSV export
   const handleExport = async (date?: string) => {
-    if (!device) return;
+    if (!credentials) return;
     try {
-      const blob = await api.exportCsv(device.deviceId, device.password, date);
+      const blob = await api.exportCsv(credentials.deviceId, credentials.password, date);
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
       a.download = date
-        ? `${device.deviceId}-${date}.csv`
-        : `${device.deviceId}-all.zip`;
+        ? `${credentials.deviceId}-${date}.csv`
+        : `${credentials.deviceId}-all.zip`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
