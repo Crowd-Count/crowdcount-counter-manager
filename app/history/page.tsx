@@ -243,77 +243,67 @@ export default function AggregateHistoryPage() {
     }
   }, [credentials, selectedWeekDate, loadWeekData]);
 
-  // Load aggregated year data
+  // Load aggregated year data by aggregating daily data for each month
   const loadYearData = useCallback(async () => {
     if (credentials.length < 2 || !selectedYear) return;
     setIsLoadingYear(true);
     try {
-      const dateStr = `${selectedYear}-01-01`;
-      const allData = await Promise.all(
-        credentials.map(async (cred) => {
-          try {
-            const [data, avgData] = await Promise.all([
-              api.getYearData(cred.deviceId, cred.password, dateStr),
-              api.getAverageYearData(cred.deviceId, cred.password, dateStr),
-            ]);
-            return { data, avgData };
-          } catch {
-            return { data: {}, avgData: null };
-          }
-        })
+      // Filter dates for the selected year
+      const yearDates = availableDates.filter((date) =>
+        date.startsWith(selectedYear)
       );
 
-      // Months in order with various possible key formats
-      const monthsConfig = [
-        { name: "January", keys: ["January", "january", "Jan", "jan", "1", "01"] },
-        { name: "February", keys: ["February", "february", "Feb", "feb", "2", "02"] },
-        { name: "March", keys: ["March", "march", "Mar", "mar", "3", "03"] },
-        { name: "April", keys: ["April", "april", "Apr", "apr", "4", "04"] },
-        { name: "May", keys: ["May", "may", "5", "05"] },
-        { name: "June", keys: ["June", "june", "Jun", "jun", "6", "06"] },
-        { name: "July", keys: ["July", "july", "Jul", "jul", "7", "07"] },
-        { name: "August", keys: ["August", "august", "Aug", "aug", "8", "08"] },
-        { name: "September", keys: ["September", "september", "Sep", "sep", "9", "09"] },
-        { name: "October", keys: ["October", "october", "Oct", "oct", "10"] },
-        { name: "November", keys: ["November", "november", "Nov", "nov", "11"] },
-        { name: "December", keys: ["December", "december", "Dec", "dec", "12"] },
+      // Fetch day data for all dates from all devices
+      const allDayData = await Promise.all(
+        yearDates.flatMap((date) =>
+          credentials.map(async (cred) => {
+            try {
+              const [data, avgData] = await Promise.all([
+                api.getDayData(cred.deviceId, cred.password, date),
+                api.getAverageDayData(cred.deviceId, cred.password, date),
+              ]);
+              const month = parseInt(date.split("-")[1], 10);
+              const dayTotal = Object.values(data).reduce(
+                (sum: number, val) => sum + (val as number),
+                0
+              );
+              const avgTotal = Object.values(avgData).reduce(
+                (sum: number, val) => sum + (val as number),
+                0
+              );
+              return { month, dayTotal, avgTotal };
+            } catch {
+              return null;
+            }
+          })
+        )
+      );
+
+      // Aggregate by month
+      const monthTotals: Record<number, { value: number; average: number; count: number }> = {};
+      allDayData.forEach((dayData) => {
+        if (dayData) {
+          if (!monthTotals[dayData.month]) {
+            monthTotals[dayData.month] = { value: 0, average: 0, count: 0 };
+          }
+          monthTotals[dayData.month].value += dayData.dayTotal;
+          monthTotals[dayData.month].average += dayData.avgTotal;
+          monthTotals[dayData.month].count += 1;
+        }
+      });
+
+      const months = [
+        "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+        "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
       ];
 
-      const chartData: ChartData[] = monthsConfig.map(({ name, keys }) => {
-        let totalValue = 0;
-        let totalAverage = 0;
-
-        allData.forEach(({ data, avgData }) => {
-          // Find data using any matching key
-          let monthDays: Record<string, number> = {};
-          for (const key of keys) {
-            if (data[key]) {
-              monthDays = data[key];
-              break;
-            }
-          }
-
-          const monthTotal = Object.values(monthDays).reduce(
-            (sum: number, val) => sum + (val as number),
-            0
-          );
-          totalValue += monthTotal;
-
-          // Find average using any matching key
-          if (avgData) {
-            for (const key of keys) {
-              if (avgData[key] !== undefined) {
-                totalAverage += avgData[key];
-                break;
-              }
-            }
-          }
-        });
-
+      const chartData: ChartData[] = months.map((month, index) => {
+        const monthNum = index + 1;
+        const totals = monthTotals[monthNum];
         return {
-          label: name.substring(0, 3),
-          value: totalValue,
-          average: totalAverage,
+          label: month,
+          value: totals?.value || 0,
+          average: totals?.average || 0,
         };
       });
 
@@ -324,7 +314,7 @@ export default function AggregateHistoryPage() {
     } finally {
       setIsLoadingYear(false);
     }
-  }, [credentials, selectedYear]);
+  }, [credentials, selectedYear, availableDates]);
 
   useEffect(() => {
     if (credentials.length >= 2 && selectedYear) {

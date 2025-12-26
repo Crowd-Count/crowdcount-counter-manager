@@ -69,7 +69,7 @@ export default function LoginPage() {
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
-          <CardTitle className="text-3xl font-bold">CrowdCount</CardTitle>
+          <CardTitle className="text-3xl font-bold">CrowdCount Counter Manager</CardTitle>
           <CardDescription>
             Enter your device credentials to get started
           </CardDescription>
