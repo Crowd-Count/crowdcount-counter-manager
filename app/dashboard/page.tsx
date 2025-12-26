@@ -24,6 +24,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { DeviceCard } from "@/components/DeviceCard";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import {
   Plus,
   RefreshCw,
@@ -111,6 +112,7 @@ export default function DashboardPage() {
           <div className="flex items-center justify-between">
             <h1 className="text-2xl font-bold">CrowdCount</h1>
             <div className="flex items-center gap-2">
+              <ThemeToggle />
               <Button
                 variant="outline"
                 size="icon"
@@ -203,6 +205,12 @@ export default function DashboardPage() {
                     Limit: {totalOvercrowding}
                   </p>
                 )}
+                <Button variant="outline" size="sm" className="mt-4" asChild>
+                  <Link href="/history">
+                    <BarChart3 className="h-4 w-4 mr-1" />
+                    View Total History
+                  </Link>
+                </Button>
               </div>
             </CardContent>
           </Card>

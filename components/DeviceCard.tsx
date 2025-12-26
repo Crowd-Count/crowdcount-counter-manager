@@ -136,7 +136,7 @@ export function DeviceCard({ device }: DeviceCardProps) {
             {device.isOnline ? (
               <Wifi className="h-4 w-4 text-green-500" />
             ) : (
-              <WifiOff className="h-4 w-4 text-muted-foreground" />
+              <WifiOff className="h-4 w-4 text-red-500" />
             )}
           </div>
         </div>

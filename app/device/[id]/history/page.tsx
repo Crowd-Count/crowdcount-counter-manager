@@ -22,6 +22,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { HistoryChart } from "@/components/HistoryChart";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { ArrowLeft, Download, RefreshCw } from "lucide-react";
 
 interface ChartData {
@@ -280,18 +281,21 @@ export default function HistoryPage() {
       {/* Header */}
       <header className="border-b">
         <div className="container mx-auto px-4 py-4">
-          <div className="flex items-center gap-4">
-            <Button variant="ghost" size="icon" asChild>
-              <Link href="/dashboard">
-                <ArrowLeft className="h-4 w-4" />
-              </Link>
-            </Button>
-            <div>
-              <h1 className="text-xl font-bold">
-                {device.name || device.deviceId} History
-              </h1>
-              <p className="text-sm text-muted-foreground">{device.deviceId}</p>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <Button variant="ghost" size="icon" asChild>
+                <Link href="/dashboard">
+                  <ArrowLeft className="h-4 w-4" />
+                </Link>
+              </Button>
+              <div>
+                <h1 className="text-xl font-bold">
+                  {device.name || device.deviceId} History
+                </h1>
+                <p className="text-sm text-muted-foreground">{device.deviceId}</p>
+              </div>
             </div>
+            <ThemeToggle />
           </div>
         </div>
       </header>
