@@ -56,7 +56,7 @@ export default function DashboardPage() {
     setAddError("");
     setIsAdding(true);
 
-    const trimmedDeviceId = newDeviceId.trim().toUpperCase();
+    const trimmedDeviceId = newDeviceId.trim();
     const trimmedPassword = newPassword.trim();
 
     if (!trimmedDeviceId || !trimmedPassword) {

@@ -34,7 +34,7 @@ export default function LoginPage() {
     setError("");
     setIsSubmitting(true);
 
-    const trimmedDeviceId = deviceId.trim().toUpperCase();
+    const trimmedDeviceId = deviceId.trim();
     const trimmedPassword = password.trim();
 
     if (!trimmedDeviceId || !trimmedPassword) {
