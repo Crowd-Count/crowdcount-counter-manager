@@ -212,12 +212,7 @@ export default function AggregateHistoryPage() {
         let totalAverage = 0;
 
         allData.forEach(({ data, avgData }) => {
-          const dayHours = data[day] || {};
-          const dayTotal = Object.values(dayHours).reduce(
-            (sum: number, val) => sum + (val as number),
-            0
-          );
-          totalValue += dayTotal;
+          totalValue += data[day] || 0;
           totalAverage += avgData[day] || 0;
         });
 
@@ -243,67 +238,57 @@ export default function AggregateHistoryPage() {
     }
   }, [credentials, selectedWeekDate, loadWeekData]);
 
-  // Load aggregated year data by aggregating daily data for each month
+  // Load aggregated year data
   const loadYearData = useCallback(async () => {
     if (credentials.length < 2 || !selectedYear) return;
     setIsLoadingYear(true);
     try {
-      // Filter dates for the selected year
-      const yearDates = availableDates.filter((date) =>
-        date.startsWith(selectedYear)
-      );
-
-      // Fetch day data for all dates from all devices
-      const allDayData = await Promise.all(
-        yearDates.flatMap((date) =>
-          credentials.map(async (cred) => {
-            try {
-              const [data, avgData] = await Promise.all([
-                api.getDayData(cred.deviceId, cred.password, date),
-                api.getAverageDayData(cred.deviceId, cred.password, date),
-              ]);
-              const month = parseInt(date.split("-")[1], 10);
-              const dayTotal = Object.values(data).reduce(
-                (sum: number, val) => sum + (val as number),
-                0
-              );
-              const avgTotal = Object.values(avgData).reduce(
-                (sum: number, val) => sum + (val as number),
-                0
-              );
-              return { month, dayTotal, avgTotal };
-            } catch {
-              return null;
-            }
-          })
-        )
-      );
-
-      // Aggregate by month
-      const monthTotals: Record<number, { value: number; average: number; count: number }> = {};
-      allDayData.forEach((dayData) => {
-        if (dayData) {
-          if (!monthTotals[dayData.month]) {
-            monthTotals[dayData.month] = { value: 0, average: 0, count: 0 };
+      const yearNum = parseInt(selectedYear, 10);
+      const allData = await Promise.all(
+        credentials.map(async (cred) => {
+          try {
+            const [data, avgData] = await Promise.all([
+              api.getYearData(cred.deviceId, cred.password, yearNum),
+              api.getAverageYearData(cred.deviceId, cred.password, yearNum),
+            ]);
+            return { data, avgData };
+          } catch {
+            return { data: {}, avgData: null };
           }
-          monthTotals[dayData.month].value += dayData.dayTotal;
-          monthTotals[dayData.month].average += dayData.avgTotal;
-          monthTotals[dayData.month].count += 1;
-        }
-      });
+        })
+      );
 
+      // Months in order
       const months = [
-        "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-        "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+        "January",
+        "February",
+        "March",
+        "April",
+        "May",
+        "June",
+        "July",
+        "August",
+        "September",
+        "October",
+        "November",
+        "December",
       ];
 
-      const chartData: ChartData[] = months.map((month, index) => {
-        const monthNum = index + 1;
-        const totals = monthTotals[monthNum];
+      const chartData: ChartData[] = months.map((month) => {
+        let totalValue = 0;
+        let totalAverage = 0;
+
+        allData.forEach(({ data, avgData }) => {
+          totalValue += data[month] || 0;
+          if (avgData) {
+            totalAverage += avgData[month] || 0;
+          }
+        });
+
         return {
-          label: month,
-          value: totals?.value || 0,
-          average: totals?.average || 0,
+          label: month.substring(0, 3),
+          value: totalValue,
+          average: totalAverage,
         };
       });
 
@@ -314,7 +299,7 @@ export default function AggregateHistoryPage() {
     } finally {
       setIsLoadingYear(false);
     }
-  }, [credentials, selectedYear, availableDates]);
+  }, [credentials, selectedYear]);
 
   useEffect(() => {
     if (credentials.length >= 2 && selectedYear) {

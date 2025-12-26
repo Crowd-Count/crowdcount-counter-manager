@@ -156,15 +156,9 @@ export default function HistoryPage() {
       ];
 
       const chartData: ChartData[] = daysOfWeek.map((day) => {
-        // Sum all hours for each day
-        const dayHours = data[day] || {};
-        const dayTotal = Object.values(dayHours).reduce(
-          (sum: number, val) => sum + (val as number),
-          0
-        );
         return {
           label: day.substring(0, 3),
-          value: dayTotal,
+          value: data[day] || 0,
           average: avgData[day] || 0,
         };
       });
@@ -184,75 +178,38 @@ export default function HistoryPage() {
     }
   }, [credentials, selectedWeekDate, loadWeekData]);
 
-  // Load year data by aggregating daily data for each month
+  // Load year data
   const loadYearData = useCallback(async () => {
     if (!credentials || !selectedYear) return;
     setIsLoadingYear(true);
     try {
-      // Filter dates for the selected year
-      const yearDates = availableDates.filter((date) =>
-        date.startsWith(selectedYear)
-      );
+      const yearNum = parseInt(selectedYear, 10);
+      const [data, avgData] = await Promise.all([
+        api.getYearData(credentials.deviceId, credentials.password, yearNum),
+        api.getAverageYearData(credentials.deviceId, credentials.password, yearNum),
+      ]);
 
-      // Group dates by month
-      const datesByMonth: Record<number, string[]> = {};
-      yearDates.forEach((date) => {
-        const month = parseInt(date.split("-")[1], 10);
-        if (!datesByMonth[month]) {
-          datesByMonth[month] = [];
-        }
-        datesByMonth[month].push(date);
-      });
-
-      // Fetch day data for all dates in the year
-      const allDayData = await Promise.all(
-        yearDates.map(async (date) => {
-          try {
-            const [data, avgData] = await Promise.all([
-              api.getDayData(credentials.deviceId, credentials.password, date),
-              api.getAverageDayData(credentials.deviceId, credentials.password, date),
-            ]);
-            const month = parseInt(date.split("-")[1], 10);
-            const dayTotal = Object.values(data).reduce(
-              (sum: number, val) => sum + (val as number),
-              0
-            );
-            const avgTotal = Object.values(avgData).reduce(
-              (sum: number, val) => sum + (val as number),
-              0
-            );
-            return { month, dayTotal, avgTotal };
-          } catch {
-            return null;
-          }
-        })
-      );
-
-      // Aggregate by month
-      const monthTotals: Record<number, { value: number; average: number; count: number }> = {};
-      allDayData.forEach((dayData) => {
-        if (dayData) {
-          if (!monthTotals[dayData.month]) {
-            monthTotals[dayData.month] = { value: 0, average: 0, count: 0 };
-          }
-          monthTotals[dayData.month].value += dayData.dayTotal;
-          monthTotals[dayData.month].average += dayData.avgTotal;
-          monthTotals[dayData.month].count += 1;
-        }
-      });
-
+      // Months in order
       const months = [
-        "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-        "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+        "January",
+        "February",
+        "March",
+        "April",
+        "May",
+        "June",
+        "July",
+        "August",
+        "September",
+        "October",
+        "November",
+        "December",
       ];
 
-      const chartData: ChartData[] = months.map((month, index) => {
-        const monthNum = index + 1;
-        const totals = monthTotals[monthNum];
+      const chartData: ChartData[] = months.map((month) => {
         return {
-          label: month,
-          value: totals?.value || 0,
-          average: totals?.average || 0,
+          label: month.substring(0, 3),
+          value: data[month] || 0,
+          average: avgData ? avgData[month] || 0 : 0,
         };
       });
 
@@ -263,7 +220,7 @@ export default function HistoryPage() {
     } finally {
       setIsLoadingYear(false);
     }
-  }, [credentials, selectedYear, availableDates]);
+  }, [credentials, selectedYear]);
 
   useEffect(() => {
     if (credentials && selectedYear) {

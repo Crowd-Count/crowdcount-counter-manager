@@ -27,14 +27,14 @@ export default function RootLayout({
               {" | "}
               <a
                 href="https://crowdcount.tech/legal/privacy-policy.html"
-                className="text-primary hover:underline"
+                className="text-secondary-foreground hover:underline"
               >
                 Privacy Policy
               </a>
               {" | "}
               <a
                 href="https://crowdcount.tech/legal/terms-of-use.html"
-                className="text-primary hover:underline"
+                className="text-secondary-foreground hover:underline"
               >
                 Terms of Use
               </a>

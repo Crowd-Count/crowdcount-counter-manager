@@ -273,7 +273,7 @@ export async function getWeekData(
   deviceId: string,
   password: string,
   date: string
-): Promise<Record<string, Record<string, number>>> {
+): Promise<Record<string, number>> {
   const response = await apiRequest<WeekDataResponse>("/get_week_data", {
     method: "POST",
     body: JSON.stringify({ device_id: deviceId, password, date }),
@@ -300,11 +300,11 @@ export async function getAverageWeekData(
 export async function getYearData(
   deviceId: string,
   password: string,
-  date: string
-): Promise<Record<string, Record<string, number>>> {
+  year: number
+): Promise<Record<string, number>> {
   const response = await apiRequest<YearDataResponse>("/get_year_data", {
     method: "POST",
-    body: JSON.stringify({ device_id: deviceId, password, date }),
+    body: JSON.stringify({ device_id: deviceId, password, year }),
   });
   return response.year_data;
 }
@@ -312,13 +312,13 @@ export async function getYearData(
 export async function getAverageYearData(
   deviceId: string,
   password: string,
-  date: string
+  year: number
 ): Promise<Record<string, number> | null> {
   const response = await apiRequest<AverageYearDataResponse>(
     "/get_average_year_data",
     {
       method: "POST",
-      body: JSON.stringify({ device_id: deviceId, password, date }),
+      body: JSON.stringify({ device_id: deviceId, password, year }),
     }
   );
   if (typeof response.average_year_data === "string") {

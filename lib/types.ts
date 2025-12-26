@@ -62,7 +62,7 @@ export interface AverageDayDataResponse {
 }
 
 export interface WeekDataResponse {
-  week_data: Record<string, Record<string, number>>;
+  week_data: Record<string, number>;
 }
 
 export interface AverageWeekDataResponse {
@@ -70,7 +70,7 @@ export interface AverageWeekDataResponse {
 }
 
 export interface YearDataResponse {
-  year_data: Record<string, Record<string, number>>;
+  year_data: Record<string, number>;
 }
 
 export interface AverageYearDataResponse {
