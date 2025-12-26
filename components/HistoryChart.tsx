@@ -83,7 +83,7 @@ export function HistoryChart({ data }: HistoryChartProps) {
               name="Average"
               stroke="#f97316"
               strokeWidth={2}
-              dot={{ fill: "#f97316", strokeWidth: 2, r: 4 }}
+              dot={false}
               activeDot={{ r: 6 }}
             />
           )}

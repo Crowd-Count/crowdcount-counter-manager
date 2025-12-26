@@ -263,39 +263,55 @@ export default function AggregateHistoryPage() {
         })
       );
 
-      const months = [
-        "January",
-        "February",
-        "March",
-        "April",
-        "May",
-        "June",
-        "July",
-        "August",
-        "September",
-        "October",
-        "November",
-        "December",
+      // Months in order with various possible key formats
+      const monthsConfig = [
+        { name: "January", keys: ["January", "january", "Jan", "jan", "1", "01"] },
+        { name: "February", keys: ["February", "february", "Feb", "feb", "2", "02"] },
+        { name: "March", keys: ["March", "march", "Mar", "mar", "3", "03"] },
+        { name: "April", keys: ["April", "april", "Apr", "apr", "4", "04"] },
+        { name: "May", keys: ["May", "may", "5", "05"] },
+        { name: "June", keys: ["June", "june", "Jun", "jun", "6", "06"] },
+        { name: "July", keys: ["July", "july", "Jul", "jul", "7", "07"] },
+        { name: "August", keys: ["August", "august", "Aug", "aug", "8", "08"] },
+        { name: "September", keys: ["September", "september", "Sep", "sep", "9", "09"] },
+        { name: "October", keys: ["October", "october", "Oct", "oct", "10"] },
+        { name: "November", keys: ["November", "november", "Nov", "nov", "11"] },
+        { name: "December", keys: ["December", "december", "Dec", "dec", "12"] },
       ];
 
-      const chartData: ChartData[] = months.map((month) => {
+      const chartData: ChartData[] = monthsConfig.map(({ name, keys }) => {
         let totalValue = 0;
         let totalAverage = 0;
 
         allData.forEach(({ data, avgData }) => {
-          const monthDays = data[month] || {};
+          // Find data using any matching key
+          let monthDays: Record<string, number> = {};
+          for (const key of keys) {
+            if (data[key]) {
+              monthDays = data[key];
+              break;
+            }
+          }
+
           const monthTotal = Object.values(monthDays).reduce(
             (sum: number, val) => sum + (val as number),
             0
           );
           totalValue += monthTotal;
+
+          // Find average using any matching key
           if (avgData) {
-            totalAverage += avgData[month] || 0;
+            for (const key of keys) {
+              if (avgData[key] !== undefined) {
+                totalAverage += avgData[key];
+                break;
+              }
+            }
           }
         });
 
         return {
-          label: month.substring(0, 3),
+          label: name.substring(0, 3),
           value: totalValue,
           average: totalAverage,
         };
