@@ -177,6 +177,16 @@ export default function DashboardPage() {
       </header>
 
       <main className="container mx-auto px-4 py-6">
+        {/* iOS app disclaimer */}
+        <div className="mb-4 p-3 bg-muted/50 rounded-lg border">
+          <p className="text-xs text-muted-foreground text-center">
+            Note: Most features are currently only available in the iOS app. Download it on the App Store{" "}
+            <a href="https://crowdcount.tech/app" className="underline hover:text-foreground" target="_blank" rel="noopener noreferrer">
+              here
+            </a>.
+          </p>
+        </div>
+
         {/* Total count card (show when multiple devices) */}
         {devices.length > 1 && (
           <Card className="mb-6">

@@ -110,6 +110,12 @@ export default function LoginPage() {
               {isSubmitting ? "Connecting..." : "Add Device"}
             </Button>
           </form>
+          <p className="text-xs text-muted-foreground text-center mt-4 px-2">
+            Note: Most features are currently only available in the iOS app. Download it on the App Store{" "}
+            <a href="https://crowdcount.tech/app" className="underline hover:text-foreground" target="_blank" rel="noopener noreferrer">
+              here
+            </a>.
+          </p>
         </CardContent>
       </Card>
     </div>
