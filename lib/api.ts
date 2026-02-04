@@ -2,7 +2,6 @@ import type {
   CheckPasswordResponse,
   CurrentCountResponse,
   ConnectionStatusResponse,
-  OvercrowdingExistsResponse,
   OvercrowdingResponse,
   DirectionFlippedResponse,
   AvailableDatesResponse,
@@ -14,6 +13,9 @@ import type {
   AverageWeekDataResponse,
   YearDataResponse,
   AverageYearDataResponse,
+  OvercrowdingGroupResponse,
+  CreateGroupResponse,
+  GroupIdsResponse,
 } from "./types";
 
 const API_BASE_URL = "https://api.crowdcount.tech";
@@ -24,7 +26,8 @@ async function apiRequest<T>(
 ): Promise<T> {
   const url = `${API_BASE_URL}${endpoint}`;
   const response = await fetch(url, {
-    ...options,
+    method: options.method || "GET",
+    body: options.body,
     headers: {
       "Content-Type": "application/json",
       ...options.headers,
@@ -89,15 +92,6 @@ export async function getConnectionStatus(
 }
 
 // Overcrowding
-export async function checkOvercrowdingExists(
-  deviceId: string
-): Promise<boolean> {
-  const response = await apiRequest<OvercrowdingExistsResponse>(
-    `/check_if_overcrowding_exists?device_name=${deviceId}`
-  );
-  return response.overcrowding_exists;
-}
-
 export async function getOvercrowding(
   deviceId: string
 ): Promise<number | null> {
@@ -325,6 +319,68 @@ export async function getAverageYearData(
     return null;
   }
   return response.average_year_data;
+}
+
+// Overcrowding Groups
+export async function createOvercrowdingGroup(
+  deviceIds: string[],
+  limit: number,
+  groupName?: string
+): Promise<string> {
+  const body: Record<string, unknown> = { device_ids: deviceIds, limit };
+  if (groupName) {
+    body.group_name = groupName;
+  }
+  const response = await apiRequest<CreateGroupResponse>(
+    "/create_overcrowding_group",
+    {
+      method: "POST",
+      body: JSON.stringify(body),
+    }
+  );
+  return response.group_id;
+}
+
+export async function updateOvercrowdingGroup(
+  groupId: string,
+  deviceIds?: string[],
+  limit?: number
+): Promise<void> {
+  const body: Record<string, unknown> = { group_id: groupId };
+  if (deviceIds !== undefined) {
+    body.device_ids = deviceIds;
+  }
+  if (limit !== undefined) {
+    body.limit = limit;
+  }
+  await apiRequest("/update_overcrowding_group", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export async function deleteOvercrowdingGroup(groupId: string): Promise<void> {
+  await apiRequest("/delete_overcrowding_group", {
+    method: "POST",
+    body: JSON.stringify({ group_id: groupId }),
+  });
+}
+
+export async function getOvercrowdingGroup(
+  groupId: string
+): Promise<OvercrowdingGroupResponse> {
+  return apiRequest<OvercrowdingGroupResponse>(
+    `/get_overcrowding_group?group_id=${groupId}`
+  );
+}
+
+export async function getGroupIdsForDevice(
+  deviceId: string
+): Promise<string[]> {
+  const response = await apiRequest<GroupIdsResponse>(
+    `/get_groups_for_device?device_id=${deviceId}`
+  );
+  return response.group_ids;
 }
 
 // CSV Export

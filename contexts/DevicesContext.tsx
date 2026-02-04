@@ -120,16 +120,11 @@ export function DevicesProvider({ children }: { children: React.ReactNode }) {
 
   const fetchDeviceData = async (device: StoredDevice): Promise<void> => {
     try {
-      const [count, status, overcrowdingExists] = await Promise.all([
+      const [count, status, overcrowdingLimit] = await Promise.all([
         api.getCurrentCount(device.deviceId),
         api.getConnectionStatus(device.deviceId),
-        api.checkOvercrowdingExists(device.deviceId),
+        api.getOvercrowding(device.deviceId),
       ]);
-
-      let overcrowdingLimit: number | null = null;
-      if (overcrowdingExists) {
-        overcrowdingLimit = await api.getOvercrowding(device.deviceId);
-      }
 
       setDevices((prev) =>
         prev.map((d) =>

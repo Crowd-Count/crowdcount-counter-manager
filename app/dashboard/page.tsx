@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useDevices } from "@/contexts/DevicesContext";
+import { useLocations } from "@/contexts/LocationsContext";
+import { LOCATION_COLORS, type LocationColorName } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -24,25 +26,36 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { DeviceCard } from "@/components/DeviceCard";
+import { LocationCard } from "@/components/LocationCard";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import {
   Plus,
   RefreshCw,
-  Settings,
   BarChart3,
   AlertTriangle,
+  MapPin,
 } from "lucide-react";
 
 export default function DashboardPage() {
   const router = useRouter();
   const { devices, isLoading, addDevice, refreshAllDevices, totalCount } =
     useDevices();
+  const { locations, getUngroupedDeviceIds } = useLocations();
+
+  // Add device dialog state
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [newDeviceId, setNewDeviceId] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [addError, setAddError] = useState("");
   const [isAdding, setIsAdding] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
+
+  // Create location dialog state
+  const [isLocationDialogOpen, setIsLocationDialogOpen] = useState(false);
+  const [newLocationName, setNewLocationName] = useState("");
+  const [newLocationColor, setNewLocationColor] = useState<LocationColorName>("blue");
+  const [selectedDeviceIds, setSelectedDeviceIds] = useState<string[]>([]);
+  const { addLocation } = useLocations();
 
   // Redirect to login if no devices
   useEffect(() => {
@@ -87,6 +100,23 @@ export default function DashboardPage() {
     setIsRefreshing(false);
   };
 
+  const handleCreateLocation = () => {
+    if (!newLocationName.trim()) return;
+    addLocation(newLocationName.trim(), newLocationColor, selectedDeviceIds);
+    setIsLocationDialogOpen(false);
+    setNewLocationName("");
+    setNewLocationColor("blue");
+    setSelectedDeviceIds([]);
+  };
+
+  const toggleDeviceSelection = (deviceId: string) => {
+    setSelectedDeviceIds((prev) =>
+      prev.includes(deviceId)
+        ? prev.filter((id) => id !== deviceId)
+        : [...prev, deviceId]
+    );
+  };
+
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
@@ -103,6 +133,14 @@ export default function DashboardPage() {
   const hasOvercrowding = devices.some((d) => d.overcrowdingLimit !== null);
   const isOverLimit =
     hasOvercrowding && totalOvercrowding > 0 && totalCount > totalOvercrowding;
+
+  const ungroupedDeviceIds = getUngroupedDeviceIds();
+  const ungroupedDevices = devices.filter((d) =>
+    ungroupedDeviceIds.includes(d.id)
+  );
+
+  // Available devices for the create-location dialog (currently ungrouped)
+  const availableForLocation = ungroupedDevices;
 
   return (
     <div className="min-h-screen bg-background">
@@ -123,6 +161,98 @@ export default function DashboardPage() {
                   className={`h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`}
                 />
               </Button>
+
+              {/* Create Location Dialog */}
+              <Dialog
+                open={isLocationDialogOpen}
+                onOpenChange={(open) => {
+                  setIsLocationDialogOpen(open);
+                  if (!open) {
+                    setSelectedDeviceIds([]);
+                    setNewLocationName("");
+                    setNewLocationColor("blue");
+                  }
+                }}
+              >
+                <DialogTrigger asChild>
+                  <Button variant="outline" size="icon">
+                    <MapPin className="h-4 w-4" />
+                  </Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Create Location</DialogTitle>
+                    <DialogDescription>
+                      Group devices into a named location
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="locationName">Name</Label>
+                      <Input
+                        id="locationName"
+                        type="text"
+                        placeholder="e.g., Main Entrance"
+                        value={newLocationName}
+                        onChange={(e) => setNewLocationName(e.target.value)}
+                      />
+                    </div>
+
+                    {/* Color picker */}
+                    <div className="space-y-2">
+                      <Label>Color</Label>
+                      <div className="flex gap-2">
+                        {LOCATION_COLORS.map((color) => (
+                          <button
+                            key={color.name}
+                            type="button"
+                            className={`h-8 w-8 rounded-full border-2 transition-all ${
+                              newLocationColor === color.name
+                                ? "border-foreground scale-110"
+                                : "border-transparent"
+                            }`}
+                            style={{ backgroundColor: color.value }}
+                            onClick={() => setNewLocationColor(color.name as LocationColorName)}
+                          />
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Device selection */}
+                    {availableForLocation.length > 0 && (
+                      <div className="space-y-2">
+                        <Label>Devices (optional)</Label>
+                        <div className="space-y-1 max-h-40 overflow-y-auto border rounded-md p-2">
+                          {availableForLocation.map((device) => (
+                            <button
+                              key={device.id}
+                              type="button"
+                              className={`w-full text-left px-3 py-2 rounded-md text-sm transition-colors ${
+                                selectedDeviceIds.includes(device.id)
+                                  ? "bg-primary text-primary-foreground"
+                                  : "hover:bg-accent"
+                              }`}
+                              onClick={() => toggleDeviceSelection(device.id)}
+                            >
+                              {device.name || device.deviceId}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  <DialogFooter>
+                    <Button
+                      onClick={handleCreateLocation}
+                      disabled={!newLocationName.trim()}
+                    >
+                      Create Location
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+
+              {/* Add Device Dialog */}
               <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
                 <DialogTrigger asChild>
                   <Button variant="outline" size="icon">
@@ -226,12 +356,26 @@ export default function DashboardPage() {
           </Card>
         )}
 
-        {/* Device cards */}
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {devices.map((device) => (
-            <DeviceCard key={device.id} device={device} />
-          ))}
-        </div>
+        {/* Location cards */}
+        {locations.map((location) => (
+          <LocationCard key={location.id} location={location} />
+        ))}
+
+        {/* Ungrouped device cards */}
+        {ungroupedDevices.length > 0 && (
+          <>
+            {locations.length > 0 && (
+              <h2 className="text-lg font-semibold text-muted-foreground mb-4">
+                Ungrouped Devices
+              </h2>
+            )}
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              {ungroupedDevices.map((device) => (
+                <DeviceCard key={device.id} device={device} />
+              ))}
+            </div>
+          </>
+        )}
       </main>
     </div>
   );

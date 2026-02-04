@@ -29,12 +29,8 @@ export interface ConnectionStatusResponse {
   status: "online" | "offline" | "does_not_exist";
 }
 
-export interface OvercrowdingExistsResponse {
-  overcrowding_exists: boolean;
-}
-
 export interface OvercrowdingResponse {
-  overcrowding: number;
+  overcrowding: number | null;
 }
 
 export interface DirectionFlippedResponse {
@@ -88,3 +84,48 @@ export interface ChartDataPoint {
 export type PollInterval = 1 | 3 | 5 | 10 | 15 | 30 | 45 | 60;
 
 export const POLL_INTERVALS: PollInterval[] = [1, 3, 5, 10, 15, 30, 45, 60];
+
+// Location types
+export interface StoredLocation {
+  id: string;
+  name: string;
+  deviceIds: string[]; // Local UUIDs (StoredDevice.id), not server device IDs
+  overcrowdingLimit: number | null;
+  colorName: string;
+  overcrowdingGroupId: string | null;
+}
+
+export interface LocationState extends StoredLocation {
+  totalCount: number;
+  isOverLimit: boolean;
+  allDevicesOnline: boolean;
+  someDevicesOnline: boolean;
+}
+
+export const LOCATION_COLORS = [
+  { name: "red", value: "#ef4444" },
+  { name: "orange", value: "#f97316" },
+  { name: "yellow", value: "#eab308" },
+  { name: "green", value: "#22c55e" },
+  { name: "blue", value: "#3b82f6" },
+  { name: "purple", value: "#a855f7" },
+] as const;
+
+export type LocationColorName = (typeof LOCATION_COLORS)[number]["name"];
+
+// Overcrowding group API types
+export interface OvercrowdingGroupResponse {
+  group_id: string;
+  group_name?: string;
+  device_ids: string[];
+  limit: number;
+  current_total: number;
+}
+
+export interface CreateGroupResponse {
+  group_id: string;
+}
+
+export interface GroupIdsResponse {
+  group_ids: string[];
+}
