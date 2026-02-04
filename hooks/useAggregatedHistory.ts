@@ -161,7 +161,7 @@ export function useAggregatedHistory(
     }
   }, [stableCredentials, loadAvailableDates]);
 
-  // Load all chart data in parallel whenever any selection or dataType changes
+  // Load chart data — fetch devices sequentially to avoid browser connection limits
   useEffect(() => {
     if (stableCredentials.length === 0 || !selectedDate || !selectedWeekDate || !selectedYear) return;
 
@@ -178,56 +178,42 @@ export function useAggregatedHistory(
     setIsLoadingWeek(true);
     setIsLoadingYear(true);
 
-    const fetchDay = Promise.all(
-      stableCredentials.map(async (cred) => {
+    const yearNum = parseInt(selectedYear, 10);
+
+    // Fetch all data for one device at a time (sequential) to stay within browser's 6-connection limit
+    async function fetchAll() {
+      const dayResults: { data: Record<string, number>; avgData: Record<string, number> }[] = [];
+      const weekResults: { data: Record<string, number>; avgData: Record<string, number> }[] = [];
+      const yearResults: { data: Record<string, number>; avgData: Record<string, number> | null }[] = [];
+
+      for (const cred of stableCredentials) {
+        if (cancelled) return;
         try {
-          const [data, avgData] = await Promise.all([
+          const [dayD, dayAvg, weekD, weekAvg, yearD, yearAvg] = await Promise.all([
             getDayFn(cred.deviceId, cred.password, selectedDate),
             getAvgDayFn(cred.deviceId, cred.password, selectedDate),
-          ]);
-          return { data, avgData };
-        } catch {
-          return { data: {}, avgData: {} };
-        }
-      })
-    );
-
-    const fetchWeek = Promise.all(
-      stableCredentials.map(async (cred) => {
-        try {
-          const [data, avgData] = await Promise.all([
             getWeekFn(cred.deviceId, cred.password, selectedWeekDate),
             getAvgWeekFn(cred.deviceId, cred.password, selectedWeekDate),
-          ]);
-          return { data, avgData };
-        } catch {
-          return { data: {}, avgData: {} };
-        }
-      })
-    );
-
-    const yearNum = parseInt(selectedYear, 10);
-    const fetchYear = Promise.all(
-      stableCredentials.map(async (cred) => {
-        try {
-          const [data, avgData] = await Promise.all([
             getYearFn(cred.deviceId, cred.password, yearNum),
             getAvgYearFn(cred.deviceId, cred.password, yearNum),
           ]);
-          return { data, avgData };
+          dayResults.push({ data: dayD, avgData: dayAvg });
+          weekResults.push({ data: weekD, avgData: weekAvg });
+          yearResults.push({ data: yearD, avgData: yearAvg ?? {} });
         } catch {
-          return { data: {}, avgData: null };
+          dayResults.push({ data: {}, avgData: {} });
+          weekResults.push({ data: {}, avgData: {} });
+          yearResults.push({ data: {}, avgData: null });
         }
-      })
-    );
+      }
 
-    Promise.all([fetchDay, fetchWeek, fetchYear])
-      .then(([dayResults, weekResults, yearResults]) => {
-        if (cancelled) return;
-        setDayData(buildDayChart(dayResults));
-        setWeekData(buildWeekChart(weekResults));
-        setYearData(buildYearChart(yearResults));
-      })
+      if (cancelled) return;
+      setDayData(buildDayChart(dayResults));
+      setWeekData(buildWeekChart(weekResults));
+      setYearData(buildYearChart(yearResults));
+    }
+
+    fetchAll()
       .catch((error) => {
         if (cancelled) return;
         console.error("Failed to load chart data:", error);

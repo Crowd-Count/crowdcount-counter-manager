@@ -16,6 +16,7 @@ import {
 import {
   Settings,
   BarChart3,
+  Lightbulb,
   AlertTriangle,
   Wifi,
   WifiOff,
@@ -179,12 +180,20 @@ export function LocationCard({ location }: LocationCardProps) {
               Limit: {location.overcrowdingLimit}
             </p>
           )}
-          <Button variant="outline" size="sm" className="mt-3" asChild>
-            <Link href={`/location/${location.id}/history`}>
-              <BarChart3 className="h-4 w-4 mr-1" />
-              View History
-            </Link>
-          </Button>
+          <div className="flex gap-2 mt-3 justify-center">
+            <Button variant="outline" size="sm" asChild>
+              <Link href={`/location/${location.id}/history`}>
+                <BarChart3 className="h-4 w-4 mr-1" />
+                View History
+              </Link>
+            </Button>
+            <Button variant="outline" size="sm" asChild>
+              <Link href={`/location/${location.id}/insights`}>
+                <Lightbulb className="h-4 w-4 mr-1" />
+                View Insights
+              </Link>
+            </Button>
+          </div>
         </div>
 
         {/* Compact device list */}

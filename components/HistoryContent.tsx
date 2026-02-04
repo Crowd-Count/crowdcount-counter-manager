@@ -109,7 +109,7 @@ export function HistoryContent({
           <TabsTrigger value="entries">Entries</TabsTrigger>
         </TabsList>
 
-        <p className="text-xs text-muted-foreground text-center px-4">
+        <p className="text-xs text-muted-foreground text-center px-4 mt-3">
           {dataType === "population"
             ? "Population shows the number of people present at each point in time."
             : "Entries shows the total number of people who entered during each period."}

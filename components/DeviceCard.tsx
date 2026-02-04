@@ -28,6 +28,7 @@ import {
   Plus,
   Settings,
   BarChart3,
+  Lightbulb,
   AlertTriangle,
   Wifi,
   WifiOff,
@@ -224,6 +225,14 @@ export function DeviceCard({ device, showHistory = true }: DeviceCardProps) {
               <Link href={`/device/${device.id}/history`}>
                 <BarChart3 className="h-4 w-4 mr-1" />
                 History
+              </Link>
+            </Button>
+          )}
+          {showHistory && (
+            <Button variant="outline" size="sm" asChild>
+              <Link href={`/device/${device.id}/insights`}>
+                <Lightbulb className="h-4 w-4 mr-1" />
+                Insights
               </Link>
             </Button>
           )}
