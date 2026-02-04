@@ -14,9 +14,14 @@ export interface DeviceCredentials {
   password: string;
 }
 
+export type DataType = "population" | "entries";
+
 export interface AggregatedHistoryResult {
   availableDates: string[];
   isLoadingDates: boolean;
+  // Data type toggle
+  dataType: DataType;
+  setDataType: (type: DataType) => void;
   // Day
   selectedDate: string;
   setSelectedDate: (date: string) => void;
@@ -44,6 +49,8 @@ export function useAggregatedHistory(
     credentialsRef.current = credentials;
   }
   const stableCredentials = credentialsRef.current;
+
+  const [dataType, setDataType] = useState<DataType>("population");
 
   const [availableDates, setAvailableDates] = useState<string[]>([]);
   const [isLoadingDates, setIsLoadingDates] = useState(true);
@@ -97,7 +104,10 @@ export function useAggregatedHistory(
     }
   }, [stableCredentials, loadAvailableDates]);
 
-  // Load aggregated day data
+  // Day data fetchers
+  const getDayFn = dataType === "entries" ? api.getEntryDayData : api.getDayData;
+  const getAvgDayFn = dataType === "entries" ? api.getAverageEntryDayData : api.getAverageDayData;
+
   const loadDayData = useCallback(async () => {
     if (stableCredentials.length === 0 || !selectedDate) return;
     setIsLoadingDay(true);
@@ -106,8 +116,8 @@ export function useAggregatedHistory(
         stableCredentials.map(async (cred) => {
           try {
             const [data, avgData] = await Promise.all([
-              api.getDayData(cred.deviceId, cred.password, selectedDate),
-              api.getAverageDayData(cred.deviceId, cred.password, selectedDate),
+              getDayFn(cred.deviceId, cred.password, selectedDate),
+              getAvgDayFn(cred.deviceId, cred.password, selectedDate),
             ]);
             return { data, avgData };
           } catch {
@@ -138,7 +148,7 @@ export function useAggregatedHistory(
     } finally {
       setIsLoadingDay(false);
     }
-  }, [stableCredentials, selectedDate]);
+  }, [stableCredentials, selectedDate, getDayFn, getAvgDayFn]);
 
   useEffect(() => {
     if (stableCredentials.length > 0 && selectedDate) {
@@ -146,7 +156,10 @@ export function useAggregatedHistory(
     }
   }, [stableCredentials, selectedDate, loadDayData]);
 
-  // Load aggregated week data
+  // Week data fetchers
+  const getWeekFn = dataType === "entries" ? api.getEntryWeekData : api.getWeekData;
+  const getAvgWeekFn = dataType === "entries" ? api.getAverageEntryWeekData : api.getAverageWeekData;
+
   const loadWeekData = useCallback(async () => {
     if (stableCredentials.length === 0 || !selectedWeekDate) return;
     setIsLoadingWeek(true);
@@ -155,12 +168,8 @@ export function useAggregatedHistory(
         stableCredentials.map(async (cred) => {
           try {
             const [data, avgData] = await Promise.all([
-              api.getWeekData(cred.deviceId, cred.password, selectedWeekDate),
-              api.getAverageWeekData(
-                cred.deviceId,
-                cred.password,
-                selectedWeekDate
-              ),
+              getWeekFn(cred.deviceId, cred.password, selectedWeekDate),
+              getAvgWeekFn(cred.deviceId, cred.password, selectedWeekDate),
             ]);
             return { data, avgData };
           } catch {
@@ -170,13 +179,8 @@ export function useAggregatedHistory(
       );
 
       const daysOfWeek = [
-        "Monday",
-        "Tuesday",
-        "Wednesday",
-        "Thursday",
-        "Friday",
-        "Saturday",
-        "Sunday",
+        "Monday", "Tuesday", "Wednesday", "Thursday",
+        "Friday", "Saturday", "Sunday",
       ];
 
       const chartData: ChartData[] = daysOfWeek.map((day) => {
@@ -200,7 +204,7 @@ export function useAggregatedHistory(
     } finally {
       setIsLoadingWeek(false);
     }
-  }, [stableCredentials, selectedWeekDate]);
+  }, [stableCredentials, selectedWeekDate, getWeekFn, getAvgWeekFn]);
 
   useEffect(() => {
     if (stableCredentials.length > 0 && selectedWeekDate) {
@@ -208,7 +212,10 @@ export function useAggregatedHistory(
     }
   }, [stableCredentials, selectedWeekDate, loadWeekData]);
 
-  // Load aggregated year data
+  // Year data fetchers
+  const getYearFn = dataType === "entries" ? api.getEntryYearData : api.getYearData;
+  const getAvgYearFn = dataType === "entries" ? api.getAverageEntryYearData : api.getAverageYearData;
+
   const loadYearData = useCallback(async () => {
     if (stableCredentials.length === 0 || !selectedYear) return;
     setIsLoadingYear(true);
@@ -218,8 +225,8 @@ export function useAggregatedHistory(
         stableCredentials.map(async (cred) => {
           try {
             const [data, avgData] = await Promise.all([
-              api.getYearData(cred.deviceId, cred.password, yearNum),
-              api.getAverageYearData(cred.deviceId, cred.password, yearNum),
+              getYearFn(cred.deviceId, cred.password, yearNum),
+              getAvgYearFn(cred.deviceId, cred.password, yearNum),
             ]);
             return { data, avgData };
           } catch {
@@ -229,18 +236,9 @@ export function useAggregatedHistory(
       );
 
       const months = [
-        "January",
-        "February",
-        "March",
-        "April",
-        "May",
-        "June",
-        "July",
-        "August",
-        "September",
-        "October",
-        "November",
-        "December",
+        "January", "February", "March", "April",
+        "May", "June", "July", "August",
+        "September", "October", "November", "December",
       ];
 
       const chartData: ChartData[] = months.map((month) => {
@@ -266,7 +264,7 @@ export function useAggregatedHistory(
     } finally {
       setIsLoadingYear(false);
     }
-  }, [stableCredentials, selectedYear]);
+  }, [stableCredentials, selectedYear, getYearFn, getAvgYearFn]);
 
   useEffect(() => {
     if (stableCredentials.length > 0 && selectedYear) {
@@ -285,6 +283,8 @@ export function useAggregatedHistory(
   return {
     availableDates,
     isLoadingDates,
+    dataType,
+    setDataType,
     selectedDate,
     setSelectedDate,
     dayData,

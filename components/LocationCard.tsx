@@ -134,7 +134,7 @@ export function LocationCard({ location }: LocationCardProps) {
               </CardTitle>
               <div className="flex items-center gap-2 mt-0.5">
                 <span className="text-xs text-muted-foreground">
-                  {memberDevices.length} device{memberDevices.length !== 1 ? "s" : ""}
+                  {memberDevices.length} counter{memberDevices.length !== 1 ? "s" : ""}
                 </span>
                 <span className="text-xs">
                   {memberDevices.length === 0 ? (
@@ -191,7 +191,7 @@ export function LocationCard({ location }: LocationCardProps) {
         {memberDevices.length > 0 && (
           <div className="space-y-1.5">
             <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider px-1">
-              Devices
+              Counters
             </p>
             {memberDevices.map((device) => (
               <CompactDeviceRow key={device.id} device={device} />

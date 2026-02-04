@@ -2,18 +2,10 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 import { useDevices } from "@/contexts/DevicesContext";
 import { useLocations } from "@/contexts/LocationsContext";
 import { LOCATION_COLORS, type LocationColorName } from "@/lib/types";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -31,14 +23,12 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 import {
   Plus,
   RefreshCw,
-  BarChart3,
-  AlertTriangle,
   MapPin,
 } from "lucide-react";
 
 export default function DashboardPage() {
   const router = useRouter();
-  const { devices, isLoading, addDevice, refreshAllDevices, totalCount } =
+  const { devices, isLoading, addDevice, refreshAllDevices } =
     useDevices();
   const { locations, getUngroupedDeviceIds } = useLocations();
 
@@ -73,7 +63,7 @@ export default function DashboardPage() {
     const trimmedPassword = newPassword.trim();
 
     if (!trimmedDeviceId || !trimmedPassword) {
-      setAddError("Please enter both Device ID and Password");
+      setAddError("Please enter both Counter ID and Password");
       setIsAdding(false);
       return;
     }
@@ -85,10 +75,10 @@ export default function DashboardPage() {
         setNewDeviceId("");
         setNewPassword("");
       } else {
-        setAddError("Invalid credentials or device already added");
+        setAddError("Invalid credentials or counter already added");
       }
     } catch {
-      setAddError("Failed to add device");
+      setAddError("Failed to add counter");
     } finally {
       setIsAdding(false);
     }
@@ -125,21 +115,12 @@ export default function DashboardPage() {
     );
   }
 
-  // Calculate total overcrowding limit
-  const totalOvercrowding = devices.reduce(
-    (sum, d) => sum + (d.overcrowdingLimit || 0),
-    0
-  );
-  const hasOvercrowding = devices.some((d) => d.overcrowdingLimit !== null);
-  const isOverLimit =
-    hasOvercrowding && totalOvercrowding > 0 && totalCount > totalOvercrowding;
-
   const ungroupedDeviceIds = getUngroupedDeviceIds();
   const ungroupedDevices = devices.filter((d) =>
     ungroupedDeviceIds.includes(d.id)
   );
 
-  // Available devices for the create-location dialog (currently ungrouped)
+  // Available counters for the create-location dialog (currently ungrouped)
   const availableForLocation = ungroupedDevices;
 
   return (
@@ -177,14 +158,14 @@ export default function DashboardPage() {
                 <DialogTrigger asChild>
                   <Button variant="outline">
                     <MapPin className="h-4 w-4 mr-1" />
-                    Group
+                    Group Counters
                   </Button>
                 </DialogTrigger>
                 <DialogContent>
                   <DialogHeader>
                     <DialogTitle>Create Location</DialogTitle>
                     <DialogDescription>
-                      Group devices into a named location
+                      Group counters into a named location
                     </DialogDescription>
                   </DialogHeader>
                   <div className="space-y-4">
@@ -222,7 +203,7 @@ export default function DashboardPage() {
                     {/* Device selection */}
                     {availableForLocation.length > 0 && (
                       <div className="space-y-2">
-                        <Label>Devices (optional)</Label>
+                        <Label>Counters (optional)</Label>
                         <div className="space-y-1 max-h-40 overflow-y-auto border rounded-md p-2">
                           {availableForLocation.map((device) => (
                             <button
@@ -262,14 +243,14 @@ export default function DashboardPage() {
                 </DialogTrigger>
                 <DialogContent>
                   <DialogHeader>
-                    <DialogTitle>Add Device</DialogTitle>
+                    <DialogTitle>Add Counter</DialogTitle>
                     <DialogDescription>
-                      Enter the credentials for your CrowdCount device
+                      Enter the credentials for your CrowdCount counter
                     </DialogDescription>
                   </DialogHeader>
                   <form onSubmit={handleAddDevice} className="space-y-4">
                     <div className="space-y-2">
-                      <Label htmlFor="newDeviceId">Device ID</Label>
+                      <Label htmlFor="newDeviceId">Counter ID</Label>
                       <Input
                         id="newDeviceId"
                         type="text"
@@ -296,7 +277,7 @@ export default function DashboardPage() {
                     )}
                     <DialogFooter>
                       <Button type="submit" disabled={isAdding}>
-                        {isAdding ? "Adding..." : "Add Device"}
+                        {isAdding ? "Adding..." : "Add Counter"}
                       </Button>
                     </DialogFooter>
                   </form>
@@ -308,54 +289,15 @@ export default function DashboardPage() {
       </header>
 
       <main className="container mx-auto px-4 py-6">
-        {/* iOS app disclaimer */}
+        {/* Web disclaimer */}
         <div className="mb-4 p-3 bg-muted/50 rounded-lg border">
           <p className="text-xs text-muted-foreground text-center">
-            Note: Most features are currently only available in the iOS app. Download it on the App Store{" "}
+            Note: Promotions and counter setup are not available on web. Download the iOS app on the App Store{" "}
             <a href="https://crowdcount.tech/app" className="underline hover:text-foreground" target="_blank" rel="noopener noreferrer">
               here
             </a>.
           </p>
         </div>
-
-        {/* Total count card (show when multiple devices) */}
-        {devices.length > 1 && (
-          <Card className="mb-6">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                Total Count
-                {isOverLimit && (
-                  <AlertTriangle className="h-5 w-5 text-destructive" />
-                )}
-              </CardTitle>
-              <CardDescription>
-                Combined count across all {devices.length} devices
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="text-center">
-                <p
-                  className={`text-6xl font-bold ${
-                    isOverLimit ? "text-destructive" : ""
-                  }`}
-                >
-                  {totalCount}
-                </p>
-                {hasOvercrowding && totalOvercrowding > 0 && (
-                  <p className="text-muted-foreground mt-2">
-                    Limit: {totalOvercrowding}
-                  </p>
-                )}
-                <Button variant="outline" size="sm" className="mt-4" asChild>
-                  <Link href="/history">
-                    <BarChart3 className="h-4 w-4 mr-1" />
-                    View Total History
-                  </Link>
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        )}
 
         {/* Location cards */}
         {locations.map((location) => (
@@ -367,7 +309,7 @@ export default function DashboardPage() {
           <>
             {locations.length > 0 && (
               <h2 className="text-lg font-semibold text-muted-foreground mb-4">
-                Ungrouped Devices
+                Ungrouped Counters
               </h2>
             )}
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">

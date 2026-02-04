@@ -130,7 +130,7 @@ export default function LocationSettingsPage() {
                     {location.name} Settings
                   </h1>
                   <p className="text-sm text-muted-foreground">
-                    {memberDevices.length} device{memberDevices.length !== 1 ? "s" : ""}
+                    {memberDevices.length} counter{memberDevices.length !== 1 ? "s" : ""}
                   </p>
                 </div>
               </div>
@@ -146,7 +146,7 @@ export default function LocationSettingsPage() {
           <CardHeader>
             <CardTitle>Location Name</CardTitle>
             <CardDescription>
-              A friendly name for this group of devices
+              A friendly name for this group of counters
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -199,14 +199,14 @@ export default function LocationSettingsPage() {
         {/* Member Devices */}
         <Card>
           <CardHeader>
-            <CardTitle>Devices</CardTitle>
+            <CardTitle>Counters</CardTitle>
             <CardDescription>
-              Devices grouped in this location
+              Counters grouped in this location
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-2">
             {memberDevices.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No devices in this location</p>
+              <p className="text-sm text-muted-foreground">No counters in this location</p>
             ) : (
               memberDevices.map((device) => (
                 <div
@@ -236,7 +236,7 @@ export default function LocationSettingsPage() {
                 {isAddDeviceOpen ? (
                   <div className="border rounded-md p-2 space-y-1">
                     <p className="text-xs text-muted-foreground px-2 pb-1">
-                      Select a device to add:
+                      Select a counter to add:
                     </p>
                     {ungroupedDevices.map((device) => (
                       <button
@@ -270,7 +270,7 @@ export default function LocationSettingsPage() {
                     onClick={() => setIsAddDeviceOpen(true)}
                   >
                     <Plus className="h-4 w-4 mr-1" />
-                    Add Device
+                    Add Counter
                   </Button>
                 )}
               </>
@@ -283,7 +283,7 @@ export default function LocationSettingsPage() {
           <CardHeader>
             <CardTitle>Overcrowding Limit</CardTitle>
             <CardDescription>
-              Set a combined maximum count threshold for all devices in this
+              Set a combined maximum count threshold for all counters in this
               location. Leave empty to disable.
             </CardDescription>
           </CardHeader>
@@ -320,7 +320,7 @@ export default function LocationSettingsPage() {
               <div>
                 <p className="font-medium">Delete Location</p>
                 <p className="text-sm text-muted-foreground">
-                  Ungroups all devices and deletes the server overcrowding group
+                  Ungroups all counters and deletes the server overcrowding group
                   if one exists
                 </p>
               </div>
@@ -336,7 +336,7 @@ export default function LocationSettingsPage() {
                     <AlertDialogTitle>Delete Location?</AlertDialogTitle>
                     <AlertDialogDescription>
                       This will delete the location &quot;{location.name}&quot;. All
-                      devices will be ungrouped. This action cannot be undone.
+                      counters will be ungrouped. This action cannot be undone.
                     </AlertDialogDescription>
                   </AlertDialogHeader>
                   <AlertDialogFooter>

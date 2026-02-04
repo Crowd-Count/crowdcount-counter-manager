@@ -103,7 +103,7 @@ export default function DeviceSettingsPage() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="text-center">
-          <p className="text-muted-foreground mb-4">Device not found</p>
+          <p className="text-muted-foreground mb-4">Counter not found</p>
           <Button asChild>
             <Link href="/dashboard">Back to Dashboard</Link>
           </Button>
@@ -302,7 +302,7 @@ export default function DeviceSettingsPage() {
         <Card>
           <CardHeader>
             <CardTitle>Change Password</CardTitle>
-            <CardDescription>Update your device password</CardDescription>
+            <CardDescription>Update your counter password</CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleChangePassword} className="space-y-4">
@@ -360,10 +360,10 @@ export default function DeviceSettingsPage() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            {/* Reset Device Data */}
+            {/* Reset Counter Data */}
             <div className="flex items-center justify-between">
               <div>
-                <p className="font-medium">Reset Device Data</p>
+                <p className="font-medium">Reset Counter Data</p>
                 <p className="text-sm text-muted-foreground">
                   Clear all historical data and reset the count to zero
                 </p>
@@ -377,7 +377,7 @@ export default function DeviceSettingsPage() {
                 </AlertDialogTrigger>
                 <AlertDialogContent>
                   <AlertDialogHeader>
-                    <AlertDialogTitle>Reset Device Data?</AlertDialogTitle>
+                    <AlertDialogTitle>Reset Counter Data?</AlertDialogTitle>
                     <AlertDialogDescription>
                       This will permanently delete all historical data for{" "}
                       {device.name || device.deviceId} and reset the count to
@@ -397,12 +397,12 @@ export default function DeviceSettingsPage() {
               </AlertDialog>
             </div>
 
-            {/* Remove Device */}
+            {/* Remove Counter */}
             <div className="flex items-center justify-between">
               <div>
-                <p className="font-medium">Remove Device</p>
+                <p className="font-medium">Remove Counter</p>
                 <p className="text-sm text-muted-foreground">
-                  Remove this device from the app (does not delete server data)
+                  Remove this counter from the app (does not delete server data)
                 </p>
               </div>
               <AlertDialog>
@@ -414,7 +414,7 @@ export default function DeviceSettingsPage() {
                 </AlertDialogTrigger>
                 <AlertDialogContent>
                   <AlertDialogHeader>
-                    <AlertDialogTitle>Remove Device?</AlertDialogTitle>
+                    <AlertDialogTitle>Remove Counter?</AlertDialogTitle>
                     <AlertDialogDescription>
                       This will remove {device.name || device.deviceId} from
                       this app. You can add it back later with your credentials.
@@ -426,7 +426,7 @@ export default function DeviceSettingsPage() {
                       onClick={handleRemoveDevice}
                       className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                     >
-                      Remove Device
+                      Remove Counter
                     </AlertDialogAction>
                   </AlertDialogFooter>
                 </AlertDialogContent>

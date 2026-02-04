@@ -38,7 +38,7 @@ export default function LoginPage() {
     const trimmedPassword = password.trim();
 
     if (!trimmedDeviceId || !trimmedPassword) {
-      setError("Please enter both Device ID and Password");
+      setError("Please enter both Counter ID and Password");
       setIsSubmitting(false);
       return;
     }
@@ -48,7 +48,7 @@ export default function LoginPage() {
       if (success) {
         router.push("/dashboard");
       } else {
-        setError("Invalid Device ID or Password");
+        setError("Invalid Counter ID or Password");
       }
     } catch {
       setError("Failed to connect. Please try again.");
@@ -71,13 +71,13 @@ export default function LoginPage() {
         <CardHeader className="text-center">
           <CardTitle className="text-3xl font-bold">CrowdCount Counter Manager</CardTitle>
           <CardDescription>
-            Enter your device credentials to get started
+            Enter your counter credentials to get started
           </CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="deviceId">Device ID</Label>
+              <Label htmlFor="deviceId">Counter ID</Label>
               <Input
                 id="deviceId"
                 type="text"
@@ -107,7 +107,7 @@ export default function LoginPage() {
               className="w-full"
               disabled={isSubmitting}
             >
-              {isSubmitting ? "Connecting..." : "Add Device"}
+              {isSubmitting ? "Connecting..." : "Add Counter"}
             </Button>
           </form>
           <p className="text-xs text-muted-foreground text-center mt-4 px-2">

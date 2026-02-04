@@ -16,6 +16,12 @@ import type {
   OvercrowdingGroupResponse,
   CreateGroupResponse,
   GroupIdsResponse,
+  EntryDayDataResponse,
+  AverageEntryDayDataResponse,
+  EntryWeekDataResponse,
+  AverageEntryWeekDataResponse,
+  EntryYearDataResponse,
+  AverageEntryYearDataResponse,
 } from "./types";
 
 const API_BASE_URL = "https://api.crowdcount.tech";
@@ -319,6 +325,100 @@ export async function getAverageYearData(
     return null;
   }
   return response.average_year_data;
+}
+
+// Entry data
+export async function getEntryDayData(
+  deviceId: string,
+  password: string,
+  date: string
+): Promise<Record<string, number>> {
+  const response = await apiRequest<EntryDayDataResponse>(
+    "/get_entry_day_data",
+    {
+      method: "POST",
+      body: JSON.stringify({ device_id: deviceId, password, date }),
+    }
+  );
+  return response.entry_day_data;
+}
+
+export async function getAverageEntryDayData(
+  deviceId: string,
+  password: string,
+  date: string
+): Promise<Record<string, number>> {
+  const response = await apiRequest<AverageEntryDayDataResponse>(
+    "/get_average_entry_day_data",
+    {
+      method: "POST",
+      body: JSON.stringify({ device_id: deviceId, password, date }),
+    }
+  );
+  return response.average_entry_day_data;
+}
+
+export async function getEntryWeekData(
+  deviceId: string,
+  password: string,
+  date: string
+): Promise<Record<string, number>> {
+  const response = await apiRequest<EntryWeekDataResponse>(
+    "/get_entry_week_data",
+    {
+      method: "POST",
+      body: JSON.stringify({ device_id: deviceId, password, date }),
+    }
+  );
+  return response.entry_week_data;
+}
+
+export async function getAverageEntryWeekData(
+  deviceId: string,
+  password: string,
+  date: string
+): Promise<Record<string, number>> {
+  const response = await apiRequest<AverageEntryWeekDataResponse>(
+    "/get_average_entry_week_data",
+    {
+      method: "POST",
+      body: JSON.stringify({ device_id: deviceId, password, date }),
+    }
+  );
+  return response.average_entry_week_data;
+}
+
+export async function getEntryYearData(
+  deviceId: string,
+  password: string,
+  year: number
+): Promise<Record<string, number>> {
+  const response = await apiRequest<EntryYearDataResponse>(
+    "/get_entry_year_data",
+    {
+      method: "POST",
+      body: JSON.stringify({ device_id: deviceId, password, year }),
+    }
+  );
+  return response.entry_year_data;
+}
+
+export async function getAverageEntryYearData(
+  deviceId: string,
+  password: string,
+  year: number
+): Promise<Record<string, number> | null> {
+  const response = await apiRequest<AverageEntryYearDataResponse>(
+    "/get_average_entry_year_data",
+    {
+      method: "POST",
+      body: JSON.stringify({ device_id: deviceId, password, year }),
+    }
+  );
+  if (typeof response.average_entry_year_data === "string") {
+    return null;
+  }
+  return response.average_entry_year_data;
 }
 
 // Overcrowding Groups

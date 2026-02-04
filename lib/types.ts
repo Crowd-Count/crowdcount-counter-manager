@@ -129,3 +129,28 @@ export interface CreateGroupResponse {
 export interface GroupIdsResponse {
   group_ids: string[];
 }
+
+// Entry data response types
+export interface EntryDayDataResponse {
+  entry_day_data: Record<string, number>;
+}
+
+export interface AverageEntryDayDataResponse {
+  average_entry_day_data: Record<string, number>;
+}
+
+export interface EntryWeekDataResponse {
+  entry_week_data: Record<string, number>;
+}
+
+export interface AverageEntryWeekDataResponse {
+  average_entry_week_data: Record<string, number>;
+}
+
+export interface EntryYearDataResponse {
+  entry_year_data: Record<string, number>;
+}
+
+export interface AverageEntryYearDataResponse {
+  average_entry_year_data: Record<string, number> | string;
+}
