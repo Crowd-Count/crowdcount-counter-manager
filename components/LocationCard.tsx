@@ -2,28 +2,110 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import type { LocationState } from "@/lib/types";
+import type { LocationState, DeviceState } from "@/lib/types";
 import { LOCATION_COLORS } from "@/lib/types";
 import { useDevices } from "@/contexts/DevicesContext";
-import { DeviceCard } from "@/components/DeviceCard";
+import * as api from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import {
-  ChevronDown,
-  ChevronRight,
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import {
   Settings,
   BarChart3,
   AlertTriangle,
   Wifi,
   WifiOff,
+  Minus,
+  Plus,
 } from "lucide-react";
 
 interface LocationCardProps {
   location: LocationState;
 }
 
+function CompactDeviceRow({ device }: { device: DeviceState }) {
+  const { refreshDevice } = useDevices();
+  const [isModifying, setIsModifying] = useState(false);
+
+  const handleIncrement = async () => {
+    setIsModifying(true);
+    try {
+      await api.setCount(device.deviceId, device.password, device.currentCount + 1);
+      await refreshDevice(device.id);
+    } catch (error) {
+      console.error("Failed to increment:", error);
+    } finally {
+      setIsModifying(false);
+    }
+  };
+
+  const handleDecrement = async () => {
+    setIsModifying(true);
+    try {
+      await api.setCount(device.deviceId, device.password, Math.max(0, device.currentCount - 1));
+      await refreshDevice(device.id);
+    } catch (error) {
+      console.error("Failed to decrement:", error);
+    } finally {
+      setIsModifying(false);
+    }
+  };
+
+  return (
+    <div className="flex items-center gap-2 px-3 py-2 rounded-md bg-muted/50">
+      {/* Status dot */}
+      <div
+        className={`h-2 w-2 rounded-full shrink-0 ${
+          device.isOnline ? "bg-green-500" : "bg-red-500"
+        }`}
+      />
+
+      {/* Name */}
+      <span className="text-sm font-medium truncate flex-1 min-w-0">
+        {device.name || device.deviceId}
+      </span>
+
+      {/* +/- count controls */}
+      <div className="flex items-center gap-1 shrink-0">
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-6 w-6"
+          onClick={handleDecrement}
+          disabled={isModifying || device.currentCount === 0}
+        >
+          <Minus className="h-3 w-3" />
+        </Button>
+        <span className="text-sm font-semibold tabular-nums w-8 text-center">
+          {device.currentCount}
+        </span>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-6 w-6"
+          onClick={handleIncrement}
+          disabled={isModifying}
+        >
+          <Plus className="h-3 w-3" />
+        </Button>
+      </div>
+
+      {/* Settings gear */}
+      <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" asChild>
+        <Link href={`/device/${device.id}/settings`}>
+          <Settings className="h-3 w-3" />
+        </Link>
+      </Button>
+    </div>
+  );
+}
+
 export function LocationCard({ location }: LocationCardProps) {
   const { devices } = useDevices();
-  const [isOpen, setIsOpen] = useState(true);
 
   const memberDevices = devices.filter((d) =>
     location.deviceIds.includes(d.id)
@@ -34,96 +116,89 @@ export function LocationCard({ location }: LocationCardProps) {
     "#3b82f6";
 
   return (
-    <div className="mb-6">
-      {/* Header */}
-      <div
-        className="flex items-center gap-3 px-4 py-3 rounded-lg border bg-card cursor-pointer hover:bg-accent/50 transition-colors"
-        onClick={() => setIsOpen(!isOpen)}
-      >
-        {/* Color dot */}
-        <div
-          className="h-3 w-3 rounded-full shrink-0"
-          style={{ backgroundColor: colorValue }}
-        />
-
-        {/* Name + device count */}
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
-            <h3 className="font-semibold truncate">{location.name}</h3>
-            <span className="text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded-full">
-              {memberDevices.length} device{memberDevices.length !== 1 ? "s" : ""}
-            </span>
+    <Card className={`mb-6 ${location.isOverLimit ? "border-destructive" : ""}`}>
+      <CardHeader className="pb-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            {/* Color dot */}
+            <div
+              className="h-3.5 w-3.5 rounded-full shrink-0"
+              style={{ backgroundColor: colorValue }}
+            />
+            <div>
+              <CardTitle className="text-lg flex items-center gap-2">
+                {location.name}
+                {location.isOverLimit && (
+                  <AlertTriangle className="h-4 w-4 text-destructive" />
+                )}
+              </CardTitle>
+              <div className="flex items-center gap-2 mt-0.5">
+                <span className="text-xs text-muted-foreground">
+                  {memberDevices.length} device{memberDevices.length !== 1 ? "s" : ""}
+                </span>
+                <span className="text-xs">
+                  {memberDevices.length === 0 ? (
+                    <WifiOff className="h-3 w-3 text-muted-foreground inline" />
+                  ) : location.allDevicesOnline ? (
+                    <Wifi className="h-3 w-3 text-green-500 inline" />
+                  ) : location.someDevicesOnline ? (
+                    <Wifi className="h-3 w-3 text-yellow-500 inline" />
+                  ) : (
+                    <WifiOff className="h-3 w-3 text-red-500 inline" />
+                  )}
+                </span>
+              </div>
+            </div>
           </div>
-        </div>
 
-        {/* Summed count */}
-        <div className="flex items-center gap-2">
-          <span
-            className={`text-2xl font-bold tabular-nums ${
-              location.isOverLimit ? "text-destructive" : ""
-            }`}
-          >
-            {location.totalCount}
-          </span>
-          {location.overcrowdingLimit !== null && location.overcrowdingLimit > 0 && (
-            <span className="text-sm text-muted-foreground">
-              / {location.overcrowdingLimit}
-            </span>
-          )}
-        </div>
-
-        {/* Over limit warning */}
-        {location.isOverLimit && (
-          <AlertTriangle className="h-4 w-4 text-destructive shrink-0" />
-        )}
-
-        {/* Online status */}
-        <div className="shrink-0">
-          {memberDevices.length === 0 ? (
-            <WifiOff className="h-4 w-4 text-muted-foreground" />
-          ) : location.allDevicesOnline ? (
-            <Wifi className="h-4 w-4 text-green-500" />
-          ) : location.someDevicesOnline ? (
-            <Wifi className="h-4 w-4 text-yellow-500" />
-          ) : (
-            <WifiOff className="h-4 w-4 text-red-500" />
-          )}
-        </div>
-
-        {/* Action buttons */}
-        <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
-          <Button variant="outline" size="sm" asChild>
-            <Link href={`/location/${location.id}/history`}>
-              <BarChart3 className="h-4 w-4 mr-1" />
-              History
-            </Link>
-          </Button>
-          <Button variant="ghost" size="icon" className="h-8 w-8" asChild>
+          {/* Settings gear */}
+          <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" asChild>
             <Link href={`/location/${location.id}/settings`}>
               <Settings className="h-4 w-4" />
             </Link>
           </Button>
         </div>
+      </CardHeader>
 
-        {/* Collapse chevron */}
-        {isOpen ? (
-          <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" />
-        ) : (
-          <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
-        )}
-      </div>
-
-      {/* Body - collapsible device grid */}
-      <div
-        className="overflow-hidden transition-all duration-200"
-        style={{ maxHeight: isOpen ? `${memberDevices.length * 500}px` : "0px" }}
-      >
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 pt-4">
-          {memberDevices.map((device) => (
-            <DeviceCard key={device.id} device={device} showHistory={false} />
-          ))}
+      <CardContent className="space-y-4">
+        {/* Main count display */}
+        <div className="text-center py-2">
+          <p
+            className={`text-6xl font-bold tabular-nums ${
+              location.isOverLimit ? "text-destructive" : ""
+            }`}
+          >
+            {location.totalCount}
+          </p>
+          {location.overcrowdingLimit !== null && location.overcrowdingLimit > 0 && (
+            <p
+              className={`text-sm mt-1 ${
+                location.isOverLimit ? "text-destructive" : "text-muted-foreground"
+              }`}
+            >
+              Limit: {location.overcrowdingLimit}
+            </p>
+          )}
+          <Button variant="outline" size="sm" className="mt-3" asChild>
+            <Link href={`/location/${location.id}/history`}>
+              <BarChart3 className="h-4 w-4 mr-1" />
+              View History
+            </Link>
+          </Button>
         </div>
-      </div>
-    </div>
+
+        {/* Compact device list */}
+        {memberDevices.length > 0 && (
+          <div className="space-y-1.5">
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider px-1">
+              Devices
+            </p>
+            {memberDevices.map((device) => (
+              <CompactDeviceRow key={device.id} device={device} />
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }
