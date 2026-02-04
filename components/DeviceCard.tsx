@@ -36,9 +36,10 @@ import {
 
 interface DeviceCardProps {
   device: DeviceState;
+  showHistory?: boolean;
 }
 
-export function DeviceCard({ device }: DeviceCardProps) {
+export function DeviceCard({ device, showHistory = true }: DeviceCardProps) {
   const { refreshDevice, updateDeviceName } = useDevices();
   const [isModifying, setIsModifying] = useState(false);
   const [isSetDialogOpen, setIsSetDialogOpen] = useState(false);
@@ -218,12 +219,14 @@ export function DeviceCard({ device }: DeviceCardProps) {
 
         {/* Action buttons */}
         <div className="flex justify-center gap-2 mt-4">
-          <Button variant="outline" size="sm" asChild>
-            <Link href={`/device/${device.id}/history`}>
-              <BarChart3 className="h-4 w-4 mr-1" />
-              History
-            </Link>
-          </Button>
+          {showHistory && (
+            <Button variant="outline" size="sm" asChild>
+              <Link href={`/device/${device.id}/history`}>
+                <BarChart3 className="h-4 w-4 mr-1" />
+                History
+              </Link>
+            </Button>
+          )}
           <Button variant="outline" size="sm" asChild>
             <Link href={`/device/${device.id}/settings`}>
               <Settings className="h-4 w-4 mr-1" />

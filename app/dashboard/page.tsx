@@ -175,8 +175,9 @@ export default function DashboardPage() {
                 }}
               >
                 <DialogTrigger asChild>
-                  <Button variant="outline" size="icon">
-                    <MapPin className="h-4 w-4" />
+                  <Button variant="outline">
+                    <MapPin className="h-4 w-4 mr-1" />
+                    Group
                   </Button>
                 </DialogTrigger>
                 <DialogContent>
