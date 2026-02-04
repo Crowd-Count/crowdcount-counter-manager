@@ -95,7 +95,7 @@ export default function HistoryPage() {
       </header>
 
       <main className="container mx-auto px-4 py-6 max-w-4xl">
-        <HistoryContent history={history} />
+        <HistoryContent history={history} filenamePrefix={device.deviceId} />
       </main>
     </div>
   );

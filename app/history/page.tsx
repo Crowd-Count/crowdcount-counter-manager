@@ -64,6 +64,7 @@ export default function AggregateHistoryPage() {
       <main className="container mx-auto px-4 py-6 max-w-4xl">
         <HistoryContent
           history={history}
+          filenamePrefix="total"
           dayDescription="Combined hourly count from all counters"
           weekDescription="Combined daily count from all counters"
           yearDescription="Combined monthly count from all counters"

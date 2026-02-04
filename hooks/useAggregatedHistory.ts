@@ -40,6 +40,63 @@ export interface AggregatedHistoryResult {
   availableYears: string[];
 }
 
+// Helper to aggregate day data across devices
+function buildDayChart(
+  allData: { data: Record<string, number>; avgData: Record<string, number> }[]
+): ChartData[] {
+  const chartData: ChartData[] = [];
+  for (let hour = 0; hour < 24; hour++) {
+    const hourStr = hour.toString();
+    let totalValue = 0;
+    let totalAverage = 0;
+    allData.forEach(({ data, avgData }) => {
+      totalValue += data[hourStr] || 0;
+      totalAverage += avgData[hourStr] || 0;
+    });
+    chartData.push({ label: `${hour}:00`, value: totalValue, average: totalAverage });
+  }
+  return chartData;
+}
+
+// Helper to aggregate week data across devices
+function buildWeekChart(
+  allData: { data: Record<string, number>; avgData: Record<string, number> }[]
+): ChartData[] {
+  const daysOfWeek = [
+    "Monday", "Tuesday", "Wednesday", "Thursday",
+    "Friday", "Saturday", "Sunday",
+  ];
+  return daysOfWeek.map((day) => {
+    let totalValue = 0;
+    let totalAverage = 0;
+    allData.forEach(({ data, avgData }) => {
+      totalValue += data[day] || 0;
+      totalAverage += avgData[day] || 0;
+    });
+    return { label: day.substring(0, 3), value: totalValue, average: totalAverage };
+  });
+}
+
+// Helper to aggregate year data across devices
+function buildYearChart(
+  allData: { data: Record<string, number>; avgData: Record<string, number> | null }[]
+): ChartData[] {
+  const months = [
+    "January", "February", "March", "April",
+    "May", "June", "July", "August",
+    "September", "October", "November", "December",
+  ];
+  return months.map((month) => {
+    let totalValue = 0;
+    let totalAverage = 0;
+    allData.forEach(({ data, avgData }) => {
+      totalValue += data[month] || 0;
+      if (avgData) totalAverage += avgData[month] || 0;
+    });
+    return { label: month.substring(0, 3), value: totalValue, average: totalAverage };
+  });
+}
+
 export function useAggregatedHistory(
   credentials: DeviceCredentials[]
 ): AggregatedHistoryResult {
@@ -104,173 +161,91 @@ export function useAggregatedHistory(
     }
   }, [stableCredentials, loadAvailableDates]);
 
-  // Day data fetchers
-  const getDayFn = dataType === "entries" ? api.getEntryDayData : api.getDayData;
-  const getAvgDayFn = dataType === "entries" ? api.getAverageEntryDayData : api.getAverageDayData;
+  // Load all chart data in parallel whenever any selection or dataType changes
+  useEffect(() => {
+    if (stableCredentials.length === 0 || !selectedDate || !selectedWeekDate || !selectedYear) return;
 
-  const loadDayData = useCallback(async () => {
-    if (stableCredentials.length === 0 || !selectedDate) return;
+    let cancelled = false;
+
+    const getDayFn = dataType === "entries" ? api.getEntryDayData : api.getDayData;
+    const getAvgDayFn = dataType === "entries" ? api.getAverageEntryDayData : api.getAverageDayData;
+    const getWeekFn = dataType === "entries" ? api.getEntryWeekData : api.getWeekData;
+    const getAvgWeekFn = dataType === "entries" ? api.getAverageEntryWeekData : api.getAverageWeekData;
+    const getYearFn = dataType === "entries" ? api.getEntryYearData : api.getYearData;
+    const getAvgYearFn = dataType === "entries" ? api.getAverageEntryYearData : api.getAverageYearData;
+
     setIsLoadingDay(true);
-    try {
-      const allData = await Promise.all(
-        stableCredentials.map(async (cred) => {
-          try {
-            const [data, avgData] = await Promise.all([
-              getDayFn(cred.deviceId, cred.password, selectedDate),
-              getAvgDayFn(cred.deviceId, cred.password, selectedDate),
-            ]);
-            return { data, avgData };
-          } catch {
-            return { data: {}, avgData: {} };
-          }
-        })
-      );
-
-      const chartData: ChartData[] = [];
-      for (let hour = 0; hour < 24; hour++) {
-        const hourStr = hour.toString();
-        let totalValue = 0;
-        let totalAverage = 0;
-        allData.forEach(({ data, avgData }) => {
-          totalValue += data[hourStr] || 0;
-          totalAverage += avgData[hourStr] || 0;
-        });
-        chartData.push({
-          label: `${hour}:00`,
-          value: totalValue,
-          average: totalAverage,
-        });
-      }
-      setDayData(chartData);
-    } catch (error) {
-      console.error("Failed to load day data:", error);
-      setDayData([]);
-    } finally {
-      setIsLoadingDay(false);
-    }
-  }, [stableCredentials, selectedDate, getDayFn, getAvgDayFn]);
-
-  useEffect(() => {
-    if (stableCredentials.length > 0 && selectedDate) {
-      loadDayData();
-    }
-  }, [stableCredentials, selectedDate, loadDayData]);
-
-  // Week data fetchers
-  const getWeekFn = dataType === "entries" ? api.getEntryWeekData : api.getWeekData;
-  const getAvgWeekFn = dataType === "entries" ? api.getAverageEntryWeekData : api.getAverageWeekData;
-
-  const loadWeekData = useCallback(async () => {
-    if (stableCredentials.length === 0 || !selectedWeekDate) return;
     setIsLoadingWeek(true);
-    try {
-      const allData = await Promise.all(
-        stableCredentials.map(async (cred) => {
-          try {
-            const [data, avgData] = await Promise.all([
-              getWeekFn(cred.deviceId, cred.password, selectedWeekDate),
-              getAvgWeekFn(cred.deviceId, cred.password, selectedWeekDate),
-            ]);
-            return { data, avgData };
-          } catch {
-            return { data: {}, avgData: {} };
-          }
-        })
-      );
-
-      const daysOfWeek = [
-        "Monday", "Tuesday", "Wednesday", "Thursday",
-        "Friday", "Saturday", "Sunday",
-      ];
-
-      const chartData: ChartData[] = daysOfWeek.map((day) => {
-        let totalValue = 0;
-        let totalAverage = 0;
-        allData.forEach(({ data, avgData }) => {
-          totalValue += data[day] || 0;
-          totalAverage += avgData[day] || 0;
-        });
-        return {
-          label: day.substring(0, 3),
-          value: totalValue,
-          average: totalAverage,
-        };
-      });
-
-      setWeekData(chartData);
-    } catch (error) {
-      console.error("Failed to load week data:", error);
-      setWeekData([]);
-    } finally {
-      setIsLoadingWeek(false);
-    }
-  }, [stableCredentials, selectedWeekDate, getWeekFn, getAvgWeekFn]);
-
-  useEffect(() => {
-    if (stableCredentials.length > 0 && selectedWeekDate) {
-      loadWeekData();
-    }
-  }, [stableCredentials, selectedWeekDate, loadWeekData]);
-
-  // Year data fetchers
-  const getYearFn = dataType === "entries" ? api.getEntryYearData : api.getYearData;
-  const getAvgYearFn = dataType === "entries" ? api.getAverageEntryYearData : api.getAverageYearData;
-
-  const loadYearData = useCallback(async () => {
-    if (stableCredentials.length === 0 || !selectedYear) return;
     setIsLoadingYear(true);
-    try {
-      const yearNum = parseInt(selectedYear, 10);
-      const allData = await Promise.all(
-        stableCredentials.map(async (cred) => {
-          try {
-            const [data, avgData] = await Promise.all([
-              getYearFn(cred.deviceId, cred.password, yearNum),
-              getAvgYearFn(cred.deviceId, cred.password, yearNum),
-            ]);
-            return { data, avgData };
-          } catch {
-            return { data: {}, avgData: null };
-          }
-        })
-      );
 
-      const months = [
-        "January", "February", "March", "April",
-        "May", "June", "July", "August",
-        "September", "October", "November", "December",
-      ];
+    const fetchDay = Promise.all(
+      stableCredentials.map(async (cred) => {
+        try {
+          const [data, avgData] = await Promise.all([
+            getDayFn(cred.deviceId, cred.password, selectedDate),
+            getAvgDayFn(cred.deviceId, cred.password, selectedDate),
+          ]);
+          return { data, avgData };
+        } catch {
+          return { data: {}, avgData: {} };
+        }
+      })
+    );
 
-      const chartData: ChartData[] = months.map((month) => {
-        let totalValue = 0;
-        let totalAverage = 0;
-        allData.forEach(({ data, avgData }) => {
-          totalValue += data[month] || 0;
-          if (avgData) {
-            totalAverage += avgData[month] || 0;
-          }
-        });
-        return {
-          label: month.substring(0, 3),
-          value: totalValue,
-          average: totalAverage,
-        };
+    const fetchWeek = Promise.all(
+      stableCredentials.map(async (cred) => {
+        try {
+          const [data, avgData] = await Promise.all([
+            getWeekFn(cred.deviceId, cred.password, selectedWeekDate),
+            getAvgWeekFn(cred.deviceId, cred.password, selectedWeekDate),
+          ]);
+          return { data, avgData };
+        } catch {
+          return { data: {}, avgData: {} };
+        }
+      })
+    );
+
+    const yearNum = parseInt(selectedYear, 10);
+    const fetchYear = Promise.all(
+      stableCredentials.map(async (cred) => {
+        try {
+          const [data, avgData] = await Promise.all([
+            getYearFn(cred.deviceId, cred.password, yearNum),
+            getAvgYearFn(cred.deviceId, cred.password, yearNum),
+          ]);
+          return { data, avgData };
+        } catch {
+          return { data: {}, avgData: null };
+        }
+      })
+    );
+
+    Promise.all([fetchDay, fetchWeek, fetchYear])
+      .then(([dayResults, weekResults, yearResults]) => {
+        if (cancelled) return;
+        setDayData(buildDayChart(dayResults));
+        setWeekData(buildWeekChart(weekResults));
+        setYearData(buildYearChart(yearResults));
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        console.error("Failed to load chart data:", error);
+        setDayData([]);
+        setWeekData([]);
+        setYearData([]);
+      })
+      .finally(() => {
+        if (cancelled) return;
+        setIsLoadingDay(false);
+        setIsLoadingWeek(false);
+        setIsLoadingYear(false);
       });
 
-      setYearData(chartData);
-    } catch (error) {
-      console.error("Failed to load year data:", error);
-      setYearData([]);
-    } finally {
-      setIsLoadingYear(false);
-    }
-  }, [stableCredentials, selectedYear, getYearFn, getAvgYearFn]);
-
-  useEffect(() => {
-    if (stableCredentials.length > 0 && selectedYear) {
-      loadYearData();
-    }
-  }, [stableCredentials, selectedYear, loadYearData]);
+    return () => {
+      cancelled = true;
+    };
+  }, [stableCredentials, selectedDate, selectedWeekDate, selectedYear, dataType]);
 
   const availableYears = useMemo(() => {
     const years = new Set<string>();

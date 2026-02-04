@@ -85,6 +85,7 @@ export default function LocationHistoryPage() {
       <main className="container mx-auto px-4 py-6 max-w-4xl">
         <HistoryContent
           history={history}
+          filenamePrefix={location.name.replace(/\s+/g, "-").toLowerCase()}
           dayDescription="Combined hourly count from location counters"
           weekDescription="Combined daily count from location counters"
           yearDescription="Combined monthly count from location counters"
