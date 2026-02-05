@@ -1,18 +1,30 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import type { LocationState, DeviceState } from "@/lib/types";
 import { LOCATION_COLORS } from "@/lib/types";
 import { useDevices } from "@/contexts/DevicesContext";
+import { useLocations } from "@/contexts/LocationsContext";
 import * as api from "@/lib/api";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Card,
   CardContent,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import {
   Settings,
   BarChart3,
@@ -106,7 +118,68 @@ function CompactDeviceRow({ device }: { device: DeviceState }) {
 }
 
 export function LocationCard({ location }: LocationCardProps) {
-  const { devices } = useDevices();
+  const { devices, addDevice } = useDevices();
+  const { addDeviceToLocation } = useLocations();
+
+  const [isAddOpen, setIsAddOpen] = useState(false);
+  const [newDeviceId, setNewDeviceId] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [addError, setAddError] = useState("");
+  const [isAdding, setIsAdding] = useState(false);
+
+  // Track a pending device ID that needs to be added to this location once it appears in state
+  const pendingDeviceRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!pendingDeviceRef.current) return;
+    const added = devices.find((d) => d.deviceId === pendingDeviceRef.current);
+    if (added) {
+      addDeviceToLocation(location.id, added.id);
+      pendingDeviceRef.current = null;
+    }
+  }, [devices, location.id, addDeviceToLocation]);
+
+  const handleAddToLocation = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAddError("");
+    setIsAdding(true);
+
+    const trimmedId = newDeviceId.trim();
+    const trimmedPw = newPassword.trim();
+    if (!trimmedId || !trimmedPw) {
+      setAddError("Please enter both Counter ID and Password");
+      setIsAdding(false);
+      return;
+    }
+
+    try {
+      // Check if device already exists in the app
+      const existing = devices.find((d) => d.deviceId === trimmedId);
+      if (existing) {
+        addDeviceToLocation(location.id, existing.id);
+        setIsAddOpen(false);
+        setNewDeviceId("");
+        setNewPassword("");
+      } else {
+        // Set pending so the useEffect adds it to the location once state updates
+        pendingDeviceRef.current = trimmedId;
+        const success = await addDevice(trimmedId, trimmedPw);
+        if (success) {
+          setIsAddOpen(false);
+          setNewDeviceId("");
+          setNewPassword("");
+        } else {
+          pendingDeviceRef.current = null;
+          setAddError("Invalid credentials or counter already added");
+        }
+      }
+    } catch {
+      pendingDeviceRef.current = null;
+      setAddError("Failed to add counter");
+    } finally {
+      setIsAdding(false);
+    }
+  };
 
   const memberDevices = devices.filter((d) =>
     location.deviceIds.includes(d.id)
@@ -197,16 +270,75 @@ export function LocationCard({ location }: LocationCardProps) {
         </div>
 
         {/* Compact device list */}
-        {memberDevices.length > 0 && (
-          <div className="space-y-1.5">
-            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider px-1">
-              Counters
-            </p>
-            {memberDevices.map((device) => (
-              <CompactDeviceRow key={device.id} device={device} />
-            ))}
-          </div>
-        )}
+        <div className="space-y-1.5">
+          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider px-1">
+            Counters
+          </p>
+          {memberDevices.map((device) => (
+            <CompactDeviceRow key={device.id} device={device} />
+          ))}
+
+          {/* Add counter to location */}
+          <Dialog
+            open={isAddOpen}
+            onOpenChange={(open) => {
+              setIsAddOpen(open);
+              if (!open) {
+                setNewDeviceId("");
+                setNewPassword("");
+                setAddError("");
+              }
+            }}
+          >
+            <DialogTrigger asChild>
+              <button className="flex items-center gap-2 px-3 py-2 rounded-md bg-muted/30 hover:bg-muted/60 transition-colors w-full text-sm text-muted-foreground">
+                <Plus className="h-3.5 w-3.5" />
+                Add Counter
+              </button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Add Counter to {location.name}</DialogTitle>
+                <DialogDescription>
+                  Enter the credentials for your CrowdCount counter
+                </DialogDescription>
+              </DialogHeader>
+              <form onSubmit={handleAddToLocation} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor={`loc-device-${location.id}`}>Counter ID</Label>
+                  <Input
+                    id={`loc-device-${location.id}`}
+                    type="text"
+                    placeholder="e.g., T1234"
+                    value={newDeviceId}
+                    onChange={(e) => setNewDeviceId(e.target.value)}
+                    disabled={isAdding}
+                    autoCapitalize="characters"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor={`loc-pw-${location.id}`}>Password</Label>
+                  <Input
+                    id={`loc-pw-${location.id}`}
+                    type="password"
+                    placeholder="Enter password"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    disabled={isAdding}
+                  />
+                </div>
+                {addError && (
+                  <p className="text-sm text-destructive">{addError}</p>
+                )}
+                <DialogFooter>
+                  <Button type="submit" disabled={isAdding}>
+                    {isAdding ? "Adding..." : "Add Counter"}
+                  </Button>
+                </DialogFooter>
+              </form>
+            </DialogContent>
+          </Dialog>
+        </div>
       </CardContent>
     </Card>
   );

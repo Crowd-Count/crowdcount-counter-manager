@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import * as api from "@/lib/api";
+import { getLocalDayUTCBounds, shiftDayDataToLocal } from "@/lib/timezone";
 
 export interface ChartData {
   label: string;
@@ -40,7 +41,7 @@ export interface AggregatedHistoryResult {
   availableYears: string[];
 }
 
-// Helper to aggregate day data across devices
+// Helper to build day chart from already-shifted local-hour data across devices
 function buildDayChart(
   allData: { data: Record<string, number>; avgData: Record<string, number> }[]
 ): ChartData[] {
@@ -162,6 +163,8 @@ export function useAggregatedHistory(
   }, [stableCredentials, loadAvailableDates]);
 
   // Load chart data — fetch devices sequentially to avoid browser connection limits
+  // Day data is timezone-shifted: we treat the selected date as a local date,
+  // compute the two UTC dates that span it, and merge into local hours.
   useEffect(() => {
     if (stableCredentials.length === 0 || !selectedDate || !selectedWeekDate || !selectedYear) return;
 
@@ -180,6 +183,10 @@ export function useAggregatedHistory(
 
     const yearNum = parseInt(selectedYear, 10);
 
+    // Compute UTC bounds for the selected local day
+    const { utcDate1, utcDate2, utcMinutesAtMidnight } = getLocalDayUTCBounds(selectedDate);
+    const needsSecondDate = utcDate1 !== utcDate2;
+
     // Fetch all data for one device at a time (sequential) to stay within browser's 6-connection limit
     async function fetchAll() {
       const dayResults: { data: Record<string, number>; avgData: Record<string, number> }[] = [];
@@ -189,15 +196,21 @@ export function useAggregatedHistory(
       for (const cred of stableCredentials) {
         if (cancelled) return;
         try {
-          const [dayD, dayAvg, weekD, weekAvg, yearD, yearAvg] = await Promise.all([
-            getDayFn(cred.deviceId, cred.password, selectedDate),
-            getAvgDayFn(cred.deviceId, cred.password, selectedDate),
+          const [dayD1, dayAvg1, dayD2, dayAvg2, weekD, weekAvg, yearD, yearAvg] = await Promise.all([
+            getDayFn(cred.deviceId, cred.password, utcDate1),
+            getAvgDayFn(cred.deviceId, cred.password, utcDate1),
+            needsSecondDate ? getDayFn(cred.deviceId, cred.password, utcDate2) : Promise.resolve({}),
+            needsSecondDate ? getAvgDayFn(cred.deviceId, cred.password, utcDate2) : Promise.resolve({}),
             getWeekFn(cred.deviceId, cred.password, selectedWeekDate),
             getAvgWeekFn(cred.deviceId, cred.password, selectedWeekDate),
             getYearFn(cred.deviceId, cred.password, yearNum),
             getAvgYearFn(cred.deviceId, cred.password, yearNum),
           ]);
-          dayResults.push({ data: dayD, avgData: dayAvg });
+          // Shift day data from UTC to local hours
+          dayResults.push({
+            data: shiftDayDataToLocal(dayD1, dayD2, utcMinutesAtMidnight),
+            avgData: shiftDayDataToLocal(dayAvg1, dayAvg2, utcMinutesAtMidnight),
+          });
           weekResults.push({ data: weekD, avgData: weekAvg });
           yearResults.push({ data: yearD, avgData: yearAvg ?? {} });
         } catch {

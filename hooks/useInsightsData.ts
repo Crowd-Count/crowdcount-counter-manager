@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import * as api from "@/lib/api";
+import { getLocalDayUTCBounds, shiftDayDataToLocal } from "@/lib/timezone";
 import type { DeviceCredentials } from "@/hooks/useAggregatedHistory";
 
 export interface InsightsData {
@@ -40,14 +41,6 @@ function aggregateNullableRecords(
   return aggregateRecords(valid);
 }
 
-function getTodayDateString(): string {
-  const now = new Date();
-  const y = now.getFullYear();
-  const m = String(now.getMonth() + 1).padStart(2, "0");
-  const d = String(now.getDate()).padStart(2, "0");
-  return `${y}-${m}-${d}`;
-}
-
 export function useInsightsData(credentials: DeviceCredentials[]): InsightsData {
   const credentialsRef = useRef<DeviceCredentials[]>([]);
   if (credentials.length > 0 && credentialsRef.current.length === 0) {
@@ -78,36 +71,52 @@ export function useInsightsData(credentials: DeviceCredentials[]): InsightsData 
     let cancelled = false;
     setIsLoading(true);
 
-    const today = getTodayDateString();
-    const currentYear = new Date().getFullYear();
+    // Compute the two UTC dates that span the user's local "today"
+    const { utcDate1, utcDate2, utcMinutesAtMidnight } = getLocalDayUTCBounds();
+    const needsSecondDate = utcDate1 !== utcDate2;
 
-    // Fetch all 12 datasets for each device sequentially per device, then aggregate
+    // Use utcDate1 for week/year queries (the UTC date when local midnight falls)
+    const utcDateForWeek = utcDate1;
+    const now = new Date();
+    const currentYear = now.getUTCFullYear();
+
     async function fetchAll() {
       try {
-        // For each credential, fetch all 12 endpoints
         const allResults = await Promise.all(
           stableCredentials.map(async (cred) => {
             const [
-              day, avgDay, entryDay, avgEntryDay,
+              day1, avgDay1, entryDay1, avgEntryDay1,
+              day2, avgDay2, entryDay2, avgEntryDay2,
               week, avgWeek, entryWeek, avgEntryWeek,
               year, avgYear, entryYear, avgEntryYear,
             ] = await Promise.all([
-              api.getDayData(cred.deviceId, cred.password, today).catch(() => ({})),
-              api.getAverageDayData(cred.deviceId, cred.password, today).catch(() => ({})),
-              api.getEntryDayData(cred.deviceId, cred.password, today).catch(() => ({})),
-              api.getAverageEntryDayData(cred.deviceId, cred.password, today).catch(() => ({})),
-              api.getWeekData(cred.deviceId, cred.password, today).catch(() => ({})),
-              api.getAverageWeekData(cred.deviceId, cred.password, today).catch(() => ({})),
-              api.getEntryWeekData(cred.deviceId, cred.password, today).catch(() => ({})),
-              api.getAverageEntryWeekData(cred.deviceId, cred.password, today).catch(() => ({})),
+              // Day data for utcDate1
+              api.getDayData(cred.deviceId, cred.password, utcDate1).catch(() => ({})),
+              api.getAverageDayData(cred.deviceId, cred.password, utcDate1).catch(() => ({})),
+              api.getEntryDayData(cred.deviceId, cred.password, utcDate1).catch(() => ({})),
+              api.getAverageEntryDayData(cred.deviceId, cred.password, utcDate1).catch(() => ({})),
+              // Day data for utcDate2 (needed to fill local hours that wrap into the next UTC date)
+              needsSecondDate ? api.getDayData(cred.deviceId, cred.password, utcDate2).catch(() => ({})) : Promise.resolve({}),
+              needsSecondDate ? api.getAverageDayData(cred.deviceId, cred.password, utcDate2).catch(() => ({})) : Promise.resolve({}),
+              needsSecondDate ? api.getEntryDayData(cred.deviceId, cred.password, utcDate2).catch(() => ({})) : Promise.resolve({}),
+              needsSecondDate ? api.getAverageEntryDayData(cred.deviceId, cred.password, utcDate2).catch(() => ({})) : Promise.resolve({}),
+              // Week & Year data (UTC-based, no shift needed)
+              api.getWeekData(cred.deviceId, cred.password, utcDateForWeek).catch(() => ({})),
+              api.getAverageWeekData(cred.deviceId, cred.password, utcDateForWeek).catch(() => ({})),
+              api.getEntryWeekData(cred.deviceId, cred.password, utcDateForWeek).catch(() => ({})),
+              api.getAverageEntryWeekData(cred.deviceId, cred.password, utcDateForWeek).catch(() => ({})),
               api.getYearData(cred.deviceId, cred.password, currentYear).catch(() => ({})),
               api.getAverageYearData(cred.deviceId, cred.password, currentYear).catch(() => null),
               api.getEntryYearData(cred.deviceId, cred.password, currentYear).catch(() => ({})),
               api.getAverageEntryYearData(cred.deviceId, cred.password, currentYear).catch(() => null),
             ]);
 
+            // Shift day data from UTC hours to local hours
             return {
-              day, avgDay, entryDay, avgEntryDay,
+              day: shiftDayDataToLocal(day1, day2, utcMinutesAtMidnight),
+              avgDay: shiftDayDataToLocal(avgDay1, avgDay2, utcMinutesAtMidnight),
+              entryDay: shiftDayDataToLocal(entryDay1, entryDay2, utcMinutesAtMidnight),
+              avgEntryDay: shiftDayDataToLocal(avgEntryDay1, avgEntryDay2, utcMinutesAtMidnight),
               week, avgWeek, entryWeek, avgEntryWeek,
               year, avgYear, entryYear, avgEntryYear,
             };

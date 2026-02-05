@@ -20,6 +20,8 @@ import {
 import { DeviceCard } from "@/components/DeviceCard";
 import { LocationCard } from "@/components/LocationCard";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { AlertBanner } from "@/components/AlertBanner";
+import Image from "next/image";
 import {
   Plus,
   RefreshCw,
@@ -129,8 +131,18 @@ export default function DashboardPage() {
       <header className="border-b">
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
-            <h1 className="text-2xl font-bold">CrowdCount Counter Manager</h1>
             <div className="flex items-center gap-2">
+              <Image
+                src="/logo.png"
+                alt="CrowdCount"
+                width={32}
+                height={32}
+                className="shrink-0"
+              />
+              <h1 className="text-2xl font-bold">Counter Manager</h1>
+            </div>
+            <div className="flex items-center gap-2">
+              <AlertBanner />
               <ThemeToggle />
               <Button
                 variant="outline"

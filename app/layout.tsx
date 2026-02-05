@@ -1,11 +1,8 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
 import "./globals.css";
 import { DevicesProvider } from "@/contexts/DevicesContext";
 import { LocationsProvider } from "@/contexts/LocationsContext";
 import { ThemeProvider } from "@/contexts/ThemeContext";
-
-const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
   title: "Counter Manager - CrowdCount",
@@ -19,7 +16,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className="dark" suppressHydrationWarning>
-      <body className={`${inter.className} min-h-screen flex flex-col`}>
+      <body className="min-h-screen flex flex-col" style={{ fontFamily: '"SF Pro Display", sans-serif' }}>
         <ThemeProvider>
           <DevicesProvider>
             <LocationsProvider>

@@ -269,12 +269,13 @@ export function weekendWeekdayEntries(entryData: Record<string, number>): {
   };
 }
 
-/** Pro-rate historical average weekly entries to current day+hour */
+/** Pro-rate historical average weekly entries to current day+hour.
+ *  Uses UTC time because week data is bucketed by UTC day boundaries. */
 export function proRatedWeekEntries(avgEntryData: Record<string, number>): number {
   const now = new Date();
-  const currentHour = now.getHours();
-  // JavaScript: 0=Sunday, 1=Monday, ..., 6=Saturday
-  const jsDay = now.getDay();
+  const currentHour = now.getUTCHours();
+  // JavaScript getUTCDay: 0=Sunday, 1=Monday, ..., 6=Saturday
+  const jsDay = now.getUTCDay();
   // Convert to Mon=0..Sun=6
   const dayIndex = jsDay === 0 ? 6 : jsDay - 1;
 
@@ -340,12 +341,13 @@ export function slowestEntryMonth(entryData: Record<string, number>) {
   return bestMonth(entryData, "min");
 }
 
-/** Pro-rate historical average yearly entries to current month+day */
+/** Pro-rate historical average yearly entries to current month+day.
+ *  Uses UTC time because year data is bucketed by UTC month boundaries. */
 export function proRatedYearEntries(avgEntryData: Record<string, number>): number {
   const now = new Date();
-  const currentMonth = now.getMonth(); // 0-indexed
-  const currentDay = now.getDate();
-  const daysInMonth = new Date(now.getFullYear(), currentMonth + 1, 0).getDate();
+  const currentMonth = now.getUTCMonth(); // 0-indexed
+  const currentDay = now.getUTCDate();
+  const daysInMonth = new Date(Date.UTC(now.getUTCFullYear(), currentMonth + 1, 0)).getUTCDate();
 
   // Full months completed
   let total = 0;
