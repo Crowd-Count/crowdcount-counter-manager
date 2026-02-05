@@ -199,17 +199,31 @@ export function DataCacheProvider({ children }: { children: React.ReactNode }) {
     runPrefetch(false);
   }, [devicesLoading, locationsLoading, devices.length, runPrefetch]);
 
-  // 30-second background refresh
+  // 30-second background refresh (skip when tab is hidden)
   useEffect(() => {
     if (devicesLoading || locationsLoading) return;
     if (devices.length === 0) return;
 
     const interval = setInterval(() => {
+      if (document.hidden) return;
       runPrefetch(true);
     }, REFRESH_INTERVAL);
 
     return () => clearInterval(interval);
   }, [devicesLoading, locationsLoading, devices.length, runPrefetch]);
+
+  // Refresh immediately when tab becomes visible again
+  const runPrefetchRef = useRef(runPrefetch);
+  runPrefetchRef.current = runPrefetch;
+  useEffect(() => {
+    const handler = () => {
+      if (document.visibilityState === "visible" && hasInitialized.current) {
+        runPrefetchRef.current(true);
+      }
+    };
+    document.addEventListener("visibilitychange", handler);
+    return () => document.removeEventListener("visibilitychange", handler);
+  }, []);
 
   // Re-prefetch when devices/locations change (new device added, etc.)
   const prevDeviceIdsRef = useRef<string>("");

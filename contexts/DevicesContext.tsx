@@ -97,7 +97,7 @@ export function DevicesProvider({ children }: { children: React.ReactNode }) {
   // Compute a stable key for polling intervals
   const pollingKey = devices.map((d) => `${d.id}-${d.pollInterval}`).join(",");
 
-  // Set up polling for each device
+  // Set up polling for each device (skip when tab is hidden)
   useEffect(() => {
     // Clear all existing intervals
     pollIntervals.current.forEach((interval) => clearInterval(interval));
@@ -106,6 +106,7 @@ export function DevicesProvider({ children }: { children: React.ReactNode }) {
     // Set up new intervals for each device
     devices.forEach((device) => {
       const interval = setInterval(() => {
+        if (document.hidden) return;
         fetchDeviceData(device);
       }, device.pollInterval * 1000);
       pollIntervals.current.set(device.id, interval);
@@ -117,6 +118,19 @@ export function DevicesProvider({ children }: { children: React.ReactNode }) {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pollingKey]);
+
+  // Refresh all devices immediately when tab becomes visible again
+  const devicesRef = useRef<DeviceState[]>([]);
+  devicesRef.current = devices;
+  useEffect(() => {
+    const handler = () => {
+      if (document.visibilityState === "visible" && devicesRef.current.length > 0) {
+        devicesRef.current.forEach((device) => fetchDeviceData(device));
+      }
+    };
+    document.addEventListener("visibilitychange", handler);
+    return () => document.removeEventListener("visibilitychange", handler);
+  }, []);
 
   const fetchDeviceData = async (device: StoredDevice): Promise<void> => {
     try {
