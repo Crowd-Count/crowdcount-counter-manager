@@ -195,29 +195,23 @@ export function useAggregatedHistory(
 
       for (const cred of stableCredentials) {
         if (cancelled) return;
-        try {
-          const [dayD1, dayAvg1, dayD2, dayAvg2, weekD, weekAvg, yearD, yearAvg] = await Promise.all([
-            getDayFn(cred.deviceId, cred.password, utcDate1),
-            getAvgDayFn(cred.deviceId, cred.password, utcDate1),
-            needsSecondDate ? getDayFn(cred.deviceId, cred.password, utcDate2) : Promise.resolve({}),
-            needsSecondDate ? getAvgDayFn(cred.deviceId, cred.password, utcDate2) : Promise.resolve({}),
-            getWeekFn(cred.deviceId, cred.password, selectedWeekDate),
-            getAvgWeekFn(cred.deviceId, cred.password, selectedWeekDate),
-            getYearFn(cred.deviceId, cred.password, yearNum),
-            getAvgYearFn(cred.deviceId, cred.password, yearNum),
-          ]);
-          // Shift day data from UTC to local hours
-          dayResults.push({
-            data: shiftDayDataToLocal(dayD1, dayD2, utcMinutesAtMidnight),
-            avgData: shiftDayDataToLocal(dayAvg1, dayAvg2, utcMinutesAtMidnight),
-          });
-          weekResults.push({ data: weekD, avgData: weekAvg });
-          yearResults.push({ data: yearD, avgData: yearAvg ?? {} });
-        } catch {
-          dayResults.push({ data: {}, avgData: {} });
-          weekResults.push({ data: {}, avgData: {} });
-          yearResults.push({ data: {}, avgData: null });
-        }
+        const [dayD1, dayAvg1, dayD2, dayAvg2, weekD, weekAvg, yearD, yearAvg] = await Promise.all([
+          getDayFn(cred.deviceId, cred.password, utcDate1).catch(() => ({})),
+          getAvgDayFn(cred.deviceId, cred.password, utcDate1).catch(() => ({})),
+          needsSecondDate ? getDayFn(cred.deviceId, cred.password, utcDate2).catch(() => ({})) : Promise.resolve({}),
+          needsSecondDate ? getAvgDayFn(cred.deviceId, cred.password, utcDate2).catch(() => ({})) : Promise.resolve({}),
+          getWeekFn(cred.deviceId, cred.password, selectedWeekDate).catch(() => ({})),
+          getAvgWeekFn(cred.deviceId, cred.password, selectedWeekDate).catch(() => ({})),
+          getYearFn(cred.deviceId, cred.password, yearNum).catch(() => ({})),
+          getAvgYearFn(cred.deviceId, cred.password, yearNum).catch(() => null),
+        ]);
+        // Shift day data from UTC to local hours
+        dayResults.push({
+          data: shiftDayDataToLocal(dayD1, dayD2, utcMinutesAtMidnight),
+          avgData: shiftDayDataToLocal(dayAvg1, dayAvg2 as Record<string, number>, utcMinutesAtMidnight),
+        });
+        weekResults.push({ data: weekD, avgData: weekAvg });
+        yearResults.push({ data: yearD, avgData: yearAvg ?? {} });
       }
 
       if (cancelled) return;
