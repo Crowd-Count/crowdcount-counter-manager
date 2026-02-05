@@ -53,6 +53,38 @@ export function getLocalDayUTCBounds(dateStr?: string): LocalDayUTCBounds {
  * @param date2Data Hourly data for utcDate2 (keys "0"-"23")
  * @param utcMinutesAtMidnight UTC minutes into date1's day when local midnight occurs
  */
+/** Format today's local date as YYYY-MM-DD */
+export function formatLocalDate(): string {
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, "0");
+  const d = String(now.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+/** Get the current local day-of-week index (Monday=0, ..., Sunday=6) */
+export function getLocalDayOfWeekIndex(): number {
+  const day = new Date().getDay(); // 0=Sun, 1=Mon, ..., 6=Sat
+  return day === 0 ? 6 : day - 1;
+}
+
+/** Check if a YYYY-MM-DD date string falls in the current local week (Mon–Sun) */
+export function isDateInCurrentLocalWeek(dateStr: string): boolean {
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const todayDow = today.getDay(); // 0=Sun
+  const mondayOffset = todayDow === 0 ? -6 : 1 - todayDow;
+  const monday = new Date(today);
+  monday.setDate(monday.getDate() + mondayOffset);
+  const sunday = new Date(monday);
+  sunday.setDate(sunday.getDate() + 6);
+
+  const [y, m, d] = dateStr.split("-").map(Number);
+  const target = new Date(y, m - 1, d);
+
+  return target >= monday && target <= sunday;
+}
+
 export function shiftDayDataToLocal(
   date1Data: Record<string, number>,
   date2Data: Record<string, number>,

@@ -1,5 +1,11 @@
 import * as api from "@/lib/api";
-import { getLocalDayUTCBounds, shiftDayDataToLocal } from "@/lib/timezone";
+import {
+  getLocalDayUTCBounds,
+  shiftDayDataToLocal,
+  formatLocalDate,
+  getLocalDayOfWeekIndex,
+  isDateInCurrentLocalWeek,
+} from "@/lib/timezone";
 import { getOrFetch, forceRefresh } from "@/lib/apiCache";
 
 // ── Types ──
@@ -78,19 +84,24 @@ export function buildDayChart(
 }
 
 export function buildWeekChart(
-  allData: { data: Record<string, number>; avgData: Record<string, number> }[]
+  allData: { data: Record<string, number>; avgData: Record<string, number> }[],
+  maxDayIndex?: number
 ): ChartData[] {
   const daysOfWeek = [
     "Monday", "Tuesday", "Wednesday", "Thursday",
     "Friday", "Saturday", "Sunday",
   ];
-  return daysOfWeek.map((day) => {
+  return daysOfWeek.map((day, index) => {
     let totalValue = 0;
     let totalAverage = 0;
     allData.forEach(({ data, avgData }) => {
       totalValue += data[day] || 0;
       totalAverage += avgData[day] || 0;
     });
+    // Zero out future days in the current local week
+    if (maxDayIndex !== undefined && index > maxDayIndex) {
+      totalValue = 0;
+    }
     return { label: day.substring(0, 3), value: totalValue, average: totalAverage };
   });
 }
@@ -141,7 +152,7 @@ export async function fetchInsightsForCredentials(
 ): Promise<InsightsCacheEntry> {
   const { utcDate1, utcDate2, utcMinutesAtMidnight } = getLocalDayUTCBounds();
   const needsSecondDate = utcDate1 !== utcDate2;
-  const utcDateForWeek = utcDate1;
+  const localDate = formatLocalDate();
   const now = new Date();
   const currentYear = now.getUTCFullYear();
 
@@ -161,10 +172,10 @@ export async function fetchInsightsForCredentials(
         needsSecondDate ? cachedApiCall("getAverageDayData", cred.deviceId, utcDate2, () => api.getAverageDayData(cred.deviceId, cred.password, utcDate2), force).catch(() => ({})) : Promise.resolve({} as Record<string, number>),
         needsSecondDate ? cachedApiCall("getEntryDayData", cred.deviceId, utcDate2, () => api.getEntryDayData(cred.deviceId, cred.password, utcDate2), force).catch(() => ({})) : Promise.resolve({} as Record<string, number>),
         needsSecondDate ? cachedApiCall("getAverageEntryDayData", cred.deviceId, utcDate2, () => api.getAverageEntryDayData(cred.deviceId, cred.password, utcDate2), force).catch(() => ({})) : Promise.resolve({} as Record<string, number>),
-        cachedApiCall("getWeekData", cred.deviceId, utcDateForWeek, () => api.getWeekData(cred.deviceId, cred.password, utcDateForWeek), force).catch(() => ({})),
-        cachedApiCall("getAverageWeekData", cred.deviceId, utcDateForWeek, () => api.getAverageWeekData(cred.deviceId, cred.password, utcDateForWeek), force).catch(() => ({})),
-        cachedApiCall("getEntryWeekData", cred.deviceId, utcDateForWeek, () => api.getEntryWeekData(cred.deviceId, cred.password, utcDateForWeek), force).catch(() => ({})),
-        cachedApiCall("getAverageEntryWeekData", cred.deviceId, utcDateForWeek, () => api.getAverageEntryWeekData(cred.deviceId, cred.password, utcDateForWeek), force).catch(() => ({})),
+        cachedApiCall("getWeekData", cred.deviceId, localDate, () => api.getWeekData(cred.deviceId, cred.password, localDate), force).catch(() => ({})),
+        cachedApiCall("getAverageWeekData", cred.deviceId, localDate, () => api.getAverageWeekData(cred.deviceId, cred.password, localDate), force).catch(() => ({})),
+        cachedApiCall("getEntryWeekData", cred.deviceId, localDate, () => api.getEntryWeekData(cred.deviceId, cred.password, localDate), force).catch(() => ({})),
+        cachedApiCall("getAverageEntryWeekData", cred.deviceId, localDate, () => api.getAverageEntryWeekData(cred.deviceId, cred.password, localDate), force).catch(() => ({})),
         cachedApiCall("getYearData", cred.deviceId, String(currentYear), () => api.getYearData(cred.deviceId, cred.password, currentYear), force).catch(() => ({})),
         cachedApiCall("getAverageYearData", cred.deviceId, String(currentYear), () => api.getAverageYearData(cred.deviceId, cred.password, currentYear), force).catch(() => null),
         cachedApiCall("getEntryYearData", cred.deviceId, String(currentYear), () => api.getEntryYearData(cred.deviceId, cred.password, currentYear), force).catch(() => ({})),
@@ -182,14 +193,26 @@ export async function fetchInsightsForCredentials(
     })
   );
 
+  // Filter future local days from current-week data (insights is always "today")
+  const maxIdx = getLocalDayOfWeekIndex();
+  const daysOfWeek = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+  function stripFutureDays(rec: Record<string, number>): Record<string, number> {
+    const out: Record<string, number> = {};
+    for (const [key, val] of Object.entries(rec)) {
+      const idx = daysOfWeek.indexOf(key);
+      if (idx === -1 || idx <= maxIdx) out[key] = val;
+    }
+    return out;
+  }
+
   return {
     dayData: aggregateRecords(allResults.map((r) => r.day)),
     avgDayData: aggregateRecords(allResults.map((r) => r.avgDay)),
     entryDayData: aggregateRecords(allResults.map((r) => r.entryDay)),
     avgEntryDayData: aggregateRecords(allResults.map((r) => r.avgEntryDay)),
-    weekData: aggregateRecords(allResults.map((r) => r.week)),
+    weekData: stripFutureDays(aggregateRecords(allResults.map((r) => r.week))),
     avgWeekData: aggregateRecords(allResults.map((r) => r.avgWeek)),
-    entryWeekData: aggregateRecords(allResults.map((r) => r.entryWeek)),
+    entryWeekData: stripFutureDays(aggregateRecords(allResults.map((r) => r.entryWeek))),
     avgEntryWeekData: aggregateRecords(allResults.map((r) => r.avgEntryWeek)),
     yearData: aggregateRecords(allResults.map((r) => r.year)),
     avgYearData: aggregateNullableRecords(allResults.map((r) => r.avgYear)),
@@ -273,9 +296,14 @@ export async function fetchHistoryCharts(
   const weekResults = allDeviceResults.map((r) => r.week);
   const yearResults = allDeviceResults.map((r) => r.year);
 
+  // For the current local week, zero out days that haven't started locally yet
+  const maxDayIndex = isDateInCurrentLocalWeek(weekDate)
+    ? getLocalDayOfWeekIndex()
+    : undefined;
+
   return {
     dayData: buildDayChart(dayResults),
-    weekData: buildWeekChart(weekResults),
+    weekData: buildWeekChart(weekResults, maxDayIndex),
     yearData: buildYearChart(yearResults),
   };
 }
