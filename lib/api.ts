@@ -453,67 +453,58 @@ export async function getAverageEntryYearData(
   return response.average_entry_year_data;
 }
 
-// Overcrowding Groups
-export async function createOvercrowdingGroup(
-  deviceIds: string[],
-  limit: number,
-  groupName?: string
-): Promise<string> {
-  const body: Record<string, unknown> = { device_ids: deviceIds, limit };
-  if (groupName) {
-    body.group_name = groupName;
-  }
-  const response = await apiRequest<CreateGroupResponse>(
-    "/create_overcrowding_group",
-    {
-      method: "POST",
-      body: JSON.stringify(body),
-    }
-  );
-  return response.group_id;
-}
-
-export async function updateOvercrowdingGroup(
-  groupId: string,
-  deviceIds?: string[],
-  limit?: number
-): Promise<void> {
-  const body: Record<string, unknown> = { group_id: groupId };
-  if (deviceIds !== undefined) {
-    body.device_ids = deviceIds;
-  }
-  if (limit !== undefined) {
-    body.limit = limit;
-  }
-  await apiRequest("/update_overcrowding_group", {
-    method: "POST",
-    body: JSON.stringify(body),
-  });
-}
-
-export async function deleteOvercrowdingGroup(groupId: string): Promise<void> {
-  await apiRequest("/delete_overcrowding_group", {
-    method: "POST",
-    body: JSON.stringify({ group_id: groupId }),
-  });
-}
-
-export async function getOvercrowdingGroup(
-  groupId: string
-): Promise<OvercrowdingGroupResponse> {
-  return apiRequest<OvercrowdingGroupResponse>(
-    `/get_overcrowding_group?group_id=${groupId}`
-  );
-}
-
-export async function getGroupIdsForDevice(
-  deviceId: string
-): Promise<string[]> {
-  const response = await apiRequest<GroupIdsResponse>(
-    `/get_groups_for_device?device_id=${deviceId}`
-  );
-  return response.group_ids;
-}
+// Overcrowding Groups — commented out: the counter-manager should NOT create/modify
+// server-side overcrowding groups. Groups should be managed from the iOS app which
+// handles push notification subscriptions. Creating groups here would interfere with
+// iOS-created groups and has no utility since web can't receive push notifications.
+//
+// export async function createOvercrowdingGroup(
+//   deviceIds: string[],
+//   limit: number,
+//   groupName?: string
+// ): Promise<string> {
+//   const body: Record<string, unknown> = { device_ids: deviceIds, limit };
+//   if (groupName) body.group_name = groupName;
+//   const response = await apiRequest<CreateGroupResponse>(
+//     "/create_overcrowding_group",
+//     { method: "POST", body: JSON.stringify(body) }
+//   );
+//   return response.group_id;
+// }
+//
+// export async function updateOvercrowdingGroup(
+//   groupId: string, deviceIds?: string[], limit?: number
+// ): Promise<void> {
+//   const body: Record<string, unknown> = { group_id: groupId };
+//   if (deviceIds !== undefined) body.device_ids = deviceIds;
+//   if (limit !== undefined) body.limit = limit;
+//   await apiRequest("/update_overcrowding_group", {
+//     method: "POST", body: JSON.stringify(body),
+//   });
+// }
+//
+// export async function deleteOvercrowdingGroup(groupId: string): Promise<void> {
+//   await apiRequest("/delete_overcrowding_group", {
+//     method: "POST", body: JSON.stringify({ group_id: groupId }),
+//   });
+// }
+//
+// export async function getOvercrowdingGroup(
+//   groupId: string
+// ): Promise<OvercrowdingGroupResponse> {
+//   return apiRequest<OvercrowdingGroupResponse>(
+//     `/get_overcrowding_group?group_id=${groupId}`
+//   );
+// }
+//
+// export async function getGroupIdsForDevice(
+//   deviceId: string
+// ): Promise<string[]> {
+//   const response = await apiRequest<GroupIdsResponse>(
+//     `/get_groups_for_device?device_id=${deviceId}`
+//   );
+//   return response.group_ids;
+// }
 
 // Alerts
 export interface AlertInfo {

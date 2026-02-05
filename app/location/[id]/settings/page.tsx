@@ -52,8 +52,6 @@ export default function LocationSettingsPage() {
   const [overcrowdingInput, setOvercrowdingInput] = useState(
     location?.overcrowdingLimit?.toString() ?? ""
   );
-  const [isSavingOvercrowding, setIsSavingOvercrowding] = useState(false);
-  const [isSavingName, setIsSavingName] = useState(false);
   const [isAddDeviceOpen, setIsAddDeviceOpen] = useState(false);
 
   if (!location) {
@@ -83,19 +81,12 @@ export default function LocationSettingsPage() {
   };
 
   const handleSaveOvercrowding = async () => {
-    setIsSavingOvercrowding(true);
-    try {
-      const limit = parseInt(overcrowdingInput, 10);
-      if (!overcrowdingInput || isNaN(limit) || limit <= 0) {
-        await setLocationOvercrowdingLimit(locationId, null);
-        setOvercrowdingInput("");
-      } else {
-        await setLocationOvercrowdingLimit(locationId, limit);
-      }
-    } catch (error) {
-      console.error("Failed to save overcrowding limit:", error);
-    } finally {
-      setIsSavingOvercrowding(false);
+    const limit = parseInt(overcrowdingInput, 10);
+    if (!overcrowdingInput || isNaN(limit) || limit <= 0) {
+      await setLocationOvercrowdingLimit(locationId, null);
+      setOvercrowdingInput("");
+    } else {
+      await setLocationOvercrowdingLimit(locationId, limit);
     }
   };
 
@@ -296,12 +287,9 @@ export default function LocationSettingsPage() {
                 value={overcrowdingInput}
                 onChange={(e) => setOvercrowdingInput(e.target.value)}
               />
-              <Button
-                onClick={handleSaveOvercrowding}
-                disabled={isSavingOvercrowding}
-              >
+              <Button onClick={handleSaveOvercrowding}>
                 <Save className="h-4 w-4 mr-1" />
-                {isSavingOvercrowding ? "Saving..." : "Save"}
+                Save
               </Button>
             </div>
           </CardContent>
@@ -320,8 +308,7 @@ export default function LocationSettingsPage() {
               <div>
                 <p className="font-medium">Delete Location</p>
                 <p className="text-sm text-muted-foreground">
-                  Ungroups all counters and deletes the server overcrowding group
-                  if one exists
+                  Ungroups all counters from this location
                 </p>
               </div>
               <AlertDialog>

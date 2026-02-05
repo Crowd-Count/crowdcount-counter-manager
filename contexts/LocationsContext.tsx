@@ -11,7 +11,6 @@ import React, {
 import type { StoredLocation, LocationState, LocationColorName } from "@/lib/types";
 import { LOCATION_COLORS } from "@/lib/types";
 import { useDevices } from "@/contexts/DevicesContext";
-import * as api from "@/lib/api";
 
 interface LocationsContextType {
   locations: LocationState[];
@@ -131,17 +130,12 @@ export function LocationsProvider({ children }: { children: React.ReactNode }) {
 
   const removeLocation = useCallback(
     async (id: string) => {
-      const loc = storedLocations.find((l) => l.id === id);
-      if (loc?.overcrowdingGroupId) {
-        try {
-          await api.deleteOvercrowdingGroup(loc.overcrowdingGroupId);
-        } catch (error) {
-          console.error("Failed to delete overcrowding group:", error);
-        }
-      }
+      // Note: We intentionally do NOT create/delete server-side overcrowding groups
+      // from the counter-manager. Groups should be managed from the iOS app which
+      // handles push notification subscriptions. See previous investigation.
       setStoredLocations((prev) => prev.filter((l) => l.id !== id));
     },
-    [storedLocations]
+    []
   );
 
   const updateLocationName = useCallback((id: string, name: string) => {
@@ -178,62 +172,19 @@ export function LocationsProvider({ children }: { children: React.ReactNode }) {
     );
   }, []);
 
+  // Overcrowding limit is purely local/visual — no server-side group API calls.
+  // Server-side overcrowding groups should be managed from the iOS app.
   const setLocationOvercrowdingLimit = useCallback(
     async (id: string, limit: number | null) => {
-      const loc = storedLocations.find((l) => l.id === id);
-      if (!loc) return;
-
-      // Resolve server device IDs for the location's member devices
-      const serverDeviceIds = devices
-        .filter((d) => loc.deviceIds.includes(d.id))
-        .map((d) => d.deviceId);
-
-      try {
-        if (limit === null || limit <= 0) {
-          // Remove overcrowding group
-          if (loc.overcrowdingGroupId) {
-            await api.deleteOvercrowdingGroup(loc.overcrowdingGroupId);
-          }
-          setStoredLocations((prev) =>
-            prev.map((l) =>
-              l.id === id
-                ? { ...l, overcrowdingLimit: null, overcrowdingGroupId: null }
-                : l
-            )
-          );
-        } else if (loc.overcrowdingGroupId) {
-          // Update existing group
-          await api.updateOvercrowdingGroup(
-            loc.overcrowdingGroupId,
-            serverDeviceIds,
-            limit
-          );
-          setStoredLocations((prev) =>
-            prev.map((l) =>
-              l.id === id ? { ...l, overcrowdingLimit: limit } : l
-            )
-          );
-        } else {
-          // Create new group
-          const groupId = await api.createOvercrowdingGroup(
-            serverDeviceIds,
-            limit,
-            loc.name
-          );
-          setStoredLocations((prev) =>
-            prev.map((l) =>
-              l.id === id
-                ? { ...l, overcrowdingLimit: limit, overcrowdingGroupId: groupId }
-                : l
-            )
-          );
-        }
-      } catch (error) {
-        console.error("Failed to set location overcrowding limit:", error);
-        throw error;
-      }
+      setStoredLocations((prev) =>
+        prev.map((l) =>
+          l.id === id
+            ? { ...l, overcrowdingLimit: limit === null || limit <= 0 ? null : limit }
+            : l
+        )
+      );
     },
-    [storedLocations, devices]
+    []
   );
 
   const getLocation = useCallback(
