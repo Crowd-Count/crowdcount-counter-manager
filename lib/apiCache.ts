@@ -26,11 +26,23 @@ export async function getOrFetch<T>(key: string, fetcher: () => Promise<T>): Pro
   return promise;
 }
 
-/** Bypass cache, fetch fresh data, update cache entry. For background refresh. */
+/** Bypass cache, fetch fresh data, update cache entry. For background refresh.
+ *  If the same key is already in-flight, reuses that promise to avoid duplicate requests. */
 export async function forceRefresh<T>(key: string, fetcher: () => Promise<T>): Promise<T> {
-  const result = await fetcher();
-  cache.set(key, result);
-  return result;
+  const existing = inflight.get(key);
+  if (existing) return existing as Promise<T>;
+
+  const promise = fetcher().then((result) => {
+    cache.set(key, result);
+    inflight.delete(key);
+    return result;
+  }).catch((err) => {
+    inflight.delete(key);
+    throw err;
+  });
+
+  inflight.set(key, promise);
+  return promise;
 }
 
 /** Synchronous cache read. Returns undefined if not cached. */

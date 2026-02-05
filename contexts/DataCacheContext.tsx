@@ -163,14 +163,29 @@ export function DataCacheProvider({ children }: { children: React.ReactNode }) {
     const credSets = buildCredentialSets();
     if (credSets.length === 0) return;
 
-    // Fetch all credential sets in parallel
-    await Promise.all(
-      credSets.map(({ credKey, credentials }) =>
-        prefetchForCredSet(credKey, credentials, force)
-      )
-    );
+    // Phase 1: Individual devices first — populates apiCache per-device
+    const individuals = credSets.filter((s) => s.credentials.length === 1);
+    const aggregates = credSets.filter((s) => s.credentials.length > 1);
 
-    setCacheVersion((v) => v + 1);
+    if (individuals.length > 0) {
+      await Promise.all(
+        individuals.map(({ credKey, credentials }) =>
+          prefetchForCredSet(credKey, credentials, force)
+        )
+      );
+      // Notify hooks so single-device pages update immediately
+      setCacheVersion((v) => v + 1);
+    }
+
+    // Phase 2: Aggregates — apiCache already has per-device data, so these resolve fast
+    if (aggregates.length > 0) {
+      await Promise.all(
+        aggregates.map(({ credKey, credentials }) =>
+          prefetchForCredSet(credKey, credentials, force)
+        )
+      );
+      setCacheVersion((v) => v + 1);
+    }
   }, [buildCredentialSets, prefetchForCredSet]);
 
   // Initial prefetch once devices and locations are loaded

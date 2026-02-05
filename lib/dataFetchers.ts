@@ -244,30 +244,34 @@ export async function fetchHistoryCharts(
   const yearFnName = dataType === "entries" ? "getEntryYearData" : "getYearData";
   const avgYearFnName = dataType === "entries" ? "getAverageEntryYearData" : "getAverageYearData";
 
-  // Sequential per device to avoid browser 6-connection limit
-  const dayResults: { data: Record<string, number>; avgData: Record<string, number> }[] = [];
-  const weekResults: { data: Record<string, number>; avgData: Record<string, number> }[] = [];
-  const yearResults: { data: Record<string, number>; avgData: Record<string, number> | null }[] = [];
+  // All devices in parallel — apiCache deduplicates concurrent requests for the same device
+  const allDeviceResults = await Promise.all(
+    credentials.map(async (cred) => {
+      const [dayD1, dayAvg1, dayD2, dayAvg2, weekD, weekAvg, yearD, yearAvg] = await Promise.all([
+        cachedApiCall(dayFnName, cred.deviceId, utcDate1, () => getDayFn(cred.deviceId, cred.password, utcDate1), force).catch(() => ({})),
+        cachedApiCall(avgDayFnName, cred.deviceId, utcDate1, () => getAvgDayFn(cred.deviceId, cred.password, utcDate1), force).catch(() => ({})),
+        needsSecondDate ? cachedApiCall(dayFnName, cred.deviceId, utcDate2, () => getDayFn(cred.deviceId, cred.password, utcDate2), force).catch(() => ({})) : Promise.resolve({} as Record<string, number>),
+        needsSecondDate ? cachedApiCall(avgDayFnName, cred.deviceId, utcDate2, () => getAvgDayFn(cred.deviceId, cred.password, utcDate2), force).catch(() => ({})) : Promise.resolve({} as Record<string, number>),
+        cachedApiCall(weekFnName, cred.deviceId, weekDate, () => getWeekFn(cred.deviceId, cred.password, weekDate), force).catch(() => ({})),
+        cachedApiCall(avgWeekFnName, cred.deviceId, weekDate, () => getAvgWeekFn(cred.deviceId, cred.password, weekDate), force).catch(() => ({})),
+        cachedApiCall(yearFnName, cred.deviceId, String(yearNum), () => getYearFn(cred.deviceId, cred.password, yearNum), force).catch(() => ({})),
+        cachedApiCall(avgYearFnName, cred.deviceId, String(yearNum), () => getAvgYearFn(cred.deviceId, cred.password, yearNum), force).catch(() => null),
+      ]);
 
-  for (const cred of credentials) {
-    const [dayD1, dayAvg1, dayD2, dayAvg2, weekD, weekAvg, yearD, yearAvg] = await Promise.all([
-      cachedApiCall(dayFnName, cred.deviceId, utcDate1, () => getDayFn(cred.deviceId, cred.password, utcDate1), force).catch(() => ({})),
-      cachedApiCall(avgDayFnName, cred.deviceId, utcDate1, () => getAvgDayFn(cred.deviceId, cred.password, utcDate1), force).catch(() => ({})),
-      needsSecondDate ? cachedApiCall(dayFnName, cred.deviceId, utcDate2, () => getDayFn(cred.deviceId, cred.password, utcDate2), force).catch(() => ({})) : Promise.resolve({} as Record<string, number>),
-      needsSecondDate ? cachedApiCall(avgDayFnName, cred.deviceId, utcDate2, () => getAvgDayFn(cred.deviceId, cred.password, utcDate2), force).catch(() => ({})) : Promise.resolve({} as Record<string, number>),
-      cachedApiCall(weekFnName, cred.deviceId, weekDate, () => getWeekFn(cred.deviceId, cred.password, weekDate), force).catch(() => ({})),
-      cachedApiCall(avgWeekFnName, cred.deviceId, weekDate, () => getAvgWeekFn(cred.deviceId, cred.password, weekDate), force).catch(() => ({})),
-      cachedApiCall(yearFnName, cred.deviceId, String(yearNum), () => getYearFn(cred.deviceId, cred.password, yearNum), force).catch(() => ({})),
-      cachedApiCall(avgYearFnName, cred.deviceId, String(yearNum), () => getAvgYearFn(cred.deviceId, cred.password, yearNum), force).catch(() => null),
-    ]);
+      return {
+        day: {
+          data: shiftDayDataToLocal(dayD1, dayD2, utcMinutesAtMidnight),
+          avgData: shiftDayDataToLocal(dayAvg1, dayAvg2 as Record<string, number>, utcMinutesAtMidnight),
+        },
+        week: { data: weekD, avgData: weekAvg },
+        year: { data: yearD, avgData: yearAvg ?? {} },
+      };
+    })
+  );
 
-    dayResults.push({
-      data: shiftDayDataToLocal(dayD1, dayD2, utcMinutesAtMidnight),
-      avgData: shiftDayDataToLocal(dayAvg1, dayAvg2 as Record<string, number>, utcMinutesAtMidnight),
-    });
-    weekResults.push({ data: weekD, avgData: weekAvg });
-    yearResults.push({ data: yearD, avgData: yearAvg ?? {} });
-  }
+  const dayResults = allDeviceResults.map((r) => r.day);
+  const weekResults = allDeviceResults.map((r) => r.week);
+  const yearResults = allDeviceResults.map((r) => r.year);
 
   return {
     dayData: buildDayChart(dayResults),
