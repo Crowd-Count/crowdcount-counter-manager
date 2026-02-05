@@ -130,7 +130,7 @@ export default function DashboardPage() {
       {/* Header */}
       <header className="border-b">
         <div className="container mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <div className="flex items-center gap-2">
               <Image
                 src="/logo.png"
@@ -168,9 +168,9 @@ export default function DashboardPage() {
                 }}
               >
                 <DialogTrigger asChild>
-                  <Button variant="outline">
-                    <MapPin className="h-4 w-4 mr-1" />
-                    Group Counters
+                  <Button variant="outline" size="icon" className="sm:w-auto sm:px-3 sm:size-auto">
+                    <MapPin className="h-4 w-4 sm:mr-1" />
+                    <span className="hidden sm:inline">Group Counters</span>
                   </Button>
                 </DialogTrigger>
                 <DialogContent>

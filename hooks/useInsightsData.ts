@@ -1,9 +1,13 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import * as api from "@/lib/api";
-import { getLocalDayUTCBounds, shiftDayDataToLocal } from "@/lib/timezone";
-import type { DeviceCredentials } from "@/hooks/useAggregatedHistory";
+import { useDataCache } from "@/contexts/DataCacheContext";
+import {
+  fetchInsightsForCredentials,
+  makeCredKey,
+  type DeviceCredentials,
+  type InsightsCacheEntry,
+} from "@/lib/dataFetchers";
 
 export interface InsightsData {
   isLoading: boolean;
@@ -21,25 +25,37 @@ export interface InsightsData {
   avgEntryYearData: Record<string, number> | null;
 }
 
-function aggregateRecords(
-  records: Record<string, number>[]
-): Record<string, number> {
-  const result: Record<string, number> = {};
-  for (const rec of records) {
-    for (const [key, val] of Object.entries(rec)) {
-      result[key] = (result[key] || 0) + val;
-    }
-  }
-  return result;
+function applyInsightsCache(entry: InsightsCacheEntry): Omit<InsightsData, "isLoading"> {
+  return {
+    dayData: entry.dayData,
+    avgDayData: entry.avgDayData,
+    entryDayData: entry.entryDayData,
+    avgEntryDayData: entry.avgEntryDayData,
+    weekData: entry.weekData,
+    avgWeekData: entry.avgWeekData,
+    entryWeekData: entry.entryWeekData,
+    avgEntryWeekData: entry.avgEntryWeekData,
+    yearData: entry.yearData,
+    avgYearData: entry.avgYearData,
+    entryYearData: entry.entryYearData,
+    avgEntryYearData: entry.avgEntryYearData,
+  };
 }
 
-function aggregateNullableRecords(
-  records: (Record<string, number> | null)[]
-): Record<string, number> | null {
-  const valid = records.filter((r): r is Record<string, number> => r !== null);
-  if (valid.length === 0) return null;
-  return aggregateRecords(valid);
-}
+const EMPTY_DATA: Omit<InsightsData, "isLoading"> = {
+  dayData: {},
+  avgDayData: {},
+  entryDayData: {},
+  avgEntryDayData: {},
+  weekData: {},
+  avgWeekData: {},
+  entryWeekData: {},
+  avgEntryWeekData: {},
+  yearData: {},
+  avgYearData: null,
+  entryYearData: {},
+  avgEntryYearData: null,
+};
 
 export function useInsightsData(credentials: DeviceCredentials[]): InsightsData {
   const credentialsRef = useRef<DeviceCredentials[]>([]);
@@ -48,122 +64,63 @@ export function useInsightsData(credentials: DeviceCredentials[]): InsightsData 
   }
   const stableCredentials = credentialsRef.current;
 
-  const [isLoading, setIsLoading] = useState(true);
-  const [dayData, setDayData] = useState<Record<string, number>>({});
-  const [avgDayData, setAvgDayData] = useState<Record<string, number>>({});
-  const [entryDayData, setEntryDayData] = useState<Record<string, number>>({});
-  const [avgEntryDayData, setAvgEntryDayData] = useState<Record<string, number>>({});
-  const [weekData, setWeekData] = useState<Record<string, number>>({});
-  const [avgWeekData, setAvgWeekData] = useState<Record<string, number>>({});
-  const [entryWeekData, setEntryWeekData] = useState<Record<string, number>>({});
-  const [avgEntryWeekData, setAvgEntryWeekData] = useState<Record<string, number>>({});
-  const [yearData, setYearData] = useState<Record<string, number>>({});
-  const [avgYearData, setAvgYearData] = useState<Record<string, number> | null>(null);
-  const [entryYearData, setEntryYearData] = useState<Record<string, number>>({});
-  const [avgEntryYearData, setAvgEntryYearData] = useState<Record<string, number> | null>(null);
+  const { cacheVersion, getCachedInsights, setCachedInsights } = useDataCache();
+  const credKey = stableCredentials.length > 0 ? makeCredKey(stableCredentials) : "";
 
+  // Check cache synchronously for initial state
+  const initialCache = credKey ? getCachedInsights(credKey) : null;
+  const [isLoading, setIsLoading] = useState(!initialCache && stableCredentials.length > 0);
+  const [data, setData] = useState<Omit<InsightsData, "isLoading">>(
+    initialCache ? applyInsightsCache(initialCache) : EMPTY_DATA
+  );
+
+  // Track whether we've done the initial fetch
+  const hasFetched = useRef(!!initialCache);
+
+  // Fetch on mount if cache miss
   useEffect(() => {
     if (stableCredentials.length === 0) {
       setIsLoading(false);
       return;
     }
+    if (hasFetched.current) return;
 
     let cancelled = false;
     setIsLoading(true);
 
-    // Compute the two UTC dates that span the user's local "today"
-    const { utcDate1, utcDate2, utcMinutesAtMidnight } = getLocalDayUTCBounds();
-    const needsSecondDate = utcDate1 !== utcDate2;
-
-    // Use utcDate1 for week/year queries (the UTC date when local midnight falls)
-    const utcDateForWeek = utcDate1;
-    const now = new Date();
-    const currentYear = now.getUTCFullYear();
-
-    async function fetchAll() {
-      try {
-        const allResults = await Promise.all(
-          stableCredentials.map(async (cred) => {
-            const [
-              day1, avgDay1, entryDay1, avgEntryDay1,
-              day2, avgDay2, entryDay2, avgEntryDay2,
-              week, avgWeek, entryWeek, avgEntryWeek,
-              year, avgYear, entryYear, avgEntryYear,
-            ] = await Promise.all([
-              // Day data for utcDate1
-              api.getDayData(cred.deviceId, cred.password, utcDate1).catch(() => ({})),
-              api.getAverageDayData(cred.deviceId, cred.password, utcDate1).catch(() => ({})),
-              api.getEntryDayData(cred.deviceId, cred.password, utcDate1).catch(() => ({})),
-              api.getAverageEntryDayData(cred.deviceId, cred.password, utcDate1).catch(() => ({})),
-              // Day data for utcDate2 (needed to fill local hours that wrap into the next UTC date)
-              needsSecondDate ? api.getDayData(cred.deviceId, cred.password, utcDate2).catch(() => ({})) : Promise.resolve({}),
-              needsSecondDate ? api.getAverageDayData(cred.deviceId, cred.password, utcDate2).catch(() => ({})) : Promise.resolve({}),
-              needsSecondDate ? api.getEntryDayData(cred.deviceId, cred.password, utcDate2).catch(() => ({})) : Promise.resolve({}),
-              needsSecondDate ? api.getAverageEntryDayData(cred.deviceId, cred.password, utcDate2).catch(() => ({})) : Promise.resolve({}),
-              // Week & Year data (UTC-based, no shift needed)
-              api.getWeekData(cred.deviceId, cred.password, utcDateForWeek).catch(() => ({})),
-              api.getAverageWeekData(cred.deviceId, cred.password, utcDateForWeek).catch(() => ({})),
-              api.getEntryWeekData(cred.deviceId, cred.password, utcDateForWeek).catch(() => ({})),
-              api.getAverageEntryWeekData(cred.deviceId, cred.password, utcDateForWeek).catch(() => ({})),
-              api.getYearData(cred.deviceId, cred.password, currentYear).catch(() => ({})),
-              api.getAverageYearData(cred.deviceId, cred.password, currentYear).catch(() => null),
-              api.getEntryYearData(cred.deviceId, cred.password, currentYear).catch(() => ({})),
-              api.getAverageEntryYearData(cred.deviceId, cred.password, currentYear).catch(() => null),
-            ]);
-
-            // Shift day data from UTC hours to local hours
-            return {
-              day: shiftDayDataToLocal(day1, day2, utcMinutesAtMidnight),
-              avgDay: shiftDayDataToLocal(avgDay1, avgDay2, utcMinutesAtMidnight),
-              entryDay: shiftDayDataToLocal(entryDay1, entryDay2, utcMinutesAtMidnight),
-              avgEntryDay: shiftDayDataToLocal(avgEntryDay1, avgEntryDay2, utcMinutesAtMidnight),
-              week, avgWeek, entryWeek, avgEntryWeek,
-              year, avgYear, entryYear, avgEntryYear,
-            };
-          })
-        );
-
+    fetchInsightsForCredentials(stableCredentials)
+      .then((result) => {
         if (cancelled) return;
-
-        setDayData(aggregateRecords(allResults.map((r) => r.day)));
-        setAvgDayData(aggregateRecords(allResults.map((r) => r.avgDay)));
-        setEntryDayData(aggregateRecords(allResults.map((r) => r.entryDay)));
-        setAvgEntryDayData(aggregateRecords(allResults.map((r) => r.avgEntryDay)));
-        setWeekData(aggregateRecords(allResults.map((r) => r.week)));
-        setAvgWeekData(aggregateRecords(allResults.map((r) => r.avgWeek)));
-        setEntryWeekData(aggregateRecords(allResults.map((r) => r.entryWeek)));
-        setAvgEntryWeekData(aggregateRecords(allResults.map((r) => r.avgEntryWeek)));
-        setYearData(aggregateRecords(allResults.map((r) => r.year)));
-        setAvgYearData(aggregateNullableRecords(allResults.map((r) => r.avgYear)));
-        setEntryYearData(aggregateRecords(allResults.map((r) => r.entryYear)));
-        setAvgEntryYearData(aggregateNullableRecords(allResults.map((r) => r.avgEntryYear)));
-      } catch (error) {
+        hasFetched.current = true;
+        setData(applyInsightsCache(result));
+        setCachedInsights(credKey, result);
+      })
+      .catch((error) => {
+        if (cancelled) return;
         console.error("Failed to load insights data:", error);
-      } finally {
+      })
+      .finally(() => {
         if (!cancelled) setIsLoading(false);
-      }
-    }
-
-    fetchAll();
+      });
 
     return () => {
       cancelled = true;
     };
-  }, [stableCredentials]);
+  }, [stableCredentials, credKey, setCachedInsights]);
+
+  // Silently update when cacheVersion changes (background refresh)
+  useEffect(() => {
+    if (!credKey || cacheVersion === 0) return;
+    const cached = getCachedInsights(credKey);
+    if (cached) {
+      setData(applyInsightsCache(cached));
+      hasFetched.current = true;
+      setIsLoading(false);
+    }
+  }, [cacheVersion, credKey, getCachedInsights]);
 
   return {
     isLoading,
-    dayData,
-    avgDayData,
-    entryDayData,
-    avgEntryDayData,
-    weekData,
-    avgWeekData,
-    entryWeekData,
-    avgEntryWeekData,
-    yearData,
-    avgYearData,
-    entryYearData,
-    avgEntryYearData,
+    ...data,
   };
 }
