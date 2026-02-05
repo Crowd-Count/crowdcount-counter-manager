@@ -1,9 +1,8 @@
 "use client";
 
 import {
-  ComposedChart,
+  BarChart,
   Bar,
-  Line,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -39,7 +38,7 @@ export function HistoryChart({ data }: HistoryChartProps) {
   return (
     <div className="h-[300px] w-full">
       <ResponsiveContainer width="100%" height="100%">
-        <ComposedChart
+        <BarChart
           data={data}
           margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
         >
@@ -74,20 +73,19 @@ export function HistoryChart({ data }: HistoryChartProps) {
             dataKey="value"
             name="Count"
             fill="#3b82f6"
+            fillOpacity={0.9}
             radius={[4, 4, 0, 0]}
           />
           {hasAverage && (
-            <Line
-              type="monotone"
+            <Bar
               dataKey="average"
               name="Average"
-              stroke="#f97316"
-              strokeWidth={2}
-              dot={false}
-              activeDot={{ r: 6 }}
+              fill="#f97316"
+              fillOpacity={0.8}
+              radius={[4, 4, 0, 0]}
             />
           )}
-        </ComposedChart>
+        </BarChart>
       </ResponsiveContainer>
     </div>
   );
