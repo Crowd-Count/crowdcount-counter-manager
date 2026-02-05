@@ -56,11 +56,7 @@ export function DeviceCard({ device, showHistory = true }: DeviceCardProps) {
   const handleIncrement = async () => {
     setIsModifying(true);
     try {
-      await api.setCount(
-        device.deviceId,
-        device.password,
-        device.currentCount + 1
-      );
+      await api.addToCount(device.deviceId, device.password, 1);
       await refreshDevice(device.id);
     } catch (error) {
       console.error("Failed to increment count:", error);
@@ -72,8 +68,7 @@ export function DeviceCard({ device, showHistory = true }: DeviceCardProps) {
   const handleDecrement = async () => {
     setIsModifying(true);
     try {
-      const newVal = Math.max(0, device.currentCount - 1);
-      await api.setCount(device.deviceId, device.password, newVal);
+      await api.subFromCount(device.deviceId, device.password, 1);
       await refreshDevice(device.id);
     } catch (error) {
       console.error("Failed to decrement count:", error);

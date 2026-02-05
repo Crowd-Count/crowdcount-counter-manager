@@ -168,7 +168,7 @@ export default function DashboardPage() {
                 }}
               >
                 <DialogTrigger asChild>
-                  <Button variant="outline" size="icon" className="sm:w-auto sm:px-3 sm:size-auto">
+                  <Button variant="outline" size="icon" className="sm:w-auto sm:px-4 sm:h-10">
                     <MapPin className="h-4 w-4 sm:mr-1" />
                     <span className="hidden sm:inline">Group Counters</span>
                   </Button>

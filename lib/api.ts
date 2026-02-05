@@ -83,6 +83,38 @@ export async function setCount(
   });
 }
 
+export async function addToCount(
+  deviceId: string,
+  password: string,
+  delta: number
+): Promise<number> {
+  const response = await apiRequest<{ new_count: number }>("/add_to_count", {
+    method: "POST",
+    body: JSON.stringify({
+      device_id: deviceId,
+      password,
+      count_to_add: delta,
+    }),
+  });
+  return response.new_count;
+}
+
+export async function subFromCount(
+  deviceId: string,
+  password: string,
+  delta: number
+): Promise<number> {
+  const response = await apiRequest<{ new_count: number }>("/sub_from_count", {
+    method: "POST",
+    body: JSON.stringify({
+      device_id: deviceId,
+      password,
+      count_to_sub: delta,
+    }),
+  });
+  return response.new_count;
+}
+
 // Connection status
 export async function getConnectionStatus(
   deviceId: string
