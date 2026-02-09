@@ -26,6 +26,7 @@ import {
   Plus,
   RefreshCw,
   MapPin,
+  ExternalLink,
 } from "lucide-react";
 
 export default function DashboardPage() {
@@ -144,6 +145,11 @@ export default function DashboardPage() {
             <div className="flex items-center gap-2">
               <AlertBanner />
               <ThemeToggle />
+              <Button variant="outline" size="icon" asChild>
+                <a href="https://crowdcount.tech" target="_blank" rel="noopener noreferrer">
+                  <ExternalLink className="h-4 w-4" />
+                </a>
+              </Button>
               <Button
                 variant="outline"
                 size="icon"
