@@ -5,6 +5,7 @@ import {
   formatLocalDate,
   getLocalDayOfWeekIndex,
   isDateInCurrentLocalWeek,
+  utcDatesToLocalDates,
 } from "@/lib/timezone";
 import { getOrFetch, forceRefresh } from "@/lib/apiCache";
 
@@ -238,7 +239,8 @@ export async function fetchAvailableDates(
   allDatesArrays.forEach((dates) => {
     dates.forEach((date) => allDatesSet.add(date));
   });
-  return Array.from(allDatesSet).sort();
+  const utcDates = Array.from(allDatesSet).sort();
+  return utcDatesToLocalDates(utcDates);
 }
 
 export async function fetchHistoryCharts(

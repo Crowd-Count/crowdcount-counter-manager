@@ -53,13 +53,35 @@ export function getLocalDayUTCBounds(dateStr?: string): LocalDayUTCBounds {
  * @param date2Data Hourly data for utcDate2 (keys "0"-"23")
  * @param utcMinutesAtMidnight UTC minutes into date1's day when local midnight occurs
  */
+/** Format a Date's LOCAL components as YYYY-MM-DD */
+export function formatDateAsLocal(date: Date): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
 /** Format today's local date as YYYY-MM-DD */
 export function formatLocalDate(): string {
-  const now = new Date();
-  const y = now.getFullYear();
-  const m = String(now.getMonth() + 1).padStart(2, "0");
-  const d = String(now.getDate()).padStart(2, "0");
-  return `${y}-${m}-${d}`;
+  return formatDateAsLocal(new Date());
+}
+
+/**
+ * Convert an array of UTC date strings to local date strings.
+ * For each UTC date, checks both day boundaries (00:00 and 23:59 UTC)
+ * to find which local dates they map to, ensuring correct coverage
+ * across timezone offsets.
+ */
+export function utcDatesToLocalDates(utcDates: string[]): string[] {
+  const localDateSet = new Set<string>();
+  for (const utcDateStr of utcDates) {
+    const [y, m, d] = utcDateStr.split("-").map(Number);
+    const utcDayStart = new Date(Date.UTC(y, m - 1, d, 0, 0, 0));
+    localDateSet.add(formatDateAsLocal(utcDayStart));
+    const utcDayEnd = new Date(Date.UTC(y, m - 1, d, 23, 59, 0));
+    localDateSet.add(formatDateAsLocal(utcDayEnd));
+  }
+  return Array.from(localDateSet).sort();
 }
 
 /** Get the current local day-of-week index (Monday=0, ..., Sunday=6) */
