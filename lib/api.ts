@@ -23,21 +23,57 @@ import type {
   EntryYearDataResponse,
   AverageEntryYearDataResponse,
 } from "./types";
+import { signRequest, generateIdempotencyKey } from "./crypto";
 
 const API_BASE_URL = "https://api.crowdcount.tech";
 
+interface SigningCredentials {
+  deviceId: string;
+  password: string;
+}
+
+interface ApiRequestOptions extends Omit<RequestInit, "headers"> {
+  headers?: Record<string, string>;
+  sign?: SigningCredentials;
+  idempotent?: boolean;
+}
+
 async function apiRequest<T>(
   endpoint: string,
-  options: RequestInit = {}
+  options: ApiRequestOptions = {}
 ): Promise<T> {
+  const { sign, idempotent, headers: extraHeaders, ...fetchOptions } = options;
+  const method = fetchOptions.method || "GET";
+  const bodyStr = (fetchOptions.body as string) || "";
+
+  // Build headers
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    ...extraHeaders,
+  };
+
+  // Sign request if credentials provided
+  if (sign) {
+    const sigHeaders = await signRequest(
+      sign.deviceId,
+      sign.password,
+      method,
+      endpoint,
+      bodyStr
+    );
+    Object.assign(headers, sigHeaders);
+  }
+
+  // Add idempotency key for mutating requests
+  if (idempotent) {
+    headers["Idempotency-Key"] = generateIdempotencyKey();
+  }
+
   const url = `${API_BASE_URL}${endpoint}`;
   const response = await fetch(url, {
-    method: options.method || "GET",
-    body: options.body,
-    headers: {
-      "Content-Type": "application/json",
-      ...options.headers,
-    },
+    method,
+    body: fetchOptions.body,
+    headers,
   });
 
   if (!response.ok) {
@@ -55,6 +91,7 @@ export async function checkPassword(
   const response = await apiRequest<CheckPasswordResponse>("/check_password", {
     method: "POST",
     body: JSON.stringify({ device_id: deviceId, password }),
+    sign: { deviceId, password },
   });
   return response.is_password_correct;
 }
@@ -80,6 +117,8 @@ export async function setCount(
       password,
       new_count: newCount,
     }),
+    sign: { deviceId, password },
+    idempotent: true,
   });
 }
 
@@ -95,6 +134,8 @@ export async function addToCount(
       password,
       count_to_add: delta,
     }),
+    sign: { deviceId, password },
+    idempotent: true,
   });
   return response.new_count;
 }
@@ -111,6 +152,8 @@ export async function subFromCount(
       password,
       count_to_sub: delta,
     }),
+    sign: { deviceId, password },
+    idempotent: true,
   });
   return response.new_count;
 }
@@ -155,6 +198,8 @@ export async function addOvercrowding(
       password,
       overcrowding_value: limit,
     }),
+    sign: { deviceId, password },
+    idempotent: true,
   });
 }
 
@@ -168,6 +213,8 @@ export async function removeOvercrowding(
       device_name: deviceId,
       password,
     }),
+    sign: { deviceId, password },
+    idempotent: true,
   });
 }
 
@@ -181,6 +228,7 @@ export async function getDirectionFlipped(
     {
       method: "POST",
       body: JSON.stringify({ device_id: deviceId, password }),
+      sign: { deviceId, password },
     }
   );
   return response.direction_flipped;
@@ -198,6 +246,8 @@ export async function setDirectionFlipped(
       password,
       direction_flipped: flipped,
     }),
+    sign: { deviceId, password },
+    idempotent: true,
   });
 }
 
@@ -214,6 +264,8 @@ export async function setPassword(
       current_password: currentPassword,
       new_password: newPassword,
     }),
+    sign: { deviceId, password: currentPassword },
+    idempotent: true,
   });
 }
 
@@ -230,6 +282,8 @@ export async function resetDeviceData(
   await apiRequest("/reset_device_data", {
     method: "POST",
     body: JSON.stringify(body),
+    sign: { deviceId, password },
+    idempotent: true,
   });
 }
 
@@ -241,6 +295,7 @@ export async function getAvailableDates(
   const response = await apiRequest<AvailableDatesResponse>("/get_user_days", {
     method: "POST",
     body: JSON.stringify({ device_id: deviceId, password }),
+    sign: { deviceId, password },
   });
   return response.dates;
 }
@@ -253,6 +308,7 @@ export async function checkIfUserHasDay(
   const response = await apiRequest<HasDayResponse>("/check_if_user_has_day", {
     method: "POST",
     body: JSON.stringify({ device_id: deviceId, password, date }),
+    sign: { deviceId, password },
   });
   return response.has_day;
 }
@@ -266,6 +322,7 @@ export async function getDayData(
   const response = await apiRequest<DayDataResponse>("/get_day_data", {
     method: "POST",
     body: JSON.stringify({ device_id: deviceId, password, date }),
+    sign: { deviceId, password },
   });
   return response.day_data;
 }
@@ -280,6 +337,7 @@ export async function getAverageDayData(
     {
       method: "POST",
       body: JSON.stringify({ device_id: deviceId, password, date }),
+      sign: { deviceId, password },
     }
   );
   return response.average_day_data;
@@ -296,6 +354,7 @@ export async function checkIfUserHasWeek(
     {
       method: "POST",
       body: JSON.stringify({ device_id: deviceId, password, date }),
+      sign: { deviceId, password },
     }
   );
   return response.has_week;
@@ -309,6 +368,7 @@ export async function getWeekData(
   const response = await apiRequest<WeekDataResponse>("/get_week_data", {
     method: "POST",
     body: JSON.stringify({ device_id: deviceId, password, date }),
+    sign: { deviceId, password },
   });
   return response.week_data;
 }
@@ -323,6 +383,7 @@ export async function getAverageWeekData(
     {
       method: "POST",
       body: JSON.stringify({ device_id: deviceId, password, date }),
+      sign: { deviceId, password },
     }
   );
   return response.average_week_data;
@@ -337,6 +398,7 @@ export async function getYearData(
   const response = await apiRequest<YearDataResponse>("/get_year_data", {
     method: "POST",
     body: JSON.stringify({ device_id: deviceId, password, year }),
+    sign: { deviceId, password },
   });
   return response.year_data;
 }
@@ -351,6 +413,7 @@ export async function getAverageYearData(
     {
       method: "POST",
       body: JSON.stringify({ device_id: deviceId, password, year }),
+      sign: { deviceId, password },
     }
   );
   if (typeof response.average_year_data === "string") {
@@ -370,6 +433,7 @@ export async function getEntryDayData(
     {
       method: "POST",
       body: JSON.stringify({ device_id: deviceId, password, date }),
+      sign: { deviceId, password },
     }
   );
   return response.entry_day_data;
@@ -385,6 +449,7 @@ export async function getAverageEntryDayData(
     {
       method: "POST",
       body: JSON.stringify({ device_id: deviceId, password, date }),
+      sign: { deviceId, password },
     }
   );
   return response.average_entry_day_data;
@@ -400,6 +465,7 @@ export async function getEntryWeekData(
     {
       method: "POST",
       body: JSON.stringify({ device_id: deviceId, password, date }),
+      sign: { deviceId, password },
     }
   );
   return response.entry_week_data;
@@ -415,6 +481,7 @@ export async function getAverageEntryWeekData(
     {
       method: "POST",
       body: JSON.stringify({ device_id: deviceId, password, date }),
+      sign: { deviceId, password },
     }
   );
   return response.average_entry_week_data;
@@ -430,6 +497,7 @@ export async function getEntryYearData(
     {
       method: "POST",
       body: JSON.stringify({ device_id: deviceId, password, year }),
+      sign: { deviceId, password },
     }
   );
   return response.entry_year_data;
@@ -445,6 +513,7 @@ export async function getAverageEntryYearData(
     {
       method: "POST",
       body: JSON.stringify({ device_id: deviceId, password, year }),
+      sign: { deviceId, password },
     }
   );
   if (typeof response.average_entry_year_data === "string") {
@@ -547,16 +616,27 @@ export async function exportCsv(
   password: string,
   date?: string
 ): Promise<Blob> {
+  const bodyObj = {
+    device_id: deviceId,
+    password,
+    ...(date && { date }),
+  };
+  const bodyStr = JSON.stringify(bodyObj);
+  const sigHeaders = await signRequest(
+    deviceId,
+    password,
+    "POST",
+    "/export_csv",
+    bodyStr
+  );
+
   const response = await fetch(`${API_BASE_URL}/export_csv`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
+      ...sigHeaders,
     },
-    body: JSON.stringify({
-      device_id: deviceId,
-      password,
-      ...(date && { date }),
-    }),
+    body: bodyStr,
   });
 
   if (!response.ok) {
