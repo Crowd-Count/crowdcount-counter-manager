@@ -575,6 +575,37 @@ export async function getAverageEntryYearData(
 //   return response.group_ids;
 // }
 
+// Map location lookup
+export async function getMapLocationForDevice(
+  deviceId: string
+): Promise<string | null> {
+  try {
+    const response = await apiRequest<{
+      locations: Array<{
+        location_name: string;
+        location_device: string;
+        device_breakdown?: Array<{ device_id: string }>;
+      }>;
+    }>("/get_all_location_data_with_extra");
+
+    for (const loc of response.locations) {
+      if (loc.location_device === deviceId) {
+        return loc.location_name;
+      }
+      if (loc.device_breakdown) {
+        for (const device of loc.device_breakdown) {
+          if (device.device_id === deviceId) {
+            return loc.location_name;
+          }
+        }
+      }
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 // Alerts
 export interface AlertInfo {
   type: string;

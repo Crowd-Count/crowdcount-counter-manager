@@ -76,6 +76,11 @@ export function DevicesProvider({ children }: { children: React.ReactNode }) {
     // Refresh all devices after loading
     if (stored.length > 0) {
       Promise.all(stored.map((d) => fetchDeviceData(d)));
+      // Bootstrap signing keys on the server for all existing devices
+      // so they're ready when signature mode switches to "required"
+      stored.forEach((d) => {
+        api.checkPassword(d.deviceId, d.password).catch(() => {});
+      });
     }
   }, []);
 
@@ -161,18 +166,14 @@ export function DevicesProvider({ children }: { children: React.ReactNode }) {
       password: string,
       name?: string
     ): Promise<boolean> => {
-      // Check if device already exists
-      if (devices.some((d) => d.deviceId === deviceId)) {
+      // Check if device already exists (use ref for current state, not stale closure)
+      if (devicesRef.current.some((d) => d.deviceId === deviceId)) {
         return false;
       }
 
       // Verify credentials
-      try {
-        const isValid = await api.checkPassword(deviceId, password);
-        if (!isValid) {
-          return false;
-        }
-      } catch {
+      const isValid = await api.checkPassword(deviceId, password);
+      if (!isValid) {
         return false;
       }
 
@@ -196,7 +197,7 @@ export function DevicesProvider({ children }: { children: React.ReactNode }) {
 
       return true;
     },
-    [devices]
+    []
   );
 
   const removeDevice = useCallback((id: string) => {
