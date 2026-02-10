@@ -41,7 +41,7 @@ interface DeviceCardProps {
 }
 
 export function DeviceCard({ device, showHistory = true }: DeviceCardProps) {
-  const { refreshDevice, updateDeviceName } = useDevices();
+  const { refreshDevice, updateDeviceName, updateDeviceCount } = useDevices();
   const [isModifying, setIsModifying] = useState(false);
   const [isSetDialogOpen, setIsSetDialogOpen] = useState(false);
   const [newCount, setNewCount] = useState("");
@@ -56,8 +56,8 @@ export function DeviceCard({ device, showHistory = true }: DeviceCardProps) {
   const handleIncrement = async () => {
     setIsModifying(true);
     try {
-      await api.addToCount(device.deviceId, device.password, 1);
-      await refreshDevice(device.id);
+      const newCount = await api.addToCount(device.deviceId, device.password, 1);
+      updateDeviceCount(device.id, newCount);
     } catch (error) {
       console.error("Failed to increment count:", error);
     } finally {
@@ -68,8 +68,8 @@ export function DeviceCard({ device, showHistory = true }: DeviceCardProps) {
   const handleDecrement = async () => {
     setIsModifying(true);
     try {
-      await api.subFromCount(device.deviceId, device.password, 1);
-      await refreshDevice(device.id);
+      const newCount = await api.subFromCount(device.deviceId, device.password, 1);
+      updateDeviceCount(device.id, newCount);
     } catch (error) {
       console.error("Failed to decrement count:", error);
     } finally {
@@ -85,7 +85,7 @@ export function DeviceCard({ device, showHistory = true }: DeviceCardProps) {
     setIsSettingCount(true);
     try {
       await api.setCount(device.deviceId, device.password, value);
-      await refreshDevice(device.id);
+      updateDeviceCount(device.id, value);
       setIsSetDialogOpen(false);
       setNewCount("");
     } catch (error) {

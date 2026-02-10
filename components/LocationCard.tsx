@@ -41,14 +41,14 @@ interface LocationCardProps {
 }
 
 function CompactDeviceRow({ device }: { device: DeviceState }) {
-  const { refreshDevice } = useDevices();
+  const { updateDeviceCount } = useDevices();
   const [isModifying, setIsModifying] = useState(false);
 
   const handleIncrement = async () => {
     setIsModifying(true);
     try {
-      await api.addToCount(device.deviceId, device.password, 1);
-      await refreshDevice(device.id);
+      const newCount = await api.addToCount(device.deviceId, device.password, 1);
+      updateDeviceCount(device.id, newCount);
     } catch (error) {
       console.error("Failed to increment:", error);
     } finally {
@@ -59,8 +59,8 @@ function CompactDeviceRow({ device }: { device: DeviceState }) {
   const handleDecrement = async () => {
     setIsModifying(true);
     try {
-      await api.subFromCount(device.deviceId, device.password, 1);
-      await refreshDevice(device.id);
+      const newCount = await api.subFromCount(device.deviceId, device.password, 1);
+      updateDeviceCount(device.id, newCount);
     } catch (error) {
       console.error("Failed to decrement:", error);
     } finally {

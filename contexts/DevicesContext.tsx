@@ -26,6 +26,7 @@ interface DevicesContextType {
   refreshAllDevices: () => Promise<void>;
   getDevice: (id: string) => DeviceState | undefined;
   updateDevicePassword: (id: string, newPassword: string) => void;
+  updateDeviceCount: (id: string, count: number) => void;
   totalCount: number;
 }
 
@@ -133,29 +134,25 @@ export function DevicesProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const fetchDeviceData = async (device: StoredDevice): Promise<void> => {
-    try {
-      const [count, status, overcrowdingLimit] = await Promise.all([
-        api.getCurrentCount(device.deviceId),
-        api.getConnectionStatus(device.deviceId),
-        api.getOvercrowding(device.deviceId),
-      ]);
+    const [count, status, overcrowdingLimit] = await Promise.all([
+      api.getCurrentCount(device.deviceId).catch(() => null),
+      api.getConnectionStatus(device.deviceId).catch(() => null),
+      api.getOvercrowding(device.deviceId).catch(() => null),
+    ]);
 
-      setDevices((prev) =>
-        prev.map((d) =>
-          d.id === device.id
-            ? {
-                ...d,
-                currentCount: count,
-                isOnline: status === "online",
-                overcrowdingLimit,
-                lastUpdated: new Date(),
-              }
-            : d
-        )
-      );
-    } catch (error) {
-      console.error(`Failed to fetch data for device ${device.deviceId}:`, error);
-    }
+    // Only update fields that were successfully fetched
+    setDevices((prev) =>
+      prev.map((d) => {
+        if (d.id !== device.id) return d;
+        return {
+          ...d,
+          ...(count !== null && { currentCount: count }),
+          ...(status !== null && { isOnline: status === "online" }),
+          ...(overcrowdingLimit !== undefined && { overcrowdingLimit }),
+          lastUpdated: new Date(),
+        };
+      })
+    );
   };
 
   const addDevice = useCallback(
@@ -230,6 +227,14 @@ export function DevicesProvider({ children }: { children: React.ReactNode }) {
     );
   }, []);
 
+  const updateDeviceCount = useCallback((id: string, count: number) => {
+    setDevices((prev) =>
+      prev.map((d) =>
+        d.id === id ? { ...d, currentCount: count, lastUpdated: new Date() } : d
+      )
+    );
+  }, []);
+
   const refreshDevice = useCallback(
     async (id: string) => {
       const device = devices.find((d) => d.id === id);
@@ -264,6 +269,7 @@ export function DevicesProvider({ children }: { children: React.ReactNode }) {
         refreshAllDevices,
         getDevice,
         updateDevicePassword,
+        updateDeviceCount,
         totalCount,
       }}
     >
