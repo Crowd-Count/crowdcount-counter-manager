@@ -27,6 +27,7 @@ interface LocationsContextType {
   getLocation: (id: string) => LocationState | undefined;
   getLocationForDevice: (serverDeviceId: string) => LocationState | undefined;
   getUngroupedDeviceIds: () => string[];
+  adoptAutoLocation: (serverDeviceId: string, password: string, locationName: string, colorName?: LocationColorName) => Promise<string | null>;
 }
 
 const LocationsContext = createContext<LocationsContextType | undefined>(undefined);
@@ -98,21 +99,19 @@ export function LocationsProvider({ children }: { children: React.ReactNode }) {
           setStoredLocations((prev) => {
             let updated = [...prev];
             for (const serverLoc of serverLocations) {
-              // Skip auto locations — show those as ungrouped DeviceCards
-              if (serverLoc.is_auto) continue;
-
               const existingIdx = updated.findIndex((l) => l.id === serverLoc.id);
               const serverDeviceIds = serverLoc.devices.map((d) => d.device_id);
 
               if (existingIdx >= 0) {
                 // Update existing location with server data
+                // Don't revert isAuto to true once it's been adopted (set to false)
                 updated[existingIdx] = {
                   ...updated[existingIdx],
-                  name: serverLoc.name,
+                  name: updated[existingIdx].isAuto === false ? updated[existingIdx].name : serverLoc.name,
                   deviceIds: serverDeviceIds,
                   overcrowdingLimit: serverLoc.overcrowding_limit,
                   isOnMap: serverLoc.on_map,
-                  isAuto: serverLoc.is_auto ?? false,
+                  isAuto: updated[existingIdx].isAuto === false ? false : (serverLoc.is_auto ?? false),
                 };
               } else {
                 // Add new location from server
@@ -351,6 +350,130 @@ export function LocationsProvider({ children }: { children: React.ReactNode }) {
     [storedLocations, devices]
   );
 
+  // Adopt an auto-location for a device: rename it, mark isAuto: false
+  const adoptAutoLocation = useCallback(
+    async (serverDeviceId: string, password: string, locationName: string, colorName: LocationColorName = "blue"): Promise<string | null> => {
+      // First, try to find an existing isAuto location for this device in stored locations
+      const autoLoc = storedLocations.find(
+        (l) => l.isAuto && l.deviceIds.includes(serverDeviceId)
+      );
+
+      if (autoLoc) {
+        // Adopt: rename + mark isAuto: false locally
+        setStoredLocations((prev) =>
+          prev.map((l) =>
+            l.id === autoLoc.id
+              ? { ...l, name: locationName, isAuto: false, colorName }
+              : l
+          )
+        );
+        // Sync rename to server in background
+        const signingDevice = { deviceId: serverDeviceId, password };
+        const creds = [{ device_id: serverDeviceId, password }];
+        api.updateLocation(autoLoc.id, creds, signingDevice, { name: locationName })
+          .catch((err) => console.error("Failed to rename adopted location:", err));
+        return autoLoc.id;
+      }
+
+      // No auto-location found yet — fetch from server
+      try {
+        const serverLocations = await api.getLocationsForDevice(serverDeviceId, password);
+        const serverAutoLoc = serverLocations.find(
+          (sl) => sl.is_auto && sl.devices.some((d) => d.device_id === serverDeviceId)
+        );
+
+        if (serverAutoLoc) {
+          const serverDeviceIds = serverAutoLoc.devices.map((d) => d.device_id);
+          // Store and adopt in one step
+          setStoredLocations((prev) => {
+            const existingIdx = prev.findIndex((l) => l.id === serverAutoLoc.id);
+            if (existingIdx >= 0) {
+              return prev.map((l) =>
+                l.id === serverAutoLoc.id
+                  ? { ...l, name: locationName, isAuto: false, colorName, deviceIds: serverDeviceIds }
+                  : l
+              );
+            }
+            return [
+              ...prev,
+              {
+                id: serverAutoLoc.id,
+                name: locationName,
+                deviceIds: serverDeviceIds,
+                overcrowdingLimit: serverAutoLoc.overcrowding_limit,
+                colorName,
+                isAuto: false,
+                isOnMap: serverAutoLoc.on_map,
+              },
+            ];
+          });
+          // Sync rename to server
+          const signingDevice = { deviceId: serverDeviceId, password };
+          const creds = [{ device_id: serverDeviceId, password }];
+          api.updateLocation(serverAutoLoc.id, creds, signingDevice, { name: locationName })
+            .catch((err) => console.error("Failed to rename adopted location:", err));
+          return serverAutoLoc.id;
+        }
+
+        // No auto-location exists — create a new location
+        const creds = [{ device_id: serverDeviceId, password }];
+        const signingDevice = { deviceId: serverDeviceId, password };
+        const locationId = await api.createLocation(creds, signingDevice, locationName);
+        setStoredLocations((prev) => [
+          ...prev,
+          {
+            id: locationId,
+            name: locationName,
+            deviceIds: [serverDeviceId],
+            overcrowdingLimit: null,
+            colorName,
+            isAuto: false,
+            isOnMap: false,
+          },
+        ]);
+        return locationId;
+      } catch (err) {
+        console.error("Failed to adopt/create location:", err);
+        return null;
+      }
+    },
+    [storedLocations, devices]
+  );
+
+  // Auto-adopt: if any devices are ungrouped but have an isAuto location stored, adopt it
+  useEffect(() => {
+    if (isLoading) return;
+    const groupedServerIds = new Set(
+      storedLocations.filter((l) => !l.isAuto).flatMap((l) => l.deviceIds)
+    );
+    const ungroupedDevices = devices.filter((d) => !groupedServerIds.has(d.deviceId));
+    if (ungroupedDevices.length === 0) return;
+
+    let needsUpdate = false;
+    const updated = storedLocations.map((loc) => {
+      if (!loc.isAuto) return loc;
+      // Check if any ungrouped device belongs to this auto-location
+      const hasUngrouped = loc.deviceIds.some(
+        (did) => ungroupedDevices.some((d) => d.deviceId === did)
+      );
+      if (hasUngrouped) {
+        needsUpdate = true;
+        // Adopt: use first device's name as location name
+        const firstDevice = ungroupedDevices.find((d) => loc.deviceIds.includes(d.deviceId));
+        return {
+          ...loc,
+          name: firstDevice?.name || firstDevice?.deviceId || loc.name,
+          isAuto: false,
+        };
+      }
+      return loc;
+    });
+
+    if (needsUpdate) {
+      setStoredLocations(updated);
+    }
+  }, [storedLocations, devices, isLoading]);
+
   const getLocation = useCallback(
     (id: string) => locations.find((l) => l.id === id),
     [locations]
@@ -386,6 +509,7 @@ export function LocationsProvider({ children }: { children: React.ReactNode }) {
         getLocation,
         getLocationForDevice,
         getUngroupedDeviceIds,
+        adoptAutoLocation,
       }}
     >
       {children}

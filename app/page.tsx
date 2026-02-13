@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useDevices } from "@/contexts/DevicesContext";
+import { useLocations } from "@/contexts/LocationsContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -17,6 +18,8 @@ import {
 export default function LoginPage() {
   const router = useRouter();
   const { devices, addDevice, isLoading } = useDevices();
+  const { adoptAutoLocation } = useLocations();
+  const [locationName, setLocationName] = useState("");
   const [deviceId, setDeviceId] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -34,11 +37,12 @@ export default function LoginPage() {
     setError("");
     setIsSubmitting(true);
 
+    const trimmedLocationName = locationName.trim();
     const trimmedDeviceId = deviceId.trim();
     const trimmedPassword = password.trim();
 
-    if (!trimmedDeviceId || !trimmedPassword) {
-      setError("Please enter both Counter ID and Password");
+    if (!trimmedLocationName || !trimmedDeviceId || !trimmedPassword) {
+      setError("Please fill in all fields");
       setIsSubmitting(false);
       return;
     }
@@ -46,6 +50,8 @@ export default function LoginPage() {
     try {
       const success = await addDevice(trimmedDeviceId, trimmedPassword);
       if (success) {
+        // Adopt/create a location for this device with the user's chosen name
+        await adoptAutoLocation(trimmedDeviceId, trimmedPassword, trimmedLocationName);
         router.push("/dashboard");
       } else {
         setError("Invalid Counter ID or Password");
@@ -77,6 +83,17 @@ export default function LoginPage() {
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
+              <Label htmlFor="locationName">Location Name</Label>
+              <Input
+                id="locationName"
+                type="text"
+                placeholder="e.g., Main Entrance"
+                value={locationName}
+                onChange={(e) => setLocationName(e.target.value)}
+                disabled={isSubmitting}
+              />
+            </div>
+            <div className="space-y-2">
               <Label htmlFor="deviceId">Counter ID</Label>
               <Input
                 id="deviceId"
@@ -107,7 +124,7 @@ export default function LoginPage() {
               className="w-full"
               disabled={isSubmitting}
             >
-              {isSubmitting ? "Connecting..." : "Add Counter"}
+              {isSubmitting ? "Connecting..." : "Get Started"}
             </Button>
           </form>
           <p className="text-xs text-muted-foreground text-center mt-4 px-2">
