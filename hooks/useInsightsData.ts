@@ -4,9 +4,11 @@ import { useState, useEffect, useRef } from "react";
 import { useDataCache } from "@/contexts/DataCacheContext";
 import {
   fetchInsightsForCredentials,
+  fetchLocationInsights,
   makeCredKey,
   type DeviceCredentials,
   type InsightsCacheEntry,
+  type LocationFetchParams,
 } from "@/lib/dataFetchers";
 
 export interface InsightsData {
@@ -57,19 +59,35 @@ const EMPTY_DATA: Omit<InsightsData, "isLoading"> = {
   avgEntryYearData: null,
 };
 
-export function useInsightsData(credentials: DeviceCredentials[]): InsightsData {
+export function useInsightsData(
+  credentials: DeviceCredentials[],
+  locationParams?: LocationFetchParams
+): InsightsData {
   const credentialsRef = useRef<DeviceCredentials[]>([]);
   if (credentials.length > 0 && credentialsRef.current.length === 0) {
     credentialsRef.current = credentials;
   }
   const stableCredentials = credentialsRef.current;
 
+  const locationParamsRef = useRef<LocationFetchParams | undefined>(undefined);
+  if (locationParams && !locationParamsRef.current) {
+    locationParamsRef.current = locationParams;
+  }
+  const stableLocationParams = locationParamsRef.current;
+
   const { cacheVersion, getCachedInsights, setCachedInsights } = useDataCache();
-  const credKey = stableCredentials.length > 0 ? makeCredKey(stableCredentials) : "";
+
+  const credKey = stableLocationParams
+    ? `loc:${stableLocationParams.locationId}`
+    : stableCredentials.length > 0
+      ? makeCredKey(stableCredentials)
+      : "";
+
+  const hasData = !!stableLocationParams || stableCredentials.length > 0;
 
   // Check cache synchronously for initial state
   const initialCache = credKey ? getCachedInsights(credKey) : null;
-  const [isLoading, setIsLoading] = useState(!initialCache && stableCredentials.length > 0);
+  const [isLoading, setIsLoading] = useState(!initialCache && hasData);
   const [data, setData] = useState<Omit<InsightsData, "isLoading">>(
     initialCache ? applyInsightsCache(initialCache) : EMPTY_DATA
   );
@@ -79,7 +97,7 @@ export function useInsightsData(credentials: DeviceCredentials[]): InsightsData 
 
   // Fetch on mount if cache miss
   useEffect(() => {
-    if (stableCredentials.length === 0) {
+    if (!hasData) {
       setIsLoading(false);
       return;
     }
@@ -88,7 +106,11 @@ export function useInsightsData(credentials: DeviceCredentials[]): InsightsData 
     let cancelled = false;
     setIsLoading(true);
 
-    fetchInsightsForCredentials(stableCredentials)
+    const fetchPromise = stableLocationParams
+      ? fetchLocationInsights(stableLocationParams)
+      : fetchInsightsForCredentials(stableCredentials);
+
+    fetchPromise
       .then((result) => {
         if (cancelled) return;
         hasFetched.current = true;
@@ -106,7 +128,7 @@ export function useInsightsData(credentials: DeviceCredentials[]): InsightsData 
     return () => {
       cancelled = true;
     };
-  }, [stableCredentials, credKey, setCachedInsights]);
+  }, [stableCredentials, stableLocationParams, credKey, hasData, setCachedInsights]);
 
   // Silently update when cacheVersion changes (background refresh)
   useEffect(() => {

@@ -27,13 +27,14 @@ import {
   RefreshCw,
   MapPin,
   ExternalLink,
+  FlaskConical,
 } from "lucide-react";
 
 export default function DashboardPage() {
   const router = useRouter();
   const { devices, isLoading, addDevice, refreshAllDevices } =
     useDevices();
-  const { locations, getUngroupedDeviceIds } = useLocations();
+  const { locations, getUngroupedDeviceIds, addLocation } = useLocations();
 
   // Add device dialog state
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
@@ -48,7 +49,25 @@ export default function DashboardPage() {
   const [newLocationName, setNewLocationName] = useState("");
   const [newLocationColor, setNewLocationColor] = useState<LocationColorName>("blue");
   const [selectedDeviceIds, setSelectedDeviceIds] = useState<string[]>([]);
-  const { addLocation } = useLocations();
+  const [isCreatingLocation, setIsCreatingLocation] = useState(false);
+  const [createLocationError, setCreateLocationError] = useState("");
+
+  // Testing toggle
+  const [isTesting, setIsTesting] = useState(false);
+  useEffect(() => {
+    setIsTesting(localStorage.getItem("crowdcount_testing") === "true");
+  }, []);
+
+  const handleToggleTesting = () => {
+    const newValue = !isTesting;
+    if (newValue) {
+      localStorage.setItem("crowdcount_testing", "true");
+    } else {
+      localStorage.removeItem("crowdcount_testing");
+    }
+    // Reload to re-fetch all data from new API
+    window.location.reload();
+  };
 
   // Redirect to login if no devices
   useEffect(() => {
@@ -93,20 +112,34 @@ export default function DashboardPage() {
     setIsRefreshing(false);
   };
 
-  const handleCreateLocation = () => {
+  const handleCreateLocation = async () => {
     if (!newLocationName.trim()) return;
-    addLocation(newLocationName.trim(), newLocationColor, selectedDeviceIds);
-    setIsLocationDialogOpen(false);
-    setNewLocationName("");
-    setNewLocationColor("blue");
-    setSelectedDeviceIds([]);
+    if (selectedDeviceIds.length === 0) {
+      setCreateLocationError("Select at least one counter");
+      return;
+    }
+
+    setIsCreatingLocation(true);
+    setCreateLocationError("");
+
+    // selectedDeviceIds are server device IDs (d.deviceId)
+    const result = await addLocation(newLocationName.trim(), newLocationColor, selectedDeviceIds);
+    if (result) {
+      setIsLocationDialogOpen(false);
+      setNewLocationName("");
+      setNewLocationColor("blue");
+      setSelectedDeviceIds([]);
+    } else {
+      setCreateLocationError("Failed to create location on server");
+    }
+    setIsCreatingLocation(false);
   };
 
-  const toggleDeviceSelection = (deviceId: string) => {
+  const toggleDeviceSelection = (serverDeviceId: string) => {
     setSelectedDeviceIds((prev) =>
-      prev.includes(deviceId)
-        ? prev.filter((id) => id !== deviceId)
-        : [...prev, deviceId]
+      prev.includes(serverDeviceId)
+        ? prev.filter((id) => id !== serverDeviceId)
+        : [...prev, serverDeviceId]
     );
   };
 
@@ -123,7 +156,7 @@ export default function DashboardPage() {
     ungroupedDeviceIds.includes(d.id)
   );
 
-  // Available counters for the create-location dialog (currently ungrouped)
+  // Available counters for the create-location dialog (currently ungrouped, use server device IDs)
   const availableForLocation = ungroupedDevices;
 
   return (
@@ -141,6 +174,11 @@ export default function DashboardPage() {
                 className="shrink-0"
               />
               <h1 className="text-2xl font-bold">Counter Manager</h1>
+              {isTesting && (
+                <span className="text-xs font-semibold bg-yellow-500 text-black px-2 py-0.5 rounded-full uppercase">
+                  Staging
+                </span>
+              )}
             </div>
             <div className="flex items-center gap-2">
               <AlertBanner />
@@ -170,6 +208,7 @@ export default function DashboardPage() {
                     setSelectedDeviceIds([]);
                     setNewLocationName("");
                     setNewLocationColor("blue");
+                    setCreateLocationError("");
                   }
                 }}
               >
@@ -195,6 +234,7 @@ export default function DashboardPage() {
                         placeholder="e.g., Main Entrance"
                         value={newLocationName}
                         onChange={(e) => setNewLocationName(e.target.value)}
+                        disabled={isCreatingLocation}
                       />
                     </div>
 
@@ -213,26 +253,28 @@ export default function DashboardPage() {
                             }`}
                             style={{ backgroundColor: color.value }}
                             onClick={() => setNewLocationColor(color.name as LocationColorName)}
+                            disabled={isCreatingLocation}
                           />
                         ))}
                       </div>
                     </div>
 
-                    {/* Device selection */}
+                    {/* Device selection — uses server device IDs */}
                     {availableForLocation.length > 0 && (
                       <div className="space-y-2">
-                        <Label>Counters (optional)</Label>
+                        <Label>Counters</Label>
                         <div className="space-y-1 max-h-40 overflow-y-auto border rounded-md p-2">
                           {availableForLocation.map((device) => (
                             <button
                               key={device.id}
                               type="button"
                               className={`w-full text-left px-3 py-2 rounded-md text-sm transition-colors ${
-                                selectedDeviceIds.includes(device.id)
+                                selectedDeviceIds.includes(device.deviceId)
                                   ? "bg-primary text-primary-foreground"
                                   : "hover:bg-accent"
                               }`}
-                              onClick={() => toggleDeviceSelection(device.id)}
+                              onClick={() => toggleDeviceSelection(device.deviceId)}
+                              disabled={isCreatingLocation}
                             >
                               {device.name || device.deviceId}
                             </button>
@@ -240,13 +282,17 @@ export default function DashboardPage() {
                         </div>
                       </div>
                     )}
+
+                    {createLocationError && (
+                      <p className="text-sm text-destructive">{createLocationError}</p>
+                    )}
                   </div>
                   <DialogFooter>
                     <Button
                       onClick={handleCreateLocation}
-                      disabled={!newLocationName.trim()}
+                      disabled={!newLocationName.trim() || selectedDeviceIds.length === 0 || isCreatingLocation}
                     >
-                      Create Location
+                      {isCreatingLocation ? "Creating..." : "Create Location"}
                     </Button>
                   </DialogFooter>
                 </DialogContent>
@@ -338,6 +384,21 @@ export default function DashboardPage() {
           </>
         )}
       </main>
+
+      {/* Footer with testing toggle */}
+      <footer className="border-t mt-8">
+        <div className="container mx-auto px-4 py-3">
+          <div className="flex items-center justify-center">
+            <button
+              onClick={handleToggleTesting}
+              className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <FlaskConical className="h-3 w-3" />
+              {isTesting ? "Switch to Production" : "Switch to Staging"}
+            </button>
+          </div>
+        </div>
+      </footer>
     </div>
   );
 }

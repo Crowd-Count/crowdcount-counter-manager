@@ -6,14 +6,16 @@ import Link from "next/link";
 import { useDevices } from "@/contexts/DevicesContext";
 import { useLocations } from "@/contexts/LocationsContext";
 import { LOCATION_COLORS } from "@/lib/types";
+import * as api from "@/lib/api";
 import {
   useAggregatedHistory,
   type DeviceCredentials,
+  type LocationFetchParams,
 } from "@/hooks/useAggregatedHistory";
 import { HistoryContent } from "@/components/HistoryContent";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ThemeToggle";
-import { ArrowLeft, RefreshCw } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 
 export default function LocationHistoryPage() {
   const params = useParams();
@@ -23,14 +25,26 @@ export default function LocationHistoryPage() {
 
   const location = getLocation(locationId);
 
+  // Build credentials for fallback + location params for server-side aggregation
   const credentials: DeviceCredentials[] = useMemo(() => {
     if (!location) return [];
     return devices
-      .filter((d) => location.deviceIds.includes(d.id))
+      .filter((d) => location.deviceIds.includes(d.deviceId))
       .map((d) => ({ deviceId: d.deviceId, password: d.password }));
   }, [location, devices]);
 
-  const history = useAggregatedHistory(credentials);
+  const locationParams: LocationFetchParams | undefined = useMemo(() => {
+    if (!location) return undefined;
+    const locCreds = api.getLocationCredentials(location, devices);
+    if (!locCreds) return undefined;
+    return {
+      locationId: location.id,
+      credentials: locCreds.credentials,
+      signingDevice: locCreds.signingDevice,
+    };
+  }, [location, devices]);
+
+  const history = useAggregatedHistory(credentials, locationParams);
 
   if (!location) {
     return (

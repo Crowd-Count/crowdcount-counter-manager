@@ -1,4 +1,5 @@
 import * as api from "@/lib/api";
+import type { SigningCredentials } from "@/lib/api";
 import {
   getLocalDayUTCBounds,
   shiftDayDataToLocal,
@@ -14,6 +15,12 @@ import { getOrFetch, forceRefresh } from "@/lib/apiCache";
 export interface DeviceCredentials {
   deviceId: string;
   password: string;
+}
+
+export interface LocationFetchParams {
+  locationId: string;
+  credentials: Array<{ device_id: string; password: string }>;
+  signingDevice: SigningCredentials;
 }
 
 export type DataType = "population" | "entries";
@@ -307,5 +314,150 @@ export async function fetchHistoryCharts(
     dayData: buildDayChart(dayResults),
     weekData: buildWeekChart(weekResults, maxDayIndex),
     yearData: buildYearChart(yearResults),
+  };
+}
+
+// ── Location-level fetchers (server-side aggregation) ──
+
+function cachedLocationCall<T>(
+  fnName: string,
+  locationId: string,
+  params: string,
+  fetcher: () => Promise<T>,
+  force: boolean
+): Promise<T> {
+  const key = `loc:${fnName}:${locationId}:${params}`;
+  return force ? forceRefresh(key, fetcher) : getOrFetch(key, fetcher);
+}
+
+export async function fetchLocationInsights(
+  loc: LocationFetchParams,
+  force = false
+): Promise<InsightsCacheEntry> {
+  const { locationId, credentials, signingDevice } = loc;
+  const { utcDate1, utcDate2, utcMinutesAtMidnight } = getLocalDayUTCBounds();
+  const needsSecondDate = utcDate1 !== utcDate2;
+  const localDate = formatLocalDate();
+  const now = new Date();
+  const currentYear = now.getUTCFullYear();
+
+  const [
+    day1, avgDay1, entryDay1, avgEntryDay1,
+    day2, avgDay2, entryDay2, avgEntryDay2,
+    week, avgWeek, entryWeek, avgEntryWeek,
+    year, avgYear, entryYear, avgEntryYear,
+  ] = await Promise.all([
+    cachedLocationCall("getDayData", locationId, utcDate1, () => api.getLocationDayData(locationId, credentials, signingDevice, utcDate1), force).catch(() => ({})),
+    cachedLocationCall("getAverageDayData", locationId, utcDate1, () => api.getLocationAverageDayData(locationId, credentials, signingDevice, utcDate1), force).catch(() => ({})),
+    cachedLocationCall("getEntryDayData", locationId, utcDate1, () => api.getLocationEntryDayData(locationId, credentials, signingDevice, utcDate1), force).catch(() => ({})),
+    cachedLocationCall("getAverageEntryDayData", locationId, utcDate1, () => api.getLocationAverageEntryDayData(locationId, credentials, signingDevice, utcDate1), force).catch(() => ({})),
+    needsSecondDate ? cachedLocationCall("getDayData", locationId, utcDate2, () => api.getLocationDayData(locationId, credentials, signingDevice, utcDate2), force).catch(() => ({})) : Promise.resolve({} as Record<string, number>),
+    needsSecondDate ? cachedLocationCall("getAverageDayData", locationId, utcDate2, () => api.getLocationAverageDayData(locationId, credentials, signingDevice, utcDate2), force).catch(() => ({})) : Promise.resolve({} as Record<string, number>),
+    needsSecondDate ? cachedLocationCall("getEntryDayData", locationId, utcDate2, () => api.getLocationEntryDayData(locationId, credentials, signingDevice, utcDate2), force).catch(() => ({})) : Promise.resolve({} as Record<string, number>),
+    needsSecondDate ? cachedLocationCall("getAverageEntryDayData", locationId, utcDate2, () => api.getLocationAverageEntryDayData(locationId, credentials, signingDevice, utcDate2), force).catch(() => ({})) : Promise.resolve({} as Record<string, number>),
+    cachedLocationCall("getWeekData", locationId, localDate, () => api.getLocationWeekData(locationId, credentials, signingDevice, localDate), force).catch(() => ({})),
+    cachedLocationCall("getAverageWeekData", locationId, localDate, () => api.getLocationAverageWeekData(locationId, credentials, signingDevice, localDate), force).catch(() => ({})),
+    cachedLocationCall("getEntryWeekData", locationId, localDate, () => api.getLocationEntryWeekData(locationId, credentials, signingDevice, localDate), force).catch(() => ({})),
+    cachedLocationCall("getAverageEntryWeekData", locationId, localDate, () => api.getLocationAverageEntryWeekData(locationId, credentials, signingDevice, localDate), force).catch(() => ({})),
+    cachedLocationCall("getYearData", locationId, String(currentYear), () => api.getLocationYearData(locationId, credentials, signingDevice, currentYear), force).catch(() => ({})),
+    cachedLocationCall("getAverageYearData", locationId, String(currentYear), () => api.getLocationAverageYearData(locationId, credentials, signingDevice, currentYear), force).catch(() => null),
+    cachedLocationCall("getEntryYearData", locationId, String(currentYear), () => api.getLocationEntryYearData(locationId, credentials, signingDevice, currentYear), force).catch(() => ({})),
+    cachedLocationCall("getAverageEntryYearData", locationId, String(currentYear), () => api.getLocationAverageEntryYearData(locationId, credentials, signingDevice, currentYear), force).catch(() => null),
+  ]);
+
+  // Filter future local days from current-week data
+  const maxIdx = getLocalDayOfWeekIndex();
+  const daysOfWeek = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+  function stripFutureDays(rec: Record<string, number>): Record<string, number> {
+    const out: Record<string, number> = {};
+    for (const [key, val] of Object.entries(rec)) {
+      const idx = daysOfWeek.indexOf(key);
+      if (idx === -1 || idx <= maxIdx) out[key] = val;
+    }
+    return out;
+  }
+
+  return {
+    dayData: shiftDayDataToLocal(day1, day2, utcMinutesAtMidnight),
+    avgDayData: shiftDayDataToLocal(avgDay1, avgDay2, utcMinutesAtMidnight),
+    entryDayData: shiftDayDataToLocal(entryDay1, entryDay2, utcMinutesAtMidnight),
+    avgEntryDayData: shiftDayDataToLocal(avgEntryDay1, avgEntryDay2, utcMinutesAtMidnight),
+    weekData: stripFutureDays(week),
+    avgWeekData: avgWeek,
+    entryWeekData: stripFutureDays(entryWeek),
+    avgEntryWeekData: avgEntryWeek,
+    yearData: year,
+    avgYearData: avgYear,
+    entryYearData: entryYear,
+    avgEntryYearData: avgEntryYear,
+  };
+}
+
+export async function fetchLocationAvailableDates(
+  loc: LocationFetchParams,
+  force = false
+): Promise<string[]> {
+  const { locationId, credentials, signingDevice } = loc;
+  const dates = await cachedLocationCall(
+    "getAvailableDates", locationId, "",
+    () => api.getLocationAvailableDates(locationId, credentials, signingDevice),
+    force
+  ).catch(() => [] as string[]);
+  return utcDatesToLocalDates(dates);
+}
+
+export async function fetchLocationHistoryCharts(
+  loc: LocationFetchParams,
+  date: string,
+  weekDate: string,
+  year: string,
+  dataType: DataType,
+  force = false
+): Promise<HistoryCacheEntry> {
+  const { locationId, credentials, signingDevice } = loc;
+  const yearNum = parseInt(year, 10);
+  const { utcDate1, utcDate2, utcMinutesAtMidnight } = getLocalDayUTCBounds(date);
+  const needsSecondDate = utcDate1 !== utcDate2;
+
+  const getDayFn = dataType === "entries" ? api.getLocationEntryDayData : api.getLocationDayData;
+  const getAvgDayFn = dataType === "entries" ? api.getLocationAverageEntryDayData : api.getLocationAverageDayData;
+  const getWeekFn = dataType === "entries" ? api.getLocationEntryWeekData : api.getLocationWeekData;
+  const getAvgWeekFn = dataType === "entries" ? api.getLocationAverageEntryWeekData : api.getLocationAverageWeekData;
+  const getYearFn = dataType === "entries" ? api.getLocationEntryYearData : api.getLocationYearData;
+  const getAvgYearFn = dataType === "entries" ? api.getLocationAverageEntryYearData : api.getLocationAverageYearData;
+
+  const dayFnName = dataType === "entries" ? "getEntryDayData" : "getDayData";
+  const avgDayFnName = dataType === "entries" ? "getAverageEntryDayData" : "getAverageDayData";
+  const weekFnName = dataType === "entries" ? "getEntryWeekData" : "getWeekData";
+  const avgWeekFnName = dataType === "entries" ? "getAverageEntryWeekData" : "getAverageWeekData";
+  const yearFnName = dataType === "entries" ? "getEntryYearData" : "getYearData";
+  const avgYearFnName = dataType === "entries" ? "getAverageEntryYearData" : "getAverageYearData";
+
+  const [dayD1, dayAvg1, dayD2, dayAvg2, weekD, weekAvg, yearD, yearAvg] = await Promise.all([
+    cachedLocationCall(dayFnName, locationId, utcDate1, () => getDayFn(locationId, credentials, signingDevice, utcDate1), force).catch(() => ({})),
+    cachedLocationCall(avgDayFnName, locationId, utcDate1, () => getAvgDayFn(locationId, credentials, signingDevice, utcDate1), force).catch(() => ({})),
+    needsSecondDate ? cachedLocationCall(dayFnName, locationId, utcDate2, () => getDayFn(locationId, credentials, signingDevice, utcDate2), force).catch(() => ({})) : Promise.resolve({} as Record<string, number>),
+    needsSecondDate ? cachedLocationCall(avgDayFnName, locationId, utcDate2, () => getAvgDayFn(locationId, credentials, signingDevice, utcDate2), force).catch(() => ({})) : Promise.resolve({} as Record<string, number>),
+    cachedLocationCall(weekFnName, locationId, weekDate, () => getWeekFn(locationId, credentials, signingDevice, weekDate), force).catch(() => ({})),
+    cachedLocationCall(avgWeekFnName, locationId, weekDate, () => getAvgWeekFn(locationId, credentials, signingDevice, weekDate), force).catch(() => ({})),
+    cachedLocationCall(yearFnName, locationId, String(yearNum), () => getYearFn(locationId, credentials, signingDevice, yearNum), force).catch(() => ({})),
+    cachedLocationCall(avgYearFnName, locationId, String(yearNum), () => getAvgYearFn(locationId, credentials, signingDevice, yearNum), force).catch(() => null),
+  ]);
+
+  const dayResult = {
+    data: shiftDayDataToLocal(dayD1, dayD2, utcMinutesAtMidnight),
+    avgData: shiftDayDataToLocal(dayAvg1, dayAvg2 as Record<string, number>, utcMinutesAtMidnight),
+  };
+  const weekResult = { data: weekD, avgData: weekAvg };
+  const yearResult = { data: yearD, avgData: yearAvg ?? {} };
+
+  const maxDayIndex = isDateInCurrentLocalWeek(weekDate)
+    ? getLocalDayOfWeekIndex()
+    : undefined;
+
+  return {
+    dayData: buildDayChart([dayResult]),
+    weekData: buildWeekChart([weekResult], maxDayIndex),
+    yearData: buildYearChart([yearResult]),
   };
 }

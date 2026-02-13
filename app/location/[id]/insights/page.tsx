@@ -6,8 +6,10 @@ import Link from "next/link";
 import { useDevices } from "@/contexts/DevicesContext";
 import { useLocations } from "@/contexts/LocationsContext";
 import { LOCATION_COLORS } from "@/lib/types";
+import * as api from "@/lib/api";
 import { useInsightsData } from "@/hooks/useInsightsData";
 import type { DeviceCredentials } from "@/hooks/useAggregatedHistory";
+import type { LocationFetchParams } from "@/lib/dataFetchers";
 import { InsightsContent } from "@/components/InsightsContent";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ThemeToggle";
@@ -24,11 +26,22 @@ export default function LocationInsightsPage() {
   const credentials: DeviceCredentials[] = useMemo(() => {
     if (!location) return [];
     return devices
-      .filter((d) => location.deviceIds.includes(d.id))
+      .filter((d) => location.deviceIds.includes(d.deviceId))
       .map((d) => ({ deviceId: d.deviceId, password: d.password }));
   }, [location, devices]);
 
-  const data = useInsightsData(credentials);
+  const locationParams: LocationFetchParams | undefined = useMemo(() => {
+    if (!location) return undefined;
+    const locCreds = api.getLocationCredentials(location, devices);
+    if (!locCreds) return undefined;
+    return {
+      locationId: location.id,
+      credentials: locCreds.credentials,
+      signingDevice: locCreds.signingDevice,
+    };
+  }, [location, devices]);
+
+  const data = useInsightsData(credentials, locationParams);
 
   if (!location) {
     return (

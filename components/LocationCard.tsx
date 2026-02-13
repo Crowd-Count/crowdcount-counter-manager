@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import type { LocationState, DeviceState } from "@/lib/types";
 import { LOCATION_COLORS } from "@/lib/types";
@@ -119,7 +119,7 @@ function CompactDeviceRow({ device }: { device: DeviceState }) {
 
 export function LocationCard({ location }: LocationCardProps) {
   const { devices, addDevice } = useDevices();
-  const { locations, addLocation, addDeviceToLocation, removeLocation } = useLocations();
+  const { addDeviceToLocation } = useLocations();
 
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [newDeviceId, setNewDeviceId] = useState("");
@@ -129,16 +129,13 @@ export function LocationCard({ location }: LocationCardProps) {
 
   // Track a pending device ID that needs to be added to a location once it appears in state
   const pendingDeviceRef = useRef<string | null>(null);
-  const pendingTargetRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (!pendingDeviceRef.current) return;
     const added = devices.find((d) => d.deviceId === pendingDeviceRef.current);
     if (added) {
-      const targetId = pendingTargetRef.current || location.id;
-      addDeviceToLocation(targetId, added.id);
+      addDeviceToLocation(location.id, added.deviceId);
       pendingDeviceRef.current = null;
-      pendingTargetRef.current = null;
     }
   }, [devices, location.id, addDeviceToLocation]);
 
@@ -156,69 +153,36 @@ export function LocationCard({ location }: LocationCardProps) {
     }
 
     try {
-      // Check if device belongs to a different location on the public map
-      const mapLocationName = await api.getMapLocationForDevice(trimmedId);
-      const belongsElsewhere = mapLocationName !== null && mapLocationName !== location.name;
-
-      // Determine target location
-      let targetLocationId = location.id;
-      if (belongsElsewhere) {
-        const existingLoc = locations.find((l) => l.name === mapLocationName);
-        if (existingLoc) {
-          targetLocationId = existingLoc.id;
-        } else {
-          targetLocationId = addLocation(mapLocationName, "blue");
-        }
-      }
-
       // Check if device already exists in the app
       const existing = devices.find((d) => d.deviceId === trimmedId);
       if (existing) {
-        addDeviceToLocation(targetLocationId, existing.id);
+        addDeviceToLocation(location.id, existing.deviceId);
       } else {
-        // Set pending so the useEffect adds it to the target location once state updates
+        // Set pending so the useEffect adds it to the location once state updates
         pendingDeviceRef.current = trimmedId;
-        pendingTargetRef.current = targetLocationId !== location.id ? targetLocationId : null;
         const success = await addDevice(trimmedId, trimmedPw);
         if (!success) {
           pendingDeviceRef.current = null;
-          pendingTargetRef.current = null;
           setAddError("Invalid credentials or counter already added");
           setIsAdding(false);
           return;
         }
       }
 
-      if (belongsElsewhere) {
-        setNewDeviceId("");
-        setNewPassword("");
-        // If current location is now empty, clean it up
-        if (location.deviceIds.length === 0) {
-          await removeLocation(location.id);
-        } else {
-          setAddError(
-            `This counter belongs to "${mapLocationName}" on the public map and was added there instead.`
-          );
-        }
-        setIsAdding(false);
-        return;
-      }
-
-      // Normal flow — device added to current location
       setIsAddOpen(false);
       setNewDeviceId("");
       setNewPassword("");
     } catch {
       pendingDeviceRef.current = null;
-      pendingTargetRef.current = null;
       setAddError("Failed to add counter");
     } finally {
       setIsAdding(false);
     }
   };
 
+  // Look up devices by server device ID (d.deviceId), not local UUID
   const memberDevices = devices.filter((d) =>
-    location.deviceIds.includes(d.id)
+    location.deviceIds.includes(d.deviceId)
   );
 
   const colorValue =

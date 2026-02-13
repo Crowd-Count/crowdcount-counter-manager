@@ -5,13 +5,16 @@ import { useDataCache } from "@/contexts/DataCacheContext";
 import {
   fetchAvailableDates,
   fetchHistoryCharts,
+  fetchLocationAvailableDates,
+  fetchLocationHistoryCharts,
   makeCredKey,
   type ChartData,
   type DeviceCredentials,
   type DataType,
+  type LocationFetchParams,
 } from "@/lib/dataFetchers";
 
-export type { ChartData, DeviceCredentials, DataType } from "@/lib/dataFetchers";
+export type { ChartData, DeviceCredentials, DataType, LocationFetchParams } from "@/lib/dataFetchers";
 
 export interface AggregatedHistoryResult {
   availableDates: string[];
@@ -34,13 +37,20 @@ export interface AggregatedHistoryResult {
 }
 
 export function useAggregatedHistory(
-  credentials: DeviceCredentials[]
+  credentials: DeviceCredentials[],
+  locationParams?: LocationFetchParams
 ): AggregatedHistoryResult {
   const credentialsRef = useRef<DeviceCredentials[]>([]);
   if (credentials.length > 0 && credentialsRef.current.length === 0) {
     credentialsRef.current = credentials;
   }
   const stableCredentials = credentialsRef.current;
+
+  const locationParamsRef = useRef<LocationFetchParams | undefined>(undefined);
+  if (locationParams && !locationParamsRef.current) {
+    locationParamsRef.current = locationParams;
+  }
+  const stableLocationParams = locationParamsRef.current;
 
   const {
     cacheVersion,
@@ -50,14 +60,21 @@ export function useAggregatedHistory(
     setCachedHistory,
   } = useDataCache();
 
-  const credKey = stableCredentials.length > 0 ? makeCredKey(stableCredentials) : "";
+  // Use location ID as the cred key when available, otherwise device-based
+  const credKey = stableLocationParams
+    ? `loc:${stableLocationParams.locationId}`
+    : stableCredentials.length > 0
+      ? makeCredKey(stableCredentials)
+      : "";
+
+  const hasData = !!stableLocationParams || stableCredentials.length > 0;
 
   // Check dates cache synchronously
   const initialDates = credKey ? getCachedDates(credKey) : null;
 
   const [dataType, setDataType] = useState<DataType>("population");
   const [availableDates, setAvailableDates] = useState<string[]>(initialDates ?? []);
-  const [isLoadingDates, setIsLoadingDates] = useState(!initialDates && stableCredentials.length > 0);
+  const [isLoadingDates, setIsLoadingDates] = useState(!initialDates && hasData);
 
   // Compute initial date selections from cached dates
   const initialMostRecent = initialDates && initialDates.length > 0 ? initialDates[initialDates.length - 1] : "";
@@ -74,11 +91,11 @@ export function useAggregatedHistory(
   const initialHistory = initialHistKey ? getCachedHistory(initialHistKey) : null;
 
   const [dayData, setDayData] = useState<ChartData[]>(initialHistory?.dayData ?? []);
-  const [isLoadingDay, setIsLoadingDay] = useState(!initialHistory && stableCredentials.length > 0);
+  const [isLoadingDay, setIsLoadingDay] = useState(!initialHistory && hasData);
   const [weekData, setWeekData] = useState<ChartData[]>(initialHistory?.weekData ?? []);
-  const [isLoadingWeek, setIsLoadingWeek] = useState(!initialHistory && stableCredentials.length > 0);
+  const [isLoadingWeek, setIsLoadingWeek] = useState(!initialHistory && hasData);
   const [yearData, setYearData] = useState<ChartData[]>(initialHistory?.yearData ?? []);
-  const [isLoadingYear, setIsLoadingYear] = useState(!initialHistory && stableCredentials.length > 0);
+  const [isLoadingYear, setIsLoadingYear] = useState(!initialHistory && hasData);
 
   // Track whether initial fetches have been done
   const datesFetched = useRef(!!initialDates);
@@ -86,12 +103,14 @@ export function useAggregatedHistory(
 
   // Load available dates
   const loadAvailableDates = useCallback(async () => {
-    if (stableCredentials.length === 0) return;
+    if (!hasData) return;
     if (datesFetched.current) return;
 
     setIsLoadingDates(true);
     try {
-      const dates = await fetchAvailableDates(stableCredentials);
+      const dates = stableLocationParams
+        ? await fetchLocationAvailableDates(stableLocationParams)
+        : await fetchAvailableDates(stableCredentials);
       datesFetched.current = true;
       setAvailableDates(dates);
       setCachedDates(credKey, dates);
@@ -108,17 +127,17 @@ export function useAggregatedHistory(
     } finally {
       setIsLoadingDates(false);
     }
-  }, [stableCredentials, credKey, setCachedDates]);
+  }, [stableCredentials, stableLocationParams, credKey, hasData, setCachedDates]);
 
   useEffect(() => {
-    if (stableCredentials.length > 0 && !datesFetched.current) {
+    if (hasData && !datesFetched.current) {
       loadAvailableDates();
     }
-  }, [stableCredentials, loadAvailableDates]);
+  }, [hasData, loadAvailableDates]);
 
   // Load chart data — check cache first, then fetch
   useEffect(() => {
-    if (stableCredentials.length === 0 || !selectedDate || !selectedWeekDate || !selectedYear) return;
+    if (!hasData || !selectedDate || !selectedWeekDate || !selectedYear) return;
 
     const histKey = `${credKey}:${selectedDate}:${selectedWeekDate}:${selectedYear}:${dataType}`;
 
@@ -140,7 +159,11 @@ export function useAggregatedHistory(
     setIsLoadingWeek(true);
     setIsLoadingYear(true);
 
-    fetchHistoryCharts(stableCredentials, selectedDate, selectedWeekDate, selectedYear, dataType)
+    const fetchPromise = stableLocationParams
+      ? fetchLocationHistoryCharts(stableLocationParams, selectedDate, selectedWeekDate, selectedYear, dataType)
+      : fetchHistoryCharts(stableCredentials, selectedDate, selectedWeekDate, selectedYear, dataType);
+
+    fetchPromise
       .then((result) => {
         if (cancelled) return;
         chartsFetched.current = true;
@@ -166,7 +189,7 @@ export function useAggregatedHistory(
     return () => {
       cancelled = true;
     };
-  }, [stableCredentials, selectedDate, selectedWeekDate, selectedYear, dataType, credKey, getCachedHistory, setCachedHistory]);
+  }, [stableCredentials, stableLocationParams, selectedDate, selectedWeekDate, selectedYear, dataType, credKey, hasData, getCachedHistory, setCachedHistory]);
 
   // Silently update when cacheVersion changes (background refresh)
   useEffect(() => {

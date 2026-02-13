@@ -13,24 +13,31 @@ import type {
   AverageWeekDataResponse,
   YearDataResponse,
   AverageYearDataResponse,
-  OvercrowdingGroupResponse,
-  CreateGroupResponse,
-  GroupIdsResponse,
   EntryDayDataResponse,
   AverageEntryDayDataResponse,
   EntryWeekDataResponse,
   AverageEntryWeekDataResponse,
   EntryYearDataResponse,
   AverageEntryYearDataResponse,
+  LocationResponse,
+  CreateLocationResponse,
+  LocationsForDeviceResponse,
+  ResetSchedule,
+  SigningCredentials,
+  StoredLocation,
+  DeviceState,
+  LocationCredentials,
 } from "./types";
 import { signRequest, generateIdempotencyKey } from "./crypto";
 
-const API_BASE_URL = "https://api.crowdcount.tech";
-
-interface SigningCredentials {
-  deviceId: string;
-  password: string;
+export function getApiBaseUrl(): string {
+  if (typeof window === "undefined") return "https://api.crowdcount.tech";
+  return localStorage.getItem("crowdcount_testing") === "true"
+    ? "https://api-staging.crowdcount.tech"
+    : "https://api.crowdcount.tech";
 }
+
+export type { SigningCredentials };
 
 interface ApiRequestOptions extends Omit<RequestInit, "headers"> {
   headers?: Record<string, string>;
@@ -69,7 +76,7 @@ async function apiRequest<T>(
     headers["Idempotency-Key"] = generateIdempotencyKey();
   }
 
-  const url = `${API_BASE_URL}${endpoint}`;
+  const url = `${getApiBaseUrl()}${endpoint}`;
   const response = await fetch(url, {
     method,
     body: fetchOptions.body,
@@ -522,88 +529,423 @@ export async function getAverageEntryYearData(
   return response.average_entry_year_data;
 }
 
-// Overcrowding Groups — commented out: the counter-manager should NOT create/modify
-// server-side overcrowding groups. Groups should be managed from the iOS app which
-// handles push notification subscriptions. Creating groups here would interfere with
-// iOS-created groups and has no utility since web can't receive push notifications.
-//
-// export async function createOvercrowdingGroup(
-//   deviceIds: string[],
-//   limit: number,
-//   groupName?: string
-// ): Promise<string> {
-//   const body: Record<string, unknown> = { device_ids: deviceIds, limit };
-//   if (groupName) body.group_name = groupName;
-//   const response = await apiRequest<CreateGroupResponse>(
-//     "/create_overcrowding_group",
-//     { method: "POST", body: JSON.stringify(body) }
-//   );
-//   return response.group_id;
-// }
-//
-// export async function updateOvercrowdingGroup(
-//   groupId: string, deviceIds?: string[], limit?: number
-// ): Promise<void> {
-//   const body: Record<string, unknown> = { group_id: groupId };
-//   if (deviceIds !== undefined) body.device_ids = deviceIds;
-//   if (limit !== undefined) body.limit = limit;
-//   await apiRequest("/update_overcrowding_group", {
-//     method: "POST", body: JSON.stringify(body),
-//   });
-// }
-//
-// export async function deleteOvercrowdingGroup(groupId: string): Promise<void> {
-//   await apiRequest("/delete_overcrowding_group", {
-//     method: "POST", body: JSON.stringify({ group_id: groupId }),
-//   });
-// }
-//
-// export async function getOvercrowdingGroup(
-//   groupId: string
-// ): Promise<OvercrowdingGroupResponse> {
-//   return apiRequest<OvercrowdingGroupResponse>(
-//     `/get_overcrowding_group?group_id=${groupId}`
-//   );
-// }
-//
-// export async function getGroupIdsForDevice(
-//   deviceId: string
-// ): Promise<string[]> {
-//   const response = await apiRequest<GroupIdsResponse>(
-//     `/get_groups_for_device?device_id=${deviceId}`
-//   );
-//   return response.group_ids;
-// }
+// ── Location CRUD ──
 
-// Map location lookup
-export async function getMapLocationForDevice(
-  deviceId: string
-): Promise<string | null> {
-  try {
-    const response = await apiRequest<{
-      locations: Array<{
-        location_name: string;
-        location_device: string;
-        device_breakdown?: Array<{ device_id: string }>;
-      }>;
-    }>("/get_all_location_data_with_extra");
-
-    for (const loc of response.locations) {
-      if (loc.location_device === deviceId) {
-        return loc.location_name;
-      }
-      if (loc.device_breakdown) {
-        for (const device of loc.device_breakdown) {
-          if (device.device_id === deviceId) {
-            return loc.location_name;
-          }
-        }
-      }
+export async function createLocation(
+  credentials: Array<{ device_id: string; password: string }>,
+  signingDevice: SigningCredentials,
+  name?: string,
+  overcrowdingLimit?: number | null,
+  deviceLabels?: Record<string, string>
+): Promise<string> {
+  const body: Record<string, unknown> = {
+    credentials,
+  };
+  if (name) body.name = name;
+  if (overcrowdingLimit != null && overcrowdingLimit > 0) body.overcrowding_limit = overcrowdingLimit;
+  if (deviceLabels) body.device_labels = deviceLabels;
+  const response = await apiRequest<CreateLocationResponse>(
+    "/create_location",
+    {
+      method: "POST",
+      body: JSON.stringify(body),
+      sign: signingDevice,
+      idempotent: true,
     }
-    return null;
+  );
+  return response.location_id;
+}
+
+export async function updateLocation(
+  locationId: string,
+  credentials: Array<{ device_id: string; password: string }>,
+  signingDevice: SigningCredentials,
+  updates: { name?: string; overcrowdingLimit?: number | null }
+): Promise<void> {
+  const body: Record<string, unknown> = {
+    location_id: locationId,
+    credentials,
+  };
+  if (updates.name !== undefined) body.name = updates.name;
+  if (updates.overcrowdingLimit !== undefined) {
+    body.overcrowding_limit = updates.overcrowdingLimit === null || updates.overcrowdingLimit <= 0
+      ? null
+      : updates.overcrowdingLimit;
+  }
+  await apiRequest("/update_location", {
+    method: "POST",
+    body: JSON.stringify(body),
+    sign: signingDevice,
+    idempotent: true,
+  });
+}
+
+export async function deleteLocation(
+  locationId: string,
+  credentials: Array<{ device_id: string; password: string }>,
+  signingDevice: SigningCredentials
+): Promise<void> {
+  await apiRequest("/delete_location", {
+    method: "POST",
+    body: JSON.stringify({
+      location_id: locationId,
+      credentials,
+    }),
+    sign: signingDevice,
+    idempotent: true,
+  });
+}
+
+export async function replaceLocation(
+  locationId: string,
+  credentials: Array<{ device_id: string; password: string }>,
+  signingDevice: SigningCredentials,
+  deviceLabels?: Record<string, string>
+): Promise<string> {
+  const body: Record<string, unknown> = {
+    location_id: locationId,
+    credentials,
+  };
+  if (deviceLabels) body.device_labels = deviceLabels;
+  const response = await apiRequest<CreateLocationResponse>(
+    "/replace_location",
+    {
+      method: "POST",
+      body: JSON.stringify(body),
+      sign: signingDevice,
+      idempotent: true,
+    }
+  );
+  return response.location_id;
+}
+
+export async function getLocationsForDevice(
+  deviceId: string,
+  password: string
+): Promise<LocationResponse[]> {
+  const response = await apiRequest<LocationsForDeviceResponse>(
+    "/get_locations_for_device",
+    {
+      method: "POST",
+      body: JSON.stringify({ device_id: deviceId, password }),
+      sign: { deviceId, password },
+    }
+  );
+  return response.locations;
+}
+
+export async function getLocation(
+  locationId: string,
+  credentials: Array<{ device_id: string; password: string }>,
+  signingDevice: SigningCredentials
+): Promise<LocationResponse> {
+  return apiRequest<LocationResponse>("/get_location", {
+    method: "POST",
+    body: JSON.stringify({
+      location_id: locationId,
+      credentials,
+    }),
+    sign: signingDevice,
+  });
+}
+
+// ── Location History (data key is "data") ──
+
+export async function getLocationDayData(
+  locationId: string,
+  credentials: Array<{ device_id: string; password: string }>,
+  signingDevice: SigningCredentials,
+  date: string
+): Promise<Record<string, number>> {
+  const response = await apiRequest<{ data: Record<string, number> }>(
+    "/get_location_day_data",
+    {
+      method: "POST",
+      body: JSON.stringify({ location_id: locationId, credentials, date }),
+      sign: signingDevice,
+    }
+  );
+  return response.data;
+}
+
+export async function getLocationAverageDayData(
+  locationId: string,
+  credentials: Array<{ device_id: string; password: string }>,
+  signingDevice: SigningCredentials,
+  date: string
+): Promise<Record<string, number>> {
+  const response = await apiRequest<{ data: Record<string, number> }>(
+    "/get_location_average_day_data",
+    {
+      method: "POST",
+      body: JSON.stringify({ location_id: locationId, credentials, date }),
+      sign: signingDevice,
+    }
+  );
+  return response.data;
+}
+
+export async function getLocationWeekData(
+  locationId: string,
+  credentials: Array<{ device_id: string; password: string }>,
+  signingDevice: SigningCredentials,
+  date: string
+): Promise<Record<string, number>> {
+  const response = await apiRequest<{ data: Record<string, number> }>(
+    "/get_location_week_data",
+    {
+      method: "POST",
+      body: JSON.stringify({ location_id: locationId, credentials, date }),
+      sign: signingDevice,
+    }
+  );
+  return response.data;
+}
+
+export async function getLocationAverageWeekData(
+  locationId: string,
+  credentials: Array<{ device_id: string; password: string }>,
+  signingDevice: SigningCredentials,
+  date: string
+): Promise<Record<string, number>> {
+  const response = await apiRequest<{ data: Record<string, number> }>(
+    "/get_location_average_week_data",
+    {
+      method: "POST",
+      body: JSON.stringify({ location_id: locationId, credentials, date }),
+      sign: signingDevice,
+    }
+  );
+  return response.data;
+}
+
+export async function getLocationYearData(
+  locationId: string,
+  credentials: Array<{ device_id: string; password: string }>,
+  signingDevice: SigningCredentials,
+  year: number
+): Promise<Record<string, number>> {
+  const response = await apiRequest<{ data: Record<string, number> }>(
+    "/get_location_year_data",
+    {
+      method: "POST",
+      body: JSON.stringify({ location_id: locationId, credentials, year }),
+      sign: signingDevice,
+    }
+  );
+  return response.data;
+}
+
+export async function getLocationAverageYearData(
+  locationId: string,
+  credentials: Array<{ device_id: string; password: string }>,
+  signingDevice: SigningCredentials,
+  year: number
+): Promise<Record<string, number> | null> {
+  const response = await apiRequest<{ data: Record<string, number> | string }>(
+    "/get_location_average_year_data",
+    {
+      method: "POST",
+      body: JSON.stringify({ location_id: locationId, credentials, year }),
+      sign: signingDevice,
+    }
+  );
+  if (typeof response.data === "string") return null;
+  return response.data;
+}
+
+// Location entry data
+export async function getLocationEntryDayData(
+  locationId: string,
+  credentials: Array<{ device_id: string; password: string }>,
+  signingDevice: SigningCredentials,
+  date: string
+): Promise<Record<string, number>> {
+  const response = await apiRequest<{ data: Record<string, number> }>(
+    "/get_location_entry_day_data",
+    {
+      method: "POST",
+      body: JSON.stringify({ location_id: locationId, credentials, date }),
+      sign: signingDevice,
+    }
+  );
+  return response.data;
+}
+
+export async function getLocationAverageEntryDayData(
+  locationId: string,
+  credentials: Array<{ device_id: string; password: string }>,
+  signingDevice: SigningCredentials,
+  date: string
+): Promise<Record<string, number>> {
+  const response = await apiRequest<{ data: Record<string, number> }>(
+    "/get_location_average_entry_day_data",
+    {
+      method: "POST",
+      body: JSON.stringify({ location_id: locationId, credentials, date }),
+      sign: signingDevice,
+    }
+  );
+  return response.data;
+}
+
+export async function getLocationEntryWeekData(
+  locationId: string,
+  credentials: Array<{ device_id: string; password: string }>,
+  signingDevice: SigningCredentials,
+  date: string
+): Promise<Record<string, number>> {
+  const response = await apiRequest<{ data: Record<string, number> }>(
+    "/get_location_entry_week_data",
+    {
+      method: "POST",
+      body: JSON.stringify({ location_id: locationId, credentials, date }),
+      sign: signingDevice,
+    }
+  );
+  return response.data;
+}
+
+export async function getLocationAverageEntryWeekData(
+  locationId: string,
+  credentials: Array<{ device_id: string; password: string }>,
+  signingDevice: SigningCredentials,
+  date: string
+): Promise<Record<string, number>> {
+  const response = await apiRequest<{ data: Record<string, number> }>(
+    "/get_location_average_entry_week_data",
+    {
+      method: "POST",
+      body: JSON.stringify({ location_id: locationId, credentials, date }),
+      sign: signingDevice,
+    }
+  );
+  return response.data;
+}
+
+export async function getLocationEntryYearData(
+  locationId: string,
+  credentials: Array<{ device_id: string; password: string }>,
+  signingDevice: SigningCredentials,
+  year: number
+): Promise<Record<string, number>> {
+  const response = await apiRequest<{ data: Record<string, number> }>(
+    "/get_location_entry_year_data",
+    {
+      method: "POST",
+      body: JSON.stringify({ location_id: locationId, credentials, year }),
+      sign: signingDevice,
+    }
+  );
+  return response.data;
+}
+
+export async function getLocationAverageEntryYearData(
+  locationId: string,
+  credentials: Array<{ device_id: string; password: string }>,
+  signingDevice: SigningCredentials,
+  year: number
+): Promise<Record<string, number> | null> {
+  const response = await apiRequest<{ data: Record<string, number> | string }>(
+    "/get_location_average_entry_year_data",
+    {
+      method: "POST",
+      body: JSON.stringify({ location_id: locationId, credentials, year }),
+      sign: signingDevice,
+    }
+  );
+  if (typeof response.data === "string") return null;
+  return response.data;
+}
+
+// Location available dates
+export async function getLocationAvailableDates(
+  locationId: string,
+  credentials: Array<{ device_id: string; password: string }>,
+  signingDevice: SigningCredentials
+): Promise<string[]> {
+  const response = await apiRequest<AvailableDatesResponse>(
+    "/get_location_available_dates",
+    {
+      method: "POST",
+      body: JSON.stringify({ location_id: locationId, credentials }),
+      sign: signingDevice,
+    }
+  );
+  return response.dates;
+}
+
+// ── Reset Schedule ──
+
+export async function getResetSchedule(
+  locationId: string,
+  credentials: Array<{ device_id: string; password: string }>,
+  signingDevice: SigningCredentials
+): Promise<ResetSchedule | null> {
+  try {
+    return await apiRequest<ResetSchedule>("/get_reset_schedule", {
+      method: "POST",
+      body: JSON.stringify({ location_id: locationId, credentials }),
+      sign: signingDevice,
+    });
   } catch {
     return null;
   }
+}
+
+export async function setResetSchedule(
+  locationId: string,
+  credentials: Array<{ device_id: string; password: string }>,
+  signingDevice: SigningCredentials,
+  hour: number,
+  minute: number,
+  timezone: string
+): Promise<ResetSchedule> {
+  return apiRequest<ResetSchedule>("/set_reset_schedule", {
+    method: "POST",
+    body: JSON.stringify({
+      location_id: locationId,
+      credentials,
+      reset_hour: hour,
+      reset_minute: minute,
+      timezone,
+    }),
+    sign: signingDevice,
+    idempotent: true,
+  });
+}
+
+export async function deleteResetSchedule(
+  locationId: string,
+  credentials: Array<{ device_id: string; password: string }>,
+  signingDevice: SigningCredentials
+): Promise<void> {
+  await apiRequest("/delete_reset_schedule", {
+    method: "POST",
+    body: JSON.stringify({ location_id: locationId, credentials }),
+    sign: signingDevice,
+    idempotent: true,
+  });
+}
+
+// ── Credentials Helper ──
+
+export function getLocationCredentials(
+  location: StoredLocation,
+  devices: DeviceState[]
+): LocationCredentials | null {
+  const creds: Array<{ device_id: string; password: string }> = [];
+  for (const serverDeviceId of location.deviceIds) {
+    const device = devices.find((d) => d.deviceId === serverDeviceId);
+    if (device) {
+      creds.push({ device_id: device.deviceId, password: device.password });
+    }
+  }
+  if (creds.length === 0) return null;
+  return {
+    credentials: creds,
+    signingDevice: { deviceId: creds[0].device_id, password: creds[0].password },
+  };
 }
 
 // Alerts
@@ -665,7 +1007,7 @@ export async function exportCsv(
     bodyStr
   );
 
-  const response = await fetch(`${API_BASE_URL}/export_csv`, {
+  const response = await fetch(`${getApiBaseUrl()}/export_csv`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",

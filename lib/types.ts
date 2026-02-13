@@ -87,12 +87,13 @@ export const POLL_INTERVALS: PollInterval[] = [1, 3, 5, 10, 15, 30, 45, 60];
 
 // Location types
 export interface StoredLocation {
-  id: string;
+  id: string;              // Server location_id (UUID from server)
   name: string;
-  deviceIds: string[]; // Local UUIDs (StoredDevice.id), not server device IDs
+  deviceIds: string[];     // Server device IDs ("T1234"), NOT local UUIDs
   overcrowdingLimit: number | null;
   colorName: string;
-  overcrowdingGroupId: string | null;
+  isAuto: boolean;         // auto-created 1:1 location on server
+  isOnMap: boolean;        // visible on public map
 }
 
 export interface LocationState extends StoredLocation {
@@ -100,6 +101,36 @@ export interface LocationState extends StoredLocation {
   isOverLimit: boolean;
   allDevicesOnline: boolean;
   someDevicesOnline: boolean;
+}
+
+// API response for location endpoints
+export interface LocationResponse {
+  id: string;
+  name: string;
+  devices: Array<{ device_id: string; label: string; current_count: number }>;
+  overcrowding_limit: number | null;
+  current_count: number;
+  on_map: boolean;
+  is_auto?: boolean;
+}
+
+// Reset schedule
+export interface ResetSchedule {
+  location_id: string;
+  reset_hour: number;
+  reset_minute: number;
+  timezone: string;
+}
+
+// Credentials for a location's devices
+export interface LocationCredentials {
+  credentials: Array<{ device_id: string; password: string }>;
+  signingDevice: SigningCredentials;
+}
+
+export interface SigningCredentials {
+  deviceId: string;
+  password: string;
 }
 
 export const LOCATION_COLORS = [
@@ -113,21 +144,13 @@ export const LOCATION_COLORS = [
 
 export type LocationColorName = (typeof LOCATION_COLORS)[number]["name"];
 
-// Overcrowding group API types
-export interface OvercrowdingGroupResponse {
-  group_id: string;
-  group_name?: string;
-  device_ids: string[];
-  limit: number;
-  current_total: number;
+// Location API response types
+export interface CreateLocationResponse {
+  location_id: string;
 }
 
-export interface CreateGroupResponse {
-  group_id: string;
-}
-
-export interface GroupIdsResponse {
-  group_ids: string[];
+export interface LocationsForDeviceResponse {
+  locations: LocationResponse[];
 }
 
 // Entry data response types

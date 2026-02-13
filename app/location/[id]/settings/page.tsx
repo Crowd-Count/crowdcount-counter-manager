@@ -1,14 +1,22 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
 import { useDevices } from "@/contexts/DevicesContext";
 import { useLocations } from "@/contexts/LocationsContext";
-import { LOCATION_COLORS, type LocationColorName } from "@/lib/types";
+import { LOCATION_COLORS, type LocationColorName, type ResetSchedule } from "@/lib/types";
+import * as api from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Card,
   CardContent,
@@ -28,7 +36,45 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { ThemeToggle } from "@/components/ThemeToggle";
-import { ArrowLeft, Save, Trash2, Plus, X } from "lucide-react";
+import { ArrowLeft, Save, Trash2, Plus, X, Clock } from "lucide-react";
+
+const COMMON_TIMEZONES = [
+  "America/New_York",
+  "America/Chicago",
+  "America/Denver",
+  "America/Los_Angeles",
+  "America/Anchorage",
+  "Pacific/Honolulu",
+  "America/Toronto",
+  "America/Vancouver",
+  "Europe/London",
+  "Europe/Paris",
+  "Europe/Berlin",
+  "Europe/Amsterdam",
+  "Europe/Rome",
+  "Europe/Madrid",
+  "Europe/Zurich",
+  "Europe/Stockholm",
+  "Europe/Helsinki",
+  "Asia/Tokyo",
+  "Asia/Shanghai",
+  "Asia/Hong_Kong",
+  "Asia/Singapore",
+  "Asia/Seoul",
+  "Asia/Kolkata",
+  "Asia/Dubai",
+  "Australia/Sydney",
+  "Australia/Melbourne",
+  "Pacific/Auckland",
+];
+
+function getBrowserTimezone(): string {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone;
+  } catch {
+    return "America/New_York";
+  }
+}
 
 export default function LocationSettingsPage() {
   const router = useRouter();
@@ -54,6 +100,36 @@ export default function LocationSettingsPage() {
   );
   const [isAddDeviceOpen, setIsAddDeviceOpen] = useState(false);
 
+  // Reset schedule state
+  const [resetSchedule, setResetSchedule] = useState<ResetSchedule | null>(null);
+  const [resetHour, setResetHour] = useState(0);
+  const [resetMinute, setResetMinute] = useState(0);
+  const [resetTimezone, setResetTimezone] = useState(getBrowserTimezone());
+  const [isLoadingSchedule, setIsLoadingSchedule] = useState(true);
+  const [isSavingSchedule, setIsSavingSchedule] = useState(false);
+
+  // Fetch reset schedule on mount
+  useEffect(() => {
+    if (!location) return;
+    const locCreds = api.getLocationCredentials(location, devices);
+    if (!locCreds) {
+      setIsLoadingSchedule(false);
+      return;
+    }
+
+    api.getResetSchedule(locationId, locCreds.credentials, locCreds.signingDevice)
+      .then((schedule) => {
+        setResetSchedule(schedule);
+        if (schedule) {
+          setResetHour(schedule.reset_hour);
+          setResetMinute(schedule.reset_minute);
+          setResetTimezone(schedule.timezone);
+        }
+      })
+      .catch(() => {})
+      .finally(() => setIsLoadingSchedule(false));
+  }, [locationId, location, devices]);
+
   if (!location) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
@@ -67,8 +143,9 @@ export default function LocationSettingsPage() {
     );
   }
 
+  // Look up devices by server device ID
   const memberDevices = devices.filter((d) =>
-    location.deviceIds.includes(d.id)
+    location.deviceIds.includes(d.deviceId)
   );
   const ungroupedIds = getUngroupedDeviceIds();
   const ungroupedDevices = devices.filter((d) => ungroupedIds.includes(d.id));
@@ -93,6 +170,43 @@ export default function LocationSettingsPage() {
   const handleDeleteLocation = async () => {
     await removeLocation(locationId);
     router.push("/dashboard");
+  };
+
+  const handleSaveSchedule = async () => {
+    const locCreds = api.getLocationCredentials(location, devices);
+    if (!locCreds) return;
+
+    setIsSavingSchedule(true);
+    try {
+      const schedule = await api.setResetSchedule(
+        locationId,
+        locCreds.credentials,
+        locCreds.signingDevice,
+        resetHour,
+        resetMinute,
+        resetTimezone
+      );
+      setResetSchedule(schedule);
+    } catch (err) {
+      console.error("Failed to save reset schedule:", err);
+    } finally {
+      setIsSavingSchedule(false);
+    }
+  };
+
+  const handleDeleteSchedule = async () => {
+    const locCreds = api.getLocationCredentials(location, devices);
+    if (!locCreds) return;
+
+    setIsSavingSchedule(true);
+    try {
+      await api.deleteResetSchedule(locationId, locCreds.credentials, locCreds.signingDevice);
+      setResetSchedule(null);
+    } catch (err) {
+      console.error("Failed to delete reset schedule:", err);
+    } finally {
+      setIsSavingSchedule(false);
+    }
   };
 
   const colorValue =
@@ -212,7 +326,7 @@ export default function LocationSettingsPage() {
                     size="icon"
                     className="h-8 w-8"
                     onClick={() =>
-                      removeDeviceFromLocation(locationId, device.id)
+                      removeDeviceFromLocation(locationId, device.deviceId)
                     }
                   >
                     <X className="h-4 w-4" />
@@ -235,7 +349,7 @@ export default function LocationSettingsPage() {
                         type="button"
                         className="w-full text-left px-3 py-2 rounded-md text-sm hover:bg-accent transition-colors"
                         onClick={() => {
-                          addDeviceToLocation(locationId, device.id);
+                          addDeviceToLocation(locationId, device.deviceId);
                           if (ungroupedDevices.length <= 1) {
                             setIsAddDeviceOpen(false);
                           }
@@ -292,6 +406,107 @@ export default function LocationSettingsPage() {
                 Save
               </Button>
             </div>
+          </CardContent>
+        </Card>
+
+        {/* Reset Schedule */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Clock className="h-5 w-5" />
+              Reset Schedule
+            </CardTitle>
+            <CardDescription>
+              Automatically reset the count at a scheduled time each day
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {isLoadingSchedule ? (
+              <p className="text-sm text-muted-foreground">Loading schedule...</p>
+            ) : (
+              <>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Hour</Label>
+                    <Select
+                      value={resetHour.toString()}
+                      onValueChange={(v) => setResetHour(parseInt(v, 10))}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {Array.from({ length: 24 }, (_, i) => (
+                          <SelectItem key={i} value={i.toString()}>
+                            {i.toString().padStart(2, "0")}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Minute</Label>
+                    <Select
+                      value={resetMinute.toString()}
+                      onValueChange={(v) => setResetMinute(parseInt(v, 10))}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {[0, 15, 30, 45].map((m) => (
+                          <SelectItem key={m} value={m.toString()}>
+                            {m.toString().padStart(2, "0")}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label>Timezone</Label>
+                  <Select
+                    value={resetTimezone}
+                    onValueChange={setResetTimezone}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {COMMON_TIMEZONES.map((tz) => (
+                        <SelectItem key={tz} value={tz}>
+                          {tz.replace(/_/g, " ")}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex gap-2">
+                  <Button onClick={handleSaveSchedule} disabled={isSavingSchedule}>
+                    <Save className="h-4 w-4 mr-1" />
+                    {resetSchedule ? "Update Schedule" : "Set Schedule"}
+                  </Button>
+                  {resetSchedule && (
+                    <Button
+                      variant="outline"
+                      onClick={handleDeleteSchedule}
+                      disabled={isSavingSchedule}
+                    >
+                      <Trash2 className="h-4 w-4 mr-1" />
+                      Remove
+                    </Button>
+                  )}
+                </div>
+                {resetSchedule && (
+                  <p className="text-xs text-muted-foreground">
+                    Currently resets daily at{" "}
+                    {resetSchedule.reset_hour.toString().padStart(2, "0")}:
+                    {resetSchedule.reset_minute.toString().padStart(2, "0")}{" "}
+                    ({resetSchedule.timezone.replace(/_/g, " ")})
+                  </p>
+                )}
+              </>
+            )}
           </CardContent>
         </Card>
 

@@ -14,11 +14,16 @@ import {
   fetchInsightsForCredentials,
   fetchAvailableDates,
   fetchHistoryCharts,
+  fetchLocationInsights,
+  fetchLocationAvailableDates,
+  fetchLocationHistoryCharts,
   makeCredKey,
   type DeviceCredentials,
   type InsightsCacheEntry,
   type HistoryCacheEntry,
+  type LocationFetchParams,
 } from "@/lib/dataFetchers";
+import * as api from "@/lib/api";
 
 interface DataCacheContextType {
   cacheVersion: number;
@@ -70,8 +75,16 @@ export function DataCacheProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   // Build all credential sets that need pre-fetching
-  const buildCredentialSets = useCallback((): { credKey: string; credentials: DeviceCredentials[] }[] => {
-    const sets: { credKey: string; credentials: DeviceCredentials[] }[] = [];
+  const buildCredentialSets = useCallback((): {
+    credKey: string;
+    credentials: DeviceCredentials[];
+    locationParams?: LocationFetchParams;
+  }[] => {
+    const sets: {
+      credKey: string;
+      credentials: DeviceCredentials[];
+      locationParams?: LocationFetchParams;
+    }[] = [];
     const seen = new Set<string>();
 
     // Each individual device
@@ -84,31 +97,22 @@ export function DataCacheProvider({ children }: { children: React.ReactNode }) {
       }
     }
 
-    // Each location's devices
+    // Each location — use location-level server endpoints
     for (const location of locations) {
-      const memberDevices = devices.filter((d) => location.deviceIds.includes(d.id));
-      if (memberDevices.length === 0) continue;
-      const creds: DeviceCredentials[] = memberDevices.map((d) => ({
-        deviceId: d.deviceId,
-        password: d.password,
-      }));
-      const key = makeCredKey(creds);
-      if (!seen.has(key)) {
-        seen.add(key);
-        sets.push({ credKey: key, credentials: creds });
-      }
-    }
-
-    // All-devices aggregate (if 2+ devices)
-    if (devices.length >= 2) {
-      const creds: DeviceCredentials[] = devices.map((d) => ({
-        deviceId: d.deviceId,
-        password: d.password,
-      }));
-      const key = makeCredKey(creds);
-      if (!seen.has(key)) {
-        seen.add(key);
-        sets.push({ credKey: key, credentials: creds });
+      const locCreds = api.getLocationCredentials(location, devices);
+      if (!locCreds) continue;
+      const locKey = `loc:${location.id}`;
+      if (!seen.has(locKey)) {
+        seen.add(locKey);
+        sets.push({
+          credKey: locKey,
+          credentials: locCreds.credentials.map((c) => ({ deviceId: c.device_id, password: c.password })),
+          locationParams: {
+            locationId: location.id,
+            credentials: locCreds.credentials,
+            signingDevice: locCreds.signingDevice,
+          },
+        });
       }
     }
 
@@ -119,13 +123,18 @@ export function DataCacheProvider({ children }: { children: React.ReactNode }) {
   const prefetchForCredSet = useCallback(async (
     credKey: string,
     credentials: DeviceCredentials[],
-    force: boolean
+    force: boolean,
+    locationParams?: LocationFetchParams
   ) => {
     try {
       // Fetch dates + insights in parallel
       const [dates, insights] = await Promise.all([
-        fetchAvailableDates(credentials, force).catch(() => [] as string[]),
-        fetchInsightsForCredentials(credentials, force).catch(() => null),
+        locationParams
+          ? fetchLocationAvailableDates(locationParams, force).catch(() => [] as string[])
+          : fetchAvailableDates(credentials, force).catch(() => [] as string[]),
+        locationParams
+          ? fetchLocationInsights(locationParams, force).catch(() => null)
+          : fetchInsightsForCredentials(credentials, force).catch(() => null),
       ]);
 
       datesCache.current.set(credKey, dates);
@@ -140,8 +149,12 @@ export function DataCacheProvider({ children }: { children: React.ReactNode }) {
 
         // Fetch both population and entries in parallel
         const [popHistory, entryHistory] = await Promise.all([
-          fetchHistoryCharts(credentials, mostRecent, mostRecent, year, "population", force).catch(() => null),
-          fetchHistoryCharts(credentials, mostRecent, mostRecent, year, "entries", force).catch(() => null),
+          locationParams
+            ? fetchLocationHistoryCharts(locationParams, mostRecent, mostRecent, year, "population", force).catch(() => null)
+            : fetchHistoryCharts(credentials, mostRecent, mostRecent, year, "population", force).catch(() => null),
+          locationParams
+            ? fetchLocationHistoryCharts(locationParams, mostRecent, mostRecent, year, "entries", force).catch(() => null)
+            : fetchHistoryCharts(credentials, mostRecent, mostRecent, year, "entries", force).catch(() => null),
         ]);
 
         if (popHistory) {
@@ -164,8 +177,8 @@ export function DataCacheProvider({ children }: { children: React.ReactNode }) {
     if (credSets.length === 0) return;
 
     // Phase 1: Individual devices first — populates apiCache per-device
-    const individuals = credSets.filter((s) => s.credentials.length === 1);
-    const aggregates = credSets.filter((s) => s.credentials.length > 1);
+    const individuals = credSets.filter((s) => !s.locationParams && s.credentials.length === 1);
+    const locationSets = credSets.filter((s) => !!s.locationParams);
 
     if (individuals.length > 0) {
       await Promise.all(
@@ -177,11 +190,11 @@ export function DataCacheProvider({ children }: { children: React.ReactNode }) {
       setCacheVersion((v) => v + 1);
     }
 
-    // Phase 2: Aggregates — apiCache already has per-device data, so these resolve fast
-    if (aggregates.length > 0) {
+    // Phase 2: Location-level data — uses server-side aggregation
+    if (locationSets.length > 0) {
       await Promise.all(
-        aggregates.map(({ credKey, credentials }) =>
-          prefetchForCredSet(credKey, credentials, force)
+        locationSets.map(({ credKey, credentials, locationParams }) =>
+          prefetchForCredSet(credKey, credentials, force, locationParams)
         )
       );
       setCacheVersion((v) => v + 1);
