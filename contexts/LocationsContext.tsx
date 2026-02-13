@@ -440,40 +440,6 @@ export function LocationsProvider({ children }: { children: React.ReactNode }) {
     [storedLocations, devices]
   );
 
-  // Auto-adopt: if any devices are ungrouped but have an isAuto location stored, adopt it
-  useEffect(() => {
-    if (isLoading) return;
-    const groupedServerIds = new Set(
-      storedLocations.filter((l) => !l.isAuto).flatMap((l) => l.deviceIds)
-    );
-    const ungroupedDevices = devices.filter((d) => !groupedServerIds.has(d.deviceId));
-    if (ungroupedDevices.length === 0) return;
-
-    let needsUpdate = false;
-    const updated = storedLocations.map((loc) => {
-      if (!loc.isAuto) return loc;
-      // Check if any ungrouped device belongs to this auto-location
-      const hasUngrouped = loc.deviceIds.some(
-        (did) => ungroupedDevices.some((d) => d.deviceId === did)
-      );
-      if (hasUngrouped) {
-        needsUpdate = true;
-        // Adopt: use first device's name as location name
-        const firstDevice = ungroupedDevices.find((d) => loc.deviceIds.includes(d.deviceId));
-        return {
-          ...loc,
-          name: firstDevice?.name || firstDevice?.deviceId || loc.name,
-          isAuto: false,
-        };
-      }
-      return loc;
-    });
-
-    if (needsUpdate) {
-      setStoredLocations(updated);
-    }
-  }, [storedLocations, devices, isLoading]);
-
   const getLocation = useCallback(
     (id: string) => locations.find((l) => l.id === id),
     [locations]

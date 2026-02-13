@@ -121,9 +121,9 @@ export default function LocationSettingsPage() {
       .then((schedule) => {
         setResetSchedule(schedule);
         if (schedule) {
-          setResetHour(schedule.reset_hour);
-          setResetMinute(schedule.reset_minute);
-          setResetTimezone(schedule.timezone);
+          if (typeof schedule.reset_hour === "number") setResetHour(schedule.reset_hour);
+          if (typeof schedule.reset_minute === "number") setResetMinute(schedule.reset_minute);
+          if (schedule.timezone) setResetTimezone(schedule.timezone);
         }
       })
       .catch(() => {})
@@ -429,7 +429,7 @@ export default function LocationSettingsPage() {
                   <div className="space-y-2">
                     <Label>Hour</Label>
                     <Select
-                      value={resetHour.toString()}
+                      value={(resetHour ?? 0).toString()}
                       onValueChange={(v) => setResetHour(parseInt(v, 10))}
                     >
                       <SelectTrigger>
@@ -447,7 +447,7 @@ export default function LocationSettingsPage() {
                   <div className="space-y-2">
                     <Label>Minute</Label>
                     <Select
-                      value={resetMinute.toString()}
+                      value={(resetMinute ?? 0).toString()}
                       onValueChange={(v) => setResetMinute(parseInt(v, 10))}
                     >
                       <SelectTrigger>
@@ -497,12 +497,12 @@ export default function LocationSettingsPage() {
                     </Button>
                   )}
                 </div>
-                {resetSchedule && (
+                {resetSchedule && typeof resetSchedule.reset_hour === "number" && (
                   <p className="text-xs text-muted-foreground">
                     Currently resets daily at{" "}
                     {resetSchedule.reset_hour.toString().padStart(2, "0")}:
-                    {resetSchedule.reset_minute.toString().padStart(2, "0")}{" "}
-                    ({resetSchedule.timezone.replace(/_/g, " ")})
+                    {(resetSchedule.reset_minute ?? 0).toString().padStart(2, "0")}{" "}
+                    ({(resetSchedule.timezone ?? "").replace(/_/g, " ")})
                   </p>
                 )}
               </>
