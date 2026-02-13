@@ -52,10 +52,13 @@ export default function DashboardPage() {
   const [isCreatingLocation, setIsCreatingLocation] = useState(false);
   const [createLocationError, setCreateLocationError] = useState("");
 
-  // Testing toggle
+  // Testing toggle — auto-detect from hostname or localStorage
   const [isTesting, setIsTesting] = useState(false);
   useEffect(() => {
-    setIsTesting(localStorage.getItem("crowdcount_testing") === "true");
+    setIsTesting(
+      window.location.hostname.includes("staging") ||
+      localStorage.getItem("crowdcount_testing") === "true"
+    );
   }, []);
 
   const handleToggleTesting = () => {

@@ -32,9 +32,14 @@ import { signRequest, generateIdempotencyKey } from "./crypto";
 
 export function getApiBaseUrl(): string {
   if (typeof window === "undefined") return "https://api.crowdcount.tech";
-  return localStorage.getItem("crowdcount_testing") === "true"
-    ? "https://api-staging.crowdcount.tech"
-    : "https://api.crowdcount.tech";
+  // Auto-detect staging from hostname or localStorage toggle
+  if (
+    window.location.hostname.includes("staging") ||
+    localStorage.getItem("crowdcount_testing") === "true"
+  ) {
+    return "https://api-staging.crowdcount.tech";
+  }
+  return "https://api.crowdcount.tech";
 }
 
 export type { SigningCredentials };
