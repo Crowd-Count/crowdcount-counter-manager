@@ -396,16 +396,6 @@ export default function DashboardPage() {
       </header>
 
       <main className="container mx-auto px-4 py-6">
-        {/* Web disclaimer */}
-        <div className="mb-4 p-3 bg-muted/50 rounded-lg border">
-          <p className="text-xs text-muted-foreground text-center">
-            Note: Promotions and counter setup are not available on web. Download the iOS app on the App Store{" "}
-            <a href="https://crowdcount.tech/app" className="underline hover:text-foreground" target="_blank" rel="noopener noreferrer">
-              here
-            </a>.
-          </p>
-        </div>
-
         {/* Location cards */}
         {locations.map((location) => (
           <LocationCard key={location.id} location={location} />

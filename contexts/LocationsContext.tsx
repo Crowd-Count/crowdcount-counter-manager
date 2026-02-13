@@ -260,6 +260,40 @@ export function LocationsProvider({ children }: { children: React.ReactNode }) {
     );
   }, []);
 
+  // After replaceLocation returns a new ID, fetch full server data and merge
+  const syncAfterReplace = useCallback(
+    async (oldId: string, newId: string, locCreds: { credentials: Array<{ device_id: string; password: string }>; signingDevice: api.SigningCredentials }) => {
+      try {
+        const serverLoc = await api.getLocation(newId, locCreds.credentials, locCreds.signingDevice);
+        const serverDeviceIds = serverLoc.devices.map((d) => d.device_id);
+        setStoredLocations((p) => {
+          // Remove any duplicate entry that already had the new ID (e.g. an auto-location)
+          const withoutDupe = p.filter((l) => l.id !== newId || l.id === oldId);
+          return withoutDupe.map((l) => {
+            if (l.id === oldId) {
+              return {
+                ...l,
+                id: newId,
+                name: serverLoc.name,
+                deviceIds: serverDeviceIds,
+                overcrowdingLimit: serverLoc.overcrowding_limit ?? null,
+                isOnMap: serverLoc.on_map,
+                isAuto: false,
+              };
+            }
+            return l;
+          });
+        });
+      } catch {
+        // Fallback: just update the ID
+        setStoredLocations((p) =>
+          p.map((l) => (l.id === oldId ? { ...l, id: newId } : l))
+        );
+      }
+    },
+    []
+  );
+
   const addDeviceToLocation = useCallback((locationId: string, serverDeviceId: string) => {
     // Optimistic local update
     setStoredLocations((prev) =>
@@ -280,10 +314,7 @@ export function LocationsProvider({ children }: { children: React.ReactNode }) {
           api.replaceLocation(locationId, locCreds.credentials, locCreds.signingDevice)
             .then((newId) => {
               if (newId !== locationId) {
-                // location_id changed — update local state
-                setStoredLocations((p) =>
-                  p.map((l) => (l.id === locationId ? { ...l, id: newId } : l))
-                );
+                syncAfterReplace(locationId, newId, locCreds);
               }
             })
             .catch((err) => console.error("Failed to replace location on server:", err));
@@ -291,7 +322,7 @@ export function LocationsProvider({ children }: { children: React.ReactNode }) {
       }
       return current; // Don't mutate here, just read
     });
-  }, [devices]);
+  }, [devices, syncAfterReplace]);
 
   const removeDeviceFromLocation = useCallback((locationId: string, serverDeviceId: string) => {
     // Optimistic local update
@@ -315,9 +346,7 @@ export function LocationsProvider({ children }: { children: React.ReactNode }) {
             api.replaceLocation(locationId, locCreds.credentials, locCreds.signingDevice)
               .then((newId) => {
                 if (newId !== locationId) {
-                  setStoredLocations((p) =>
-                    p.map((l) => (l.id === locationId ? { ...l, id: newId } : l))
-                  );
+                  syncAfterReplace(locationId, newId, locCreds);
                 }
               })
               .catch((err) => console.error("Failed to replace location on server:", err));
@@ -326,7 +355,7 @@ export function LocationsProvider({ children }: { children: React.ReactNode }) {
         return current;
       });
     }, 0);
-  }, [devices]);
+  }, [devices, syncAfterReplace]);
 
   const setLocationOvercrowdingLimit = useCallback(
     async (id: string, limit: number | null) => {
