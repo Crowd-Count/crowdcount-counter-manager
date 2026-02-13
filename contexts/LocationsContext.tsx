@@ -155,7 +155,7 @@ export function LocationsProvider({ children }: { children: React.ReactNode }) {
 
   // Compute LocationState[] from StoredLocation[] + live device data
   const locations: LocationState[] = useMemo(() => {
-    // Filter out auto locations from the UI list
+    // Filter out auto locations and locations with no member devices in the app
     return storedLocations
       .filter((loc) => !loc.isAuto)
       .map((loc) => {
@@ -176,7 +176,8 @@ export function LocationsProvider({ children }: { children: React.ReactNode }) {
           allDevicesOnline,
           someDevicesOnline,
         };
-      });
+      })
+      .filter((loc) => loc.totalCount > 0 || devices.some((d) => loc.deviceIds.includes(d.deviceId)));
   }, [storedLocations, devices]);
 
   const addLocation = useCallback(

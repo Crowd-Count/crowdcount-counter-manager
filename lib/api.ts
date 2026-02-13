@@ -963,9 +963,7 @@ export interface AlertInfo {
 
 export async function checkIfAlert(): Promise<boolean> {
   try {
-    const response = await apiRequest<{ is_alert: boolean }>("/check_if_alert", {
-      headers: { "X-Client-Type": "web" },
-    });
+    const response = await apiRequest<{ is_alert: boolean }>("/check_if_alert");
     return response.is_alert;
   } catch {
     return false;
@@ -976,9 +974,7 @@ export async function getActiveAlert(): Promise<AlertInfo | null> {
   try {
     const response = await apiRequest<{
       alert_info: { alert_type: string; title: string; body: string; alert_id: string }[];
-    }>("/get_active_alert", {
-      headers: { "X-Client-Type": "web" },
-    });
+    }>("/get_active_alert");
     const alert = response.alert_info?.[0];
     if (!alert) return null;
     return {

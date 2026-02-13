@@ -107,6 +107,7 @@ export default function LocationSettingsPage() {
   const [resetTimezone, setResetTimezone] = useState(getBrowserTimezone());
   const [isLoadingSchedule, setIsLoadingSchedule] = useState(true);
   const [isSavingSchedule, setIsSavingSchedule] = useState(false);
+  const [isEditingSchedule, setIsEditingSchedule] = useState(false);
 
   // Fetch reset schedule on mount
   useEffect(() => {
@@ -202,6 +203,10 @@ export default function LocationSettingsPage() {
     try {
       await api.deleteResetSchedule(locationId, locCreds.credentials, locCreds.signingDevice);
       setResetSchedule(null);
+      setIsEditingSchedule(false);
+      setResetHour(0);
+      setResetMinute(0);
+      setResetTimezone(getBrowserTimezone());
     } catch (err) {
       console.error("Failed to delete reset schedule:", err);
     } finally {
@@ -409,20 +414,28 @@ export default function LocationSettingsPage() {
           </CardContent>
         </Card>
 
-        {/* Reset Schedule */}
+        {/* Daily Reset */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Clock className="h-5 w-5" />
-              Reset Schedule
+              Daily Reset
             </CardTitle>
             <CardDescription>
-              Automatically reset the count at a scheduled time each day
+              All counter counts will reset to 0 at this time every day. We recommend setting this during a time your location is closed or usually empty so that your total count doesn&apos;t shift over time.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             {isLoadingSchedule ? (
-              <p className="text-sm text-muted-foreground">Loading schedule...</p>
+              <p className="text-sm text-muted-foreground">Loading...</p>
+            ) : !resetSchedule && !isEditingSchedule ? (
+              <Button
+                variant="outline"
+                onClick={() => setIsEditingSchedule(true)}
+              >
+                <Clock className="h-4 w-4 mr-1" />
+                Set Daily Reset
+              </Button>
             ) : (
               <>
                 <div className="grid grid-cols-2 gap-4">
@@ -484,9 +497,9 @@ export default function LocationSettingsPage() {
                 <div className="flex gap-2">
                   <Button onClick={handleSaveSchedule} disabled={isSavingSchedule}>
                     <Save className="h-4 w-4 mr-1" />
-                    {resetSchedule ? "Update Schedule" : "Set Schedule"}
+                    {resetSchedule ? "Update" : "Save"}
                   </Button>
-                  {resetSchedule && (
+                  {resetSchedule ? (
                     <Button
                       variant="outline"
                       onClick={handleDeleteSchedule}
@@ -494,6 +507,13 @@ export default function LocationSettingsPage() {
                     >
                       <Trash2 className="h-4 w-4 mr-1" />
                       Remove
+                    </Button>
+                  ) : (
+                    <Button
+                      variant="outline"
+                      onClick={() => setIsEditingSchedule(false)}
+                    >
+                      Cancel
                     </Button>
                   )}
                 </div>
