@@ -161,6 +161,13 @@ export default function DashboardPage() {
 
   return (
     <div className="min-h-screen bg-background">
+      {/* Staging banner */}
+      {isTesting && (
+        <div className="bg-yellow-500 text-black text-center py-2 px-4 font-bold text-sm sticky top-0 z-50">
+          STAGING MODE — Connected to api-staging.crowdcount.tech
+        </div>
+      )}
+
       {/* Header */}
       <header className="border-b">
         <div className="container mx-auto px-4 py-4">
@@ -174,11 +181,6 @@ export default function DashboardPage() {
                 className="shrink-0"
               />
               <h1 className="text-2xl font-bold">Counter Manager</h1>
-              {isTesting && (
-                <span className="text-xs font-semibold bg-yellow-500 text-black px-2 py-0.5 rounded-full uppercase">
-                  Staging
-                </span>
-              )}
             </div>
             <div className="flex items-center gap-2">
               <AlertBanner />
