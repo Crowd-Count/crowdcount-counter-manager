@@ -155,28 +155,28 @@ export function LocationsProvider({ children }: { children: React.ReactNode }) {
 
   // Compute LocationState[] from StoredLocation[] + live device data
   const locations: LocationState[] = useMemo(() => {
-    // Filter out auto locations from the UI list
-    return storedLocations
-      .filter((loc) => !loc.isAuto)
-      .map((loc) => {
-        const memberDevices = devices.filter((d) => loc.deviceIds.includes(d.deviceId));
-        const totalCount = memberDevices.reduce((sum, d) => sum + d.currentCount, 0);
-        const isOverLimit =
-          loc.overcrowdingLimit !== null &&
-          loc.overcrowdingLimit > 0 &&
-          totalCount > loc.overcrowdingLimit;
-        const allDevicesOnline =
-          memberDevices.length > 0 && memberDevices.every((d) => d.isOnline);
-        const someDevicesOnline = memberDevices.some((d) => d.isOnline);
-
-        return {
-          ...loc,
-          totalCount,
-          isOverLimit,
-          allDevicesOnline,
-          someDevicesOnline,
-        };
+    const result: LocationState[] = [];
+    for (const loc of storedLocations) {
+      if (loc.isAuto) continue;
+      const memberDevices = devices.filter((d) => loc.deviceIds.includes(d.deviceId));
+      // Skip locations with no matching devices in the app (ghost locations from server)
+      if (memberDevices.length === 0) continue;
+      const totalCount = memberDevices.reduce((sum, d) => sum + d.currentCount, 0);
+      const isOverLimit =
+        loc.overcrowdingLimit !== null &&
+        loc.overcrowdingLimit > 0 &&
+        totalCount > loc.overcrowdingLimit;
+      const allDevicesOnline = memberDevices.every((d) => d.isOnline);
+      const someDevicesOnline = memberDevices.some((d) => d.isOnline);
+      result.push({
+        ...loc,
+        totalCount,
+        isOverLimit,
+        allDevicesOnline,
+        someDevicesOnline,
       });
+    }
+    return result;
   }, [storedLocations, devices]);
 
   const addLocation = useCallback(
