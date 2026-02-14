@@ -155,7 +155,7 @@ export function LocationsProvider({ children }: { children: React.ReactNode }) {
 
   // Compute LocationState[] from StoredLocation[] + live device data
   const locations: LocationState[] = useMemo(() => {
-    // Filter out auto locations and locations with no member devices in the app
+    // Filter out auto locations from the UI list
     return storedLocations
       .filter((loc) => !loc.isAuto)
       .map((loc) => {
@@ -176,8 +176,7 @@ export function LocationsProvider({ children }: { children: React.ReactNode }) {
           allDevicesOnline,
           someDevicesOnline,
         };
-      })
-      .filter((loc) => loc.totalCount > 0 || devices.some((d) => loc.deviceIds.includes(d.deviceId)));
+      });
   }, [storedLocations, devices]);
 
   const addLocation = useCallback(
@@ -262,22 +261,23 @@ export function LocationsProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   // After replaceLocation returns a new ID, fetch full server data and merge
+  // Preserves local-only fields (name, colorName) since the server may not have them
   const syncAfterReplace = useCallback(
     async (oldId: string, newId: string, locCreds: { credentials: Array<{ device_id: string; password: string }>; signingDevice: api.SigningCredentials }) => {
       try {
         const serverLoc = await api.getLocation(newId, locCreds.credentials, locCreds.signingDevice);
         const serverDeviceIds = serverLoc.devices.map((d) => d.device_id);
         setStoredLocations((p) => {
-          // Remove any duplicate entry that already had the new ID (e.g. an auto-location)
+          // Remove any duplicate entry that already had the new ID (e.g. an auto-location from watch effect)
           const withoutDupe = p.filter((l) => l.id !== newId || l.id === oldId);
           return withoutDupe.map((l) => {
             if (l.id === oldId) {
               return {
                 ...l,
                 id: newId,
-                name: serverLoc.name,
+                // Preserve local name and color; sync server-managed fields
                 deviceIds: serverDeviceIds,
-                overcrowdingLimit: serverLoc.overcrowding_limit ?? null,
+                overcrowdingLimit: serverLoc.overcrowding_limit ?? l.overcrowdingLimit,
                 isOnMap: serverLoc.on_map,
                 isAuto: false,
               };
@@ -296,67 +296,106 @@ export function LocationsProvider({ children }: { children: React.ReactNode }) {
   );
 
   const addDeviceToLocation = useCallback((locationId: string, serverDeviceId: string) => {
-    // Optimistic local update
-    setStoredLocations((prev) =>
-      prev.map((l) => {
-        if (l.id === locationId && !l.deviceIds.includes(serverDeviceId)) {
-          return { ...l, deviceIds: [...l.deviceIds, serverDeviceId] };
-        }
-        return l;
-      })
-    );
+    // Find the location and build credentials BEFORE updating state
+    const loc = storedLocations.find((l) => l.id === locationId);
+    if (!loc) return;
 
-    // Call replaceLocation with new full device set
-    setStoredLocations((current) => {
-      const loc = current.find((l) => l.id === locationId);
-      if (loc) {
-        const locCreds = api.getLocationCredentials(loc, devices);
-        if (locCreds) {
-          api.replaceLocation(locationId, locCreds.credentials, locCreds.signingDevice)
-            .then((newId) => {
-              if (newId !== locationId) {
-                syncAfterReplace(locationId, newId, locCreds);
-              }
-            })
-            .catch((err) => console.error("Failed to replace location on server:", err));
-        }
+    const newDeviceIds = loc.deviceIds.includes(serverDeviceId)
+      ? loc.deviceIds
+      : [...loc.deviceIds, serverDeviceId];
+
+    // Build credentials for the full new device set
+    const creds: Array<{ device_id: string; password: string }> = [];
+    for (const sid of newDeviceIds) {
+      const device = devices.find((d) => d.deviceId === sid);
+      if (device) {
+        creds.push({ device_id: device.deviceId, password: device.password });
       }
-      return current; // Don't mutate here, just read
-    });
-  }, [devices, syncAfterReplace]);
+    }
 
-  const removeDeviceFromLocation = useCallback((locationId: string, serverDeviceId: string) => {
+    if (creds.length === 0) return;
+    const signingDevice = { deviceId: creds[0].device_id, password: creds[0].password };
+
     // Optimistic local update
     setStoredLocations((prev) =>
       prev.map((l) => {
         if (l.id === locationId) {
-          return { ...l, deviceIds: l.deviceIds.filter((id) => id !== serverDeviceId) };
+          return { ...l, deviceIds: newDeviceIds };
         }
         return l;
       })
     );
 
-    // Call replaceLocation with reduced device set
-    // Use setTimeout to let the state update settle first
-    setTimeout(() => {
-      setStoredLocations((current) => {
-        const loc = current.find((l) => l.id === locationId);
-        if (loc && loc.deviceIds.length > 0) {
-          const locCreds = api.getLocationCredentials(loc, devices);
-          if (locCreds) {
-            api.replaceLocation(locationId, locCreds.credentials, locCreds.signingDevice)
-              .then((newId) => {
-                if (newId !== locationId) {
-                  syncAfterReplace(locationId, newId, locCreds);
-                }
-              })
-              .catch((err) => console.error("Failed to replace location on server:", err));
-          }
+    // Sync to server
+    api.replaceLocation(locationId, creds, signingDevice)
+      .then((newId) => {
+        if (newId !== locationId) {
+          syncAfterReplace(locationId, newId, { credentials: creds, signingDevice });
         }
-        return current;
+      })
+      .catch((err) => {
+        console.error("Failed to replace location on server:", err);
+        // Revert optimistic update on failure
+        setStoredLocations((prev) =>
+          prev.map((l) => {
+            if (l.id === locationId) {
+              return { ...l, deviceIds: loc.deviceIds };
+            }
+            return l;
+          })
+        );
       });
-    }, 0);
-  }, [devices, syncAfterReplace]);
+  }, [storedLocations, devices, syncAfterReplace]);
+
+  const removeDeviceFromLocation = useCallback((locationId: string, serverDeviceId: string) => {
+    // Find the location and build credentials BEFORE updating state
+    const loc = storedLocations.find((l) => l.id === locationId);
+    if (!loc) return;
+
+    const newDeviceIds = loc.deviceIds.filter((id) => id !== serverDeviceId);
+
+    // Build credentials for the remaining device set
+    const creds: Array<{ device_id: string; password: string }> = [];
+    for (const sid of newDeviceIds) {
+      const device = devices.find((d) => d.deviceId === sid);
+      if (device) {
+        creds.push({ device_id: device.deviceId, password: device.password });
+      }
+    }
+
+    // Optimistic local update
+    setStoredLocations((prev) =>
+      prev.map((l) => {
+        if (l.id === locationId) {
+          return { ...l, deviceIds: newDeviceIds };
+        }
+        return l;
+      })
+    );
+
+    // Sync to server (only if there are remaining devices)
+    if (creds.length > 0) {
+      const signingDevice = { deviceId: creds[0].device_id, password: creds[0].password };
+      api.replaceLocation(locationId, creds, signingDevice)
+        .then((newId) => {
+          if (newId !== locationId) {
+            syncAfterReplace(locationId, newId, { credentials: creds, signingDevice });
+          }
+        })
+        .catch((err) => {
+          console.error("Failed to replace location on server:", err);
+          // Revert optimistic update on failure
+          setStoredLocations((prev) =>
+            prev.map((l) => {
+              if (l.id === locationId) {
+                return { ...l, deviceIds: loc.deviceIds };
+              }
+              return l;
+            })
+          );
+        });
+    }
+  }, [storedLocations, devices, syncAfterReplace]);
 
   const setLocationOvercrowdingLimit = useCallback(
     async (id: string, limit: number | null) => {
