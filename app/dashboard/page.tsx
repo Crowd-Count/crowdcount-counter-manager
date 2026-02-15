@@ -205,7 +205,8 @@ export default function DashboardPage() {
       const result = await addLocation(
         newLocationName.trim(),
         newLocationColor,
-        [trimmedDeviceId]
+        [trimmedDeviceId],
+        trimmedPassword
       );
       if (result) {
         setIsLocationDialogOpen(false);

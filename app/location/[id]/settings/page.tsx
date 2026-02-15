@@ -115,7 +115,7 @@ export default function LocationSettingsPage() {
       return;
     }
 
-    api.getResetSchedule(locationId, locCreds.credentials, locCreds.signingDevice)
+    api.getResetSchedule(location.id, locCreds.credentials, locCreds.signingDevice)
       .then((schedule) => {
         // Treat as no schedule if reset_hour is missing/invalid
         if (schedule && typeof schedule.reset_hour === "number") {
@@ -129,7 +129,7 @@ export default function LocationSettingsPage() {
       })
       .catch(() => {})
       .finally(() => setIsLoadingSchedule(false));
-  }, [locationId, location, devices]);
+  }, [location, devices]);
 
   if (devicesLoading || locationsLoading) {
     return (
@@ -157,20 +157,24 @@ export default function LocationSettingsPage() {
     location.deviceIds.includes(d.deviceId)
   );
 
+  // Use location.id (current server ID) for all operations, not locationId from URL params
+  // (the server ID may have changed since the URL was loaded)
+  const currentId = location.id;
+
   const handleSaveName = () => {
     const trimmed = editName.trim();
     if (trimmed && trimmed !== location.name) {
-      updateLocationName(locationId, trimmed);
+      updateLocationName(currentId, trimmed);
     }
   };
 
   const handleSaveOvercrowding = async () => {
     const limit = parseInt(overcrowdingInput, 10);
     if (!overcrowdingInput || isNaN(limit) || limit <= 0) {
-      await setLocationOvercrowdingLimit(locationId, null);
+      await setLocationOvercrowdingLimit(currentId, null);
       setOvercrowdingInput("");
     } else {
-      await setLocationOvercrowdingLimit(locationId, limit);
+      await setLocationOvercrowdingLimit(currentId, limit);
     }
   };
 
@@ -184,7 +188,7 @@ export default function LocationSettingsPage() {
     setEraseDialogOpen(false);
     setIsErasing(true);
     try {
-      await api.resetLocationData(locationId, locCreds.credentials, locCreds.signingDevice);
+      await api.resetLocationData(currentId, locCreds.credentials, locCreds.signingDevice);
     } catch (err) {
       console.error("Failed to erase location data:", err);
     } finally {
@@ -193,7 +197,7 @@ export default function LocationSettingsPage() {
   };
 
   const handleDeleteLocation = async () => {
-    await removeLocation(locationId);
+    await removeLocation(location.localId);
     router.push("/dashboard");
   };
 
@@ -204,7 +208,7 @@ export default function LocationSettingsPage() {
     setIsSavingSchedule(true);
     try {
       const schedule = await api.setResetSchedule(
-        locationId,
+        currentId,
         locCreds.credentials,
         locCreds.signingDevice,
         resetHour,
@@ -225,7 +229,7 @@ export default function LocationSettingsPage() {
 
     setIsSavingSchedule(true);
     try {
-      await api.deleteResetSchedule(locationId, locCreds.credentials, locCreds.signingDevice);
+      await api.deleteResetSchedule(currentId, locCreds.credentials, locCreds.signingDevice);
       setResetSchedule(null);
       setIsEditingSchedule(false);
       setResetHour(0);
@@ -322,7 +326,7 @@ export default function LocationSettingsPage() {
                   }`}
                   style={{ backgroundColor: color.value }}
                   onClick={() =>
-                    updateLocationColor(locationId, color.name as LocationColorName)
+                    updateLocationColor(currentId, color.name as LocationColorName)
                   }
                 />
               ))}
@@ -355,7 +359,7 @@ export default function LocationSettingsPage() {
                     size="icon"
                     className="h-8 w-8"
                     onClick={() =>
-                      removeDeviceFromLocation(locationId, device.deviceId)
+                      removeDeviceFromLocation(currentId, device.deviceId)
                     }
                   >
                     <X className="h-4 w-4" />
