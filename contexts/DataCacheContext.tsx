@@ -11,13 +11,9 @@ import React, {
 import { useDevices } from "@/contexts/DevicesContext";
 import { useLocations } from "@/contexts/LocationsContext";
 import {
-  fetchInsightsForCredentials,
-  fetchAvailableDates,
-  fetchHistoryCharts,
   fetchLocationInsights,
   fetchLocationAvailableDates,
   fetchLocationHistoryCharts,
-  makeCredKey,
   type DeviceCredentials,
   type InsightsCacheEntry,
   type HistoryCacheEntry,
@@ -74,30 +70,19 @@ export function DataCacheProvider({ children }: { children: React.ReactNode }) {
     historyCache.current.set(cacheKey, data);
   }, []);
 
-  // Build all credential sets that need pre-fetching
+  // Build credential sets for locations that need pre-fetching
   const buildCredentialSets = useCallback((): {
     credKey: string;
     credentials: DeviceCredentials[];
-    locationParams?: LocationFetchParams;
+    locationParams: LocationFetchParams;
   }[] => {
     const sets: {
       credKey: string;
       credentials: DeviceCredentials[];
-      locationParams?: LocationFetchParams;
+      locationParams: LocationFetchParams;
     }[] = [];
     const seen = new Set<string>();
 
-    // Each individual device
-    for (const device of devices) {
-      const creds: DeviceCredentials[] = [{ deviceId: device.deviceId, password: device.password }];
-      const key = makeCredKey(creds);
-      if (!seen.has(key)) {
-        seen.add(key);
-        sets.push({ credKey: key, credentials: creds });
-      }
-    }
-
-    // Each location — use location-level server endpoints
     for (const location of locations) {
       const locCreds = api.getLocationCredentials(location, devices);
       if (!locCreds) continue;
@@ -119,22 +104,17 @@ export function DataCacheProvider({ children }: { children: React.ReactNode }) {
     return sets;
   }, [devices, locations]);
 
-  // Pre-fetch all data for a credential set
+  // Pre-fetch all data for a location credential set
   const prefetchForCredSet = useCallback(async (
     credKey: string,
-    credentials: DeviceCredentials[],
-    force: boolean,
-    locationParams?: LocationFetchParams
+    locationParams: LocationFetchParams,
+    force: boolean
   ) => {
     try {
       // Fetch dates + insights in parallel
       const [dates, insights] = await Promise.all([
-        locationParams
-          ? fetchLocationAvailableDates(locationParams, force).catch(() => [] as string[])
-          : fetchAvailableDates(credentials, force).catch(() => [] as string[]),
-        locationParams
-          ? fetchLocationInsights(locationParams, force).catch(() => null)
-          : fetchInsightsForCredentials(credentials, force).catch(() => null),
+        fetchLocationAvailableDates(locationParams, force).catch(() => [] as string[]),
+        fetchLocationInsights(locationParams, force).catch(() => null),
       ]);
 
       datesCache.current.set(credKey, dates);
@@ -149,12 +129,8 @@ export function DataCacheProvider({ children }: { children: React.ReactNode }) {
 
         // Fetch both population and entries in parallel
         const [popHistory, entryHistory] = await Promise.all([
-          locationParams
-            ? fetchLocationHistoryCharts(locationParams, mostRecent, mostRecent, year, "population", force).catch(() => null)
-            : fetchHistoryCharts(credentials, mostRecent, mostRecent, year, "population", force).catch(() => null),
-          locationParams
-            ? fetchLocationHistoryCharts(locationParams, mostRecent, mostRecent, year, "entries", force).catch(() => null)
-            : fetchHistoryCharts(credentials, mostRecent, mostRecent, year, "entries", force).catch(() => null),
+          fetchLocationHistoryCharts(locationParams, mostRecent, mostRecent, year, "population", force).catch(() => null),
+          fetchLocationHistoryCharts(locationParams, mostRecent, mostRecent, year, "entries", force).catch(() => null),
         ]);
 
         if (popHistory) {
@@ -171,34 +147,17 @@ export function DataCacheProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  // Main prefetch orchestration
+  // Main prefetch orchestration — single pass over location sets
   const runPrefetch = useCallback(async (force: boolean) => {
     const credSets = buildCredentialSets();
     if (credSets.length === 0) return;
 
-    // Phase 1: Individual devices first — populates apiCache per-device
-    const individuals = credSets.filter((s) => !s.locationParams && s.credentials.length === 1);
-    const locationSets = credSets.filter((s) => !!s.locationParams);
-
-    if (individuals.length > 0) {
-      await Promise.all(
-        individuals.map(({ credKey, credentials }) =>
-          prefetchForCredSet(credKey, credentials, force)
-        )
-      );
-      // Notify hooks so single-device pages update immediately
-      setCacheVersion((v) => v + 1);
-    }
-
-    // Phase 2: Location-level data — uses server-side aggregation
-    if (locationSets.length > 0) {
-      await Promise.all(
-        locationSets.map(({ credKey, credentials, locationParams }) =>
-          prefetchForCredSet(credKey, credentials, force, locationParams)
-        )
-      );
-      setCacheVersion((v) => v + 1);
-    }
+    await Promise.all(
+      credSets.map(({ credKey, locationParams }) =>
+        prefetchForCredSet(credKey, locationParams, force)
+      )
+    );
+    setCacheVersion((v) => v + 1);
   }, [buildCredentialSets, prefetchForCredSet]);
 
   // Initial prefetch once devices and locations are loaded

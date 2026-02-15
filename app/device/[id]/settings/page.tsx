@@ -5,7 +5,6 @@ import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
 import { useDevices } from "@/contexts/DevicesContext";
 import * as api from "@/lib/api";
-import { POLL_INTERVALS, type PollInterval } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
@@ -16,13 +15,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -43,7 +35,6 @@ export default function DeviceSettingsPage() {
   const deviceId = params.id as string;
   const {
     getDevice,
-    updatePollInterval,
     removeDevice,
     refreshDevice,
   } = useDevices();
@@ -153,35 +144,6 @@ export default function DeviceSettingsPage() {
       </header>
 
       <main className="container mx-auto px-4 py-6 max-w-2xl space-y-6">
-        {/* Update Frequency */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Update Frequency</CardTitle>
-            <CardDescription>
-              How often to refresh the count from the server
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Select
-              value={device.pollInterval.toString()}
-              onValueChange={(value) =>
-                updatePollInterval(device.id, parseInt(value) as PollInterval)
-              }
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {POLL_INTERVALS.map((interval) => (
-                  <SelectItem key={interval} value={interval.toString()}>
-                    {interval} second{interval !== 1 ? "s" : ""}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </CardContent>
-        </Card>
-
         {/* Direction Flip */}
         <Card>
           <CardHeader>

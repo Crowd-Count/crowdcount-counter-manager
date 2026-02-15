@@ -21,7 +21,6 @@ interface DevicesContextType {
   ) => Promise<boolean>;
   removeDevice: (id: string) => void;
   updateDeviceName: (id: string, name: string) => void;
-  updatePollInterval: (id: string, interval: number) => void;
   refreshDevice: (id: string) => Promise<void>;
   getDevice: (id: string) => DeviceState | undefined;
   updateDevicePassword: (id: string, newPassword: string) => void;
@@ -83,7 +82,6 @@ export function DevicesProvider({ children }: { children: React.ReactNode }) {
         deviceId: d.deviceId,
         password: d.password,
         name: d.name,
-        pollInterval: d.pollInterval,
       }));
       saveDevicesToStorage(stored);
     } else if (!isLoading && devices.length === 0) {
@@ -114,7 +112,6 @@ export function DevicesProvider({ children }: { children: React.ReactNode }) {
         deviceId,
         password,
         name: name || deviceId,
-        pollInterval: 5,
         isOnline: false,
         lastUpdated: null,
       };
@@ -132,12 +129,6 @@ export function DevicesProvider({ children }: { children: React.ReactNode }) {
   const updateDeviceName = useCallback((id: string, name: string) => {
     setDevices((prev) =>
       prev.map((d) => (d.id === id ? { ...d, name } : d))
-    );
-  }, []);
-
-  const updatePollInterval = useCallback((id: string, interval: number) => {
-    setDevices((prev) =>
-      prev.map((d) => (d.id === id ? { ...d, pollInterval: interval } : d))
     );
   }, []);
 
@@ -191,7 +182,6 @@ export function DevicesProvider({ children }: { children: React.ReactNode }) {
         addDevice,
         removeDevice,
         updateDeviceName,
-        updatePollInterval,
         refreshDevice,
         getDevice,
         updateDevicePassword,

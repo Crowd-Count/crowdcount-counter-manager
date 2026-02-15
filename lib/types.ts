@@ -4,7 +4,6 @@ export interface StoredDevice {
   deviceId: string; // Device ID from server (e.g., "T1234")
   password: string;
   name?: string; // Custom friendly name
-  pollInterval: number; // Refresh interval in seconds (default: 5)
 }
 
 // Device state with live data
@@ -76,11 +75,6 @@ export interface ChartDataPoint {
   value: number;
   average?: number;
 }
-
-// Settings types
-export type PollInterval = 1 | 3 | 5 | 10 | 15 | 30 | 45 | 60;
-
-export const POLL_INTERVALS: PollInterval[] = [1, 3, 5, 10, 15, 30, 45, 60];
 
 // Location types
 export interface StoredLocation {

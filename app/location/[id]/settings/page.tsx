@@ -36,7 +36,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { ThemeToggle } from "@/components/ThemeToggle";
-import { ArrowLeft, Save, Trash2, Plus, X, Clock, RotateCcw } from "lucide-react";
+import { ArrowLeft, Save, Trash2, X, Clock, RotateCcw } from "lucide-react";
 
 const COMMON_TIMEZONES = [
   "America/New_York",
@@ -85,11 +85,9 @@ export default function LocationSettingsPage() {
     getLocation,
     updateLocationName,
     updateLocationColor,
-    addDeviceToLocation,
     removeDeviceFromLocation,
     setLocationOvercrowdingLimit,
     removeLocation,
-    getUngroupedDeviceIds,
     isLoading: locationsLoading,
   } = useLocations();
 
@@ -99,8 +97,6 @@ export default function LocationSettingsPage() {
   const [overcrowdingInput, setOvercrowdingInput] = useState(
     location?.overcrowdingLimit?.toString() ?? ""
   );
-  const [isAddDeviceOpen, setIsAddDeviceOpen] = useState(false);
-
   // Reset schedule state
   const [resetSchedule, setResetSchedule] = useState<ResetSchedule | null>(null);
   const [resetHour, setResetHour] = useState(0);
@@ -160,8 +156,6 @@ export default function LocationSettingsPage() {
   const memberDevices = devices.filter((d) =>
     location.deviceIds.includes(d.deviceId)
   );
-  const ungroupedIds = getUngroupedDeviceIds();
-  const ungroupedDevices = devices.filter((d) => ungroupedIds.includes(d.id));
 
   const handleSaveName = () => {
     const trimmed = editName.trim();
@@ -370,51 +364,6 @@ export default function LocationSettingsPage() {
               ))
             )}
 
-            {/* Add device section */}
-            {ungroupedDevices.length > 0 && (
-              <>
-                {isAddDeviceOpen ? (
-                  <div className="border rounded-md p-2 space-y-1">
-                    <p className="text-xs text-muted-foreground px-2 pb-1">
-                      Select a counter to add:
-                    </p>
-                    {ungroupedDevices.map((device) => (
-                      <button
-                        key={device.id}
-                        type="button"
-                        className="w-full text-left px-3 py-2 rounded-md text-sm hover:bg-accent transition-colors"
-                        onClick={() => {
-                          addDeviceToLocation(locationId, device.deviceId);
-                          if (ungroupedDevices.length <= 1) {
-                            setIsAddDeviceOpen(false);
-                          }
-                        }}
-                      >
-                        {device.name || device.deviceId}
-                      </button>
-                    ))}
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="w-full"
-                      onClick={() => setIsAddDeviceOpen(false)}
-                    >
-                      Cancel
-                    </Button>
-                  </div>
-                ) : (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="w-full"
-                    onClick={() => setIsAddDeviceOpen(true)}
-                  >
-                    <Plus className="h-4 w-4 mr-1" />
-                    Add Counter
-                  </Button>
-                )}
-              </>
-            )}
           </CardContent>
         </Card>
 
