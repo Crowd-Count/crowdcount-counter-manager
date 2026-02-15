@@ -95,6 +95,14 @@ export default function LocationSettingsPage() {
   const [overcrowdingInput, setOvercrowdingInput] = useState(
     location?.overcrowdingLimit?.toString() ?? ""
   );
+
+  // Sync form fields when server data changes via polling
+  useEffect(() => {
+    if (location?.name) setEditName(location.name);
+  }, [location?.name]);
+  useEffect(() => {
+    setOvercrowdingInput(location?.overcrowdingLimit?.toString() ?? "");
+  }, [location?.overcrowdingLimit]);
   // Reset schedule state
   const [resetSchedule, setResetSchedule] = useState<ResetSchedule | null>(null);
   const [resetHour, setResetHour] = useState(0);

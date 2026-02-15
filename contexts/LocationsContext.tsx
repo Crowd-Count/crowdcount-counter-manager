@@ -130,13 +130,12 @@ export function LocationsProvider({ children }: { children: React.ReactNode }) {
           if (prev[loc.id] === serverLoc.current_count) return prev;
           return { ...prev, [loc.id]: serverLoc.current_count };
         });
-        // Sync non-name metadata from server (only if changed)
-        // Name is NOT synced here — it's set locally and pushed to server.
-        // Syncing it back would create race conditions (reverting user renames).
+        // Sync metadata from server (server is authoritative for name, overcrowding, on_map)
         setStoredLocations((prev) => {
           const existing = prev.find((l) => l.id === loc.id);
           if (!existing) return prev;
           if (
+            existing.name === serverLoc.name &&
             existing.overcrowdingLimit === serverLoc.overcrowding_limit &&
             existing.isOnMap === serverLoc.on_map
           ) {
@@ -146,6 +145,7 @@ export function LocationsProvider({ children }: { children: React.ReactNode }) {
             l.id === loc.id
               ? {
                   ...l,
+                  name: serverLoc.name,
                   overcrowdingLimit: serverLoc.overcrowding_limit,
                   isOnMap: serverLoc.on_map,
                 }
@@ -404,28 +404,43 @@ export function LocationsProvider({ children }: { children: React.ReactNode }) {
         // 5. Create location with combined devices (server deduplicates by device-set hash)
         const newServerId = await api.createLocation(creds, signingDevice, loc.name, loc.overcrowdingLimit);
 
-        // 6. Update target location (by localId) with new server ID + combined devices
-        //    Keep local name — push it to the server instead of pulling the server's name
+        // 6. Fetch server metadata for the (possibly existing) location
+        //    Server name is authoritative — use it instead of local name
+        let serverName = loc.name;
+        let serverOvercrowding = loc.overcrowdingLimit;
+        let serverOnMap = loc.isOnMap;
+        try {
+          const serverLoc = await api.getLocation(newServerId, creds, signingDevice);
+          serverName = serverLoc.name;
+          serverOvercrowding = serverLoc.overcrowding_limit;
+          serverOnMap = serverLoc.on_map;
+        } catch {
+          // Fall back to local values if fetch fails
+        }
+
+        // 7. Update target location (by localId) with new server ID + server metadata
         //    Also filter out any other entries with the same new server ID (dedup)
         setStoredLocations((prev) => {
           const cleaned = prev.filter((l) => l.localId === stableLocalId || l.id !== newServerId);
           return cleaned.map((l) =>
             l.localId === stableLocalId
-              ? { ...l, id: newServerId, deviceIds: combinedDeviceIds, isAuto: false }
+              ? { ...l, id: newServerId, deviceIds: combinedDeviceIds, isAuto: false, name: serverName, overcrowdingLimit: serverOvercrowding, isOnMap: serverOnMap }
               : l
           );
         });
 
-        // 7. Push local name + overcrowding to the server location
-        //    (createLocation only sets name on NEW locations, not existing ones)
-        if (newServerId !== loc.id) {
-          api.updateLocation(newServerId, creds, signingDevice, {
-            name: loc.name,
-            overcrowdingLimit: loc.overcrowdingLimit,
-          }).catch((err) => console.error("Failed to update location on server:", err));
+        // 8. For non-on-map locations, push local name to server
+        //    (createLocation doesn't update name on existing locations)
+        if (newServerId !== loc.id && !serverOnMap) {
+          api.updateLocation(newServerId, creds, signingDevice, { name: loc.name })
+            .catch((err) => console.error("Failed to update location name on server:", err));
+          if (loc.overcrowdingLimit != null && loc.overcrowdingLimit > 0) {
+            api.updateLocation(newServerId, creds, signingDevice, { overcrowdingLimit: loc.overcrowdingLimit })
+              .catch((err) => console.error("Failed to update overcrowding on server:", err));
+          }
         }
 
-        // 8. Remove standalone locations for the new device (from previous auto-location)
+        // 9. Remove standalone locations for the new device (from previous auto-location)
         //    (any loc where deviceIds.length === 1 && deviceIds[0] === newDeviceId && localId !== target)
         setStoredLocations((prev) =>
           prev.filter((l) => !(l.deviceIds.length === 1 && l.deviceIds[0] === newDeviceId && l.localId !== stableLocalId))
@@ -578,6 +593,7 @@ export function LocationsProvider({ children }: { children: React.ReactNode }) {
         }
 
         // No auto-location exists — create a new location
+        // (createLocation returns existing ID if same device set exists, but does NOT update name)
         const creds = [{ device_id: serverDeviceId, password }];
         const signingDevice = { deviceId: serverDeviceId, password };
         const locationId = await api.createLocation(creds, signingDevice, locationName);
@@ -594,6 +610,10 @@ export function LocationsProvider({ children }: { children: React.ReactNode }) {
             isOnMap: false,
           },
         ]);
+        // Always push name to server (createLocation may have returned an existing location
+        // whose name differs from what the user entered)
+        await api.updateLocation(locationId, creds, signingDevice, { name: locationName })
+          .catch((err) => console.error("Failed to set location name on server:", err));
         return locationId;
       } catch (err) {
         console.error("Failed to adopt/create location:", err);
