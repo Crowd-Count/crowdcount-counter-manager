@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import type { LocationState, DeviceState } from "@/lib/types";
 import { LOCATION_COLORS } from "@/lib/types";
@@ -118,26 +118,14 @@ function CompactDeviceRow({ device }: { device: DeviceState }) {
 }
 
 export function LocationCard({ location }: LocationCardProps) {
-  const { devices, addDevice } = useDevices();
-  const { addDeviceToLocation } = useLocations();
+  const { devices } = useDevices();
+  const { addCounterToLocation } = useLocations();
 
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [newDeviceId, setNewDeviceId] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [addError, setAddError] = useState("");
   const [isAdding, setIsAdding] = useState(false);
-
-  // Track a pending device ID that needs to be added to a location once it appears in state
-  const pendingDeviceRef = useRef<string | null>(null);
-
-  useEffect(() => {
-    if (!pendingDeviceRef.current) return;
-    const added = devices.find((d) => d.deviceId === pendingDeviceRef.current);
-    if (added) {
-      addDeviceToLocation(location.id, added.deviceId);
-      pendingDeviceRef.current = null;
-    }
-  }, [devices, location.id, addDeviceToLocation]);
 
   const handleAddToLocation = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -153,27 +141,15 @@ export function LocationCard({ location }: LocationCardProps) {
     }
 
     try {
-      // Check if device already exists in the app
-      const existing = devices.find((d) => d.deviceId === trimmedId);
-      if (existing) {
-        addDeviceToLocation(location.id, existing.deviceId);
+      const result = await addCounterToLocation(location.id, trimmedId, trimmedPw);
+      if (result.success) {
+        setIsAddOpen(false);
+        setNewDeviceId("");
+        setNewPassword("");
       } else {
-        // Set pending so the useEffect adds it to the location once state updates
-        pendingDeviceRef.current = trimmedId;
-        const success = await addDevice(trimmedId, trimmedPw);
-        if (!success) {
-          pendingDeviceRef.current = null;
-          setAddError("Invalid credentials or counter already added");
-          setIsAdding(false);
-          return;
-        }
+        setAddError(result.error || "Failed to add counter");
       }
-
-      setIsAddOpen(false);
-      setNewDeviceId("");
-      setNewPassword("");
     } catch {
-      pendingDeviceRef.current = null;
       setAddError("Failed to add counter");
     } finally {
       setIsAdding(false);

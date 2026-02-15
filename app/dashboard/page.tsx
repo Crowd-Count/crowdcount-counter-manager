@@ -141,22 +141,22 @@ export default function DashboardPage() {
   const [isCreatingLocation, setIsCreatingLocation] = useState(false);
   const [createLocationError, setCreateLocationError] = useState("");
 
-  // Testing toggle — auto-detect from hostname or localStorage
+  // Testing toggle — localStorage overrides hostname detection
   const [isTesting, setIsTesting] = useState(false);
   useEffect(() => {
-    setIsTesting(
-      window.location.hostname.includes("staging") ||
-      localStorage.getItem("crowdcount_testing") === "true"
-    );
+    const flag = localStorage.getItem("crowdcount_testing");
+    if (flag === "false") {
+      setIsTesting(false);
+    } else if (flag === "true") {
+      setIsTesting(true);
+    } else {
+      setIsTesting(window.location.hostname.includes("staging"));
+    }
   }, []);
 
   const handleToggleTesting = () => {
     const newValue = !isTesting;
-    if (newValue) {
-      localStorage.setItem("crowdcount_testing", "true");
-    } else {
-      localStorage.removeItem("crowdcount_testing");
-    }
+    localStorage.setItem("crowdcount_testing", newValue ? "true" : "false");
     // Reload to re-fetch all data from new API
     window.location.reload();
   };
@@ -396,6 +396,13 @@ export default function DashboardPage() {
       </header>
 
       <main className="container mx-auto px-4 py-6">
+        <p className="text-xs text-muted-foreground text-center mb-4 px-2">
+          Note: Promotions and counter setup are not available on web. Download the iOS app on the App Store{" "}
+          <a href="https://crowdcount.tech/app" className="underline hover:text-foreground" target="_blank" rel="noopener noreferrer">
+            here
+          </a>.
+        </p>
+
         {/* Location cards */}
         {locations.map((location) => (
           <LocationCard key={location.id} location={location} />
