@@ -120,11 +120,14 @@ export default function LocationSettingsPage() {
 
     api.getResetSchedule(locationId, locCreds.credentials, locCreds.signingDevice)
       .then((schedule) => {
-        setResetSchedule(schedule);
-        if (schedule) {
-          if (typeof schedule.reset_hour === "number") setResetHour(schedule.reset_hour);
+        // Treat as no schedule if reset_hour is missing/invalid
+        if (schedule && typeof schedule.reset_hour === "number") {
+          setResetSchedule(schedule);
+          setResetHour(schedule.reset_hour);
           if (typeof schedule.reset_minute === "number") setResetMinute(schedule.reset_minute);
           if (schedule.timezone) setResetTimezone(schedule.timezone);
+        } else {
+          setResetSchedule(null);
         }
       })
       .catch(() => {})

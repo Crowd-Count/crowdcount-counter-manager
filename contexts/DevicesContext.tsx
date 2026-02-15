@@ -148,11 +148,13 @@ export function DevicesProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const updateDeviceOnlineStatus = useCallback((id: string, isOnline: boolean) => {
-    setDevices((prev) =>
-      prev.map((d) =>
+    setDevices((prev) => {
+      const device = prev.find((d) => d.id === id);
+      if (!device || device.isOnline === isOnline) return prev; // no change → skip re-render
+      return prev.map((d) =>
         d.id === id ? { ...d, isOnline, lastUpdated: new Date() } : d
-      )
-    );
+      );
+    });
   }, []);
 
   // Simplified refreshDevice — just fetches connection status for device settings page

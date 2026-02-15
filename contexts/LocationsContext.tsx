@@ -207,7 +207,33 @@ export function LocationsProvider({ children }: { children: React.ReactNode }) {
 
     const locationPromise = api.getLocation(loc.id, locCreds.credentials, locCreds.signingDevice)
       .then((serverLoc) => {
-        setLocationCounts((prev) => ({ ...prev, [loc.id]: serverLoc.current_count }));
+        // Update count (only if changed to avoid re-renders)
+        setLocationCounts((prev) => {
+          if (prev[loc.id] === serverLoc.current_count) return prev;
+          return { ...prev, [loc.id]: serverLoc.current_count };
+        });
+        // Sync metadata from server (only if changed)
+        setStoredLocations((prev) => {
+          const existing = prev.find((l) => l.id === loc.id);
+          if (!existing) return prev;
+          if (
+            existing.name === serverLoc.name &&
+            existing.overcrowdingLimit === serverLoc.overcrowding_limit &&
+            existing.isOnMap === serverLoc.on_map
+          ) {
+            return prev; // no change
+          }
+          return prev.map((l) =>
+            l.id === loc.id
+              ? {
+                  ...l,
+                  name: serverLoc.name,
+                  overcrowdingLimit: serverLoc.overcrowding_limit,
+                  isOnMap: serverLoc.on_map,
+                }
+              : l
+          );
+        });
       })
       .catch(() => {});
 
@@ -334,25 +360,32 @@ export function LocationsProvider({ children }: { children: React.ReactNode }) {
 
   const removeLocation = useCallback(
     async (id: string) => {
-      const loc = storedLocations.find((l) => l.id === id);
-      if (loc) {
-        // Remove all member devices from the app (local only — nothing server-side)
-        for (const serverDeviceId of loc.deviceIds) {
-          const device = devices.find((d) => d.deviceId === serverDeviceId);
-          if (device) {
-            removeDevice(device.id);
-          }
-        }
-      }
+      // Read current state from refs to avoid stale closures
+      const currentLocs = storedLocationsRef.current;
+      const loc = currentLocs.find((l) => l.id === id);
+
+      // Remove stored location FIRST (before devices, so auto-prune doesn't interfere)
       setStoredLocations((prev) => prev.filter((l) => l.id !== id));
+
       // Clean up count
       setLocationCounts((prev) => {
         const next = { ...prev };
         delete next[id];
         return next;
       });
+
+      // Then remove member devices from the app
+      if (loc) {
+        const currentDevices = devicesRef.current;
+        for (const serverDeviceId of loc.deviceIds) {
+          const device = currentDevices.find((d) => d.deviceId === serverDeviceId);
+          if (device) {
+            removeDevice(device.id);
+          }
+        }
+      }
     },
-    [storedLocations, devices, removeDevice]
+    [removeDevice]
   );
 
   const updateLocationName = useCallback((id: string, name: string) => {
