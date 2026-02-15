@@ -97,8 +97,8 @@ export interface LocationState extends StoredLocation {
 
 // API response for location endpoints
 export interface LocationResponse {
-  id: string;
-  name: string;
+  location_id: string;
+  location_name: string | null;
   devices: Array<{ device_id: string; label: string; current_count: number }>;
   overcrowding_limit: number | null;
   current_count: number;

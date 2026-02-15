@@ -134,8 +134,9 @@ export function LocationsProvider({ children }: { children: React.ReactNode }) {
         setStoredLocations((prev) => {
           const existing = prev.find((l) => l.id === loc.id);
           if (!existing) return prev;
+          const newName = serverLoc.location_name ?? existing.name;
           if (
-            existing.name === serverLoc.name &&
+            existing.name === newName &&
             existing.overcrowdingLimit === serverLoc.overcrowding_limit &&
             existing.isOnMap === serverLoc.on_map
           ) {
@@ -145,7 +146,7 @@ export function LocationsProvider({ children }: { children: React.ReactNode }) {
             l.id === loc.id
               ? {
                   ...l,
-                  name: serverLoc.name,
+                  name: newName,
                   overcrowdingLimit: serverLoc.overcrowding_limit,
                   isOnMap: serverLoc.on_map,
                 }
@@ -411,7 +412,7 @@ export function LocationsProvider({ children }: { children: React.ReactNode }) {
         let serverOnMap = loc.isOnMap;
         try {
           const serverLoc = await api.getLocation(newServerId, creds, signingDevice);
-          serverName = serverLoc.name;
+          serverName = serverLoc.location_name ?? loc.name;
           serverOvercrowding = serverLoc.overcrowding_limit;
           serverOnMap = serverLoc.on_map;
         } catch {
@@ -561,12 +562,13 @@ export function LocationsProvider({ children }: { children: React.ReactNode }) {
         );
 
         if (serverAutoLoc) {
+          const serverLocId = serverAutoLoc.location_id;
           const serverDeviceIds = serverAutoLoc.devices.map((d) => d.device_id);
           setStoredLocations((prev) => {
-            const existingIdx = prev.findIndex((l) => l.id === serverAutoLoc.id);
+            const existingIdx = prev.findIndex((l) => l.id === serverLocId);
             if (existingIdx >= 0) {
               return prev.map((l) =>
-                l.id === serverAutoLoc.id
+                l.id === serverLocId
                   ? { ...l, name: locationName, isAuto: false, colorName, deviceIds: serverDeviceIds }
                   : l
               );
@@ -574,7 +576,7 @@ export function LocationsProvider({ children }: { children: React.ReactNode }) {
             return [
               ...prev,
               {
-                id: serverAutoLoc.id,
+                id: serverLocId,
                 localId: generateLocalId(),
                 name: locationName,
                 deviceIds: serverDeviceIds,
@@ -587,9 +589,9 @@ export function LocationsProvider({ children }: { children: React.ReactNode }) {
           });
           const signingDevice = { deviceId: serverDeviceId, password };
           const creds = [{ device_id: serverDeviceId, password }];
-          await api.updateLocation(serverAutoLoc.id, creds, signingDevice, { name: locationName })
+          await api.updateLocation(serverLocId, creds, signingDevice, { name: locationName })
             .catch((err) => console.error("Failed to rename adopted location:", err));
-          return serverAutoLoc.id;
+          return serverLocId;
         }
 
         // No auto-location exists — create a new location
