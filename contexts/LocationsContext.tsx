@@ -50,11 +50,15 @@ function loadLocationsFromStorage(): StoredLocation[] {
       localStorage.removeItem(STORAGE_KEY);
       return [];
     }
-    // Backfill localId for locations that don't have one yet
+    // Backfill missing fields for locations from older versions
     let needsSave = false;
     for (const loc of parsed) {
       if (!loc.localId) {
         loc.localId = generateLocalId();
+        needsSave = true;
+      }
+      if (loc.serverColor === undefined) {
+        loc.serverColor = null;
         needsSave = true;
       }
     }
@@ -130,15 +134,17 @@ export function LocationsProvider({ children }: { children: React.ReactNode }) {
           if (prev[loc.id] === serverLoc.current_count) return prev;
           return { ...prev, [loc.id]: serverLoc.current_count };
         });
-        // Sync metadata from server (server is authoritative for name, overcrowding, on_map)
+        // Sync metadata from server (server is authoritative for name, overcrowding, on_map, color)
         setStoredLocations((prev) => {
           const existing = prev.find((l) => l.id === loc.id);
           if (!existing) return prev;
           const newName = serverLoc.location_name ?? existing.name;
+          const newColor = serverLoc.location_color ?? existing.serverColor;
           if (
             existing.name === newName &&
             existing.overcrowdingLimit === serverLoc.overcrowding_limit &&
-            existing.isOnMap === serverLoc.on_map
+            existing.isOnMap === serverLoc.on_map &&
+            existing.serverColor === newColor
           ) {
             return prev; // no change
           }
@@ -149,6 +155,7 @@ export function LocationsProvider({ children }: { children: React.ReactNode }) {
                   name: newName,
                   overcrowdingLimit: serverLoc.overcrowding_limit,
                   isOnMap: serverLoc.on_map,
+                  serverColor: newColor,
                 }
               : l
           );
@@ -222,8 +229,9 @@ export function LocationsProvider({ children }: { children: React.ReactNode }) {
       const memberDevices = devices.filter((d) => loc.deviceIds.includes(d.deviceId));
       // Skip locations with no matching devices in the app (ghost locations from server)
       if (memberDevices.length === 0) continue;
-      const totalCount = locationCounts[loc.id] ?? 0;
+      const totalCount = loc.id in locationCounts ? locationCounts[loc.id] : null;
       const isOverLimit =
+        totalCount !== null &&
         loc.overcrowdingLimit !== null &&
         loc.overcrowdingLimit > 0 &&
         totalCount > loc.overcrowdingLimit;
@@ -272,6 +280,7 @@ export function LocationsProvider({ children }: { children: React.ReactNode }) {
           colorName,
           isAuto: false,
           isOnMap: false,
+          serverColor: null,
         };
         setStoredLocations((prev) => {
           // Dedup: if server returned an existing location ID, replace instead of adding
@@ -410,11 +419,13 @@ export function LocationsProvider({ children }: { children: React.ReactNode }) {
         let serverName = loc.name;
         let serverOvercrowding = loc.overcrowdingLimit;
         let serverOnMap = loc.isOnMap;
+        let serverColor = loc.serverColor;
         try {
           const serverLoc = await api.getLocation(newServerId, creds, signingDevice);
           serverName = serverLoc.location_name ?? loc.name;
           serverOvercrowding = serverLoc.overcrowding_limit;
           serverOnMap = serverLoc.on_map;
+          serverColor = serverLoc.location_color ?? loc.serverColor;
         } catch {
           // Fall back to local values if fetch fails
         }
@@ -425,7 +436,7 @@ export function LocationsProvider({ children }: { children: React.ReactNode }) {
           const cleaned = prev.filter((l) => l.localId === stableLocalId || l.id !== newServerId);
           return cleaned.map((l) =>
             l.localId === stableLocalId
-              ? { ...l, id: newServerId, deviceIds: combinedDeviceIds, isAuto: false, name: serverName, overcrowdingLimit: serverOvercrowding, isOnMap: serverOnMap }
+              ? { ...l, id: newServerId, deviceIds: combinedDeviceIds, isAuto: false, name: serverName, overcrowdingLimit: serverOvercrowding, isOnMap: serverOnMap, serverColor }
               : l
           );
         });
@@ -584,6 +595,7 @@ export function LocationsProvider({ children }: { children: React.ReactNode }) {
                 colorName,
                 isAuto: false,
                 isOnMap: serverAutoLoc.on_map,
+                serverColor: serverAutoLoc.location_color ?? null,
               },
             ];
           });
@@ -610,6 +622,7 @@ export function LocationsProvider({ children }: { children: React.ReactNode }) {
             colorName,
             isAuto: false,
             isOnMap: false,
+            serverColor: null,
           },
         ]);
         // Always push name to server (createLocation may have returned an existing location

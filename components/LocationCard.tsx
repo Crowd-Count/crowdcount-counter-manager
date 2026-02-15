@@ -34,6 +34,7 @@ import {
   WifiOff,
   Minus,
   Plus,
+  Loader2,
 } from "lucide-react";
 
 interface LocationCardProps {
@@ -139,8 +140,9 @@ export function LocationCard({ location }: LocationCardProps) {
   };
 
   const colorValue =
-    LOCATION_COLORS.find((c) => c.name === location.colorName)?.value ??
-    "#3b82f6";
+    (location.isOnMap && location.serverColor)
+      ? location.serverColor
+      : LOCATION_COLORS.find((c) => c.name === location.colorName)?.value ?? "#3b82f6";
 
   return (
     <Card className={`mb-6 ${location.isOverLimit ? "border-destructive" : ""}`}>
@@ -196,23 +198,27 @@ export function LocationCard({ location }: LocationCardProps) {
               size="icon"
               className="h-12 w-12 rounded-full"
               onClick={handleLocationDecrement}
-              disabled={isModifyingCount || !locCreds || location.totalCount === 0}
+              disabled={isModifyingCount || !locCreds || location.totalCount === null || location.totalCount === 0}
             >
               <Minus className="h-5 w-5" />
             </Button>
-            <p
-              className={`text-6xl font-bold tabular-nums ${
-                location.isOverLimit ? "text-destructive" : ""
-              }`}
-            >
-              {location.totalCount}
-            </p>
+            {location.totalCount === null ? (
+              <Loader2 className="h-12 w-12 animate-spin text-muted-foreground" />
+            ) : (
+              <p
+                className={`text-6xl font-bold tabular-nums ${
+                  location.isOverLimit ? "text-destructive" : ""
+                }`}
+              >
+                {location.totalCount}
+              </p>
+            )}
             <Button
               variant="outline"
               size="icon"
               className="h-12 w-12 rounded-full"
               onClick={handleLocationIncrement}
-              disabled={isModifyingCount || !locCreds}
+              disabled={isModifyingCount || !locCreds || location.totalCount === null}
             >
               <Plus className="h-5 w-5" />
             </Button>

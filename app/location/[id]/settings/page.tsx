@@ -251,8 +251,9 @@ export default function LocationSettingsPage() {
   };
 
   const colorValue =
-    LOCATION_COLORS.find((c) => c.name === location.colorName)?.value ??
-    "#3b82f6";
+    (location.isOnMap && location.serverColor)
+      ? location.serverColor
+      : LOCATION_COLORS.find((c) => c.name === location.colorName)?.value ?? "#3b82f6";
 
   return (
     <div className="min-h-screen bg-background">
@@ -313,34 +314,36 @@ export default function LocationSettingsPage() {
           </CardContent>
         </Card>
 
-        {/* Color */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Color</CardTitle>
-            <CardDescription>
-              Choose a color to identify this location
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="flex gap-3">
-              {LOCATION_COLORS.map((color) => (
-                <button
-                  key={color.name}
-                  type="button"
-                  className={`h-10 w-10 rounded-full border-2 transition-all ${
-                    location.colorName === color.name
-                      ? "border-foreground scale-110"
-                      : "border-transparent"
-                  }`}
-                  style={{ backgroundColor: color.value }}
-                  onClick={() =>
-                    updateLocationColor(currentId, color.name as LocationColorName)
-                  }
-                />
-              ))}
-            </div>
-          </CardContent>
-        </Card>
+        {/* Color — hidden for on-map locations (color comes from server) */}
+        {!location.isOnMap && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Color</CardTitle>
+              <CardDescription>
+                Choose a color to identify this location
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex gap-3">
+                {LOCATION_COLORS.map((color) => (
+                  <button
+                    key={color.name}
+                    type="button"
+                    className={`h-10 w-10 rounded-full border-2 transition-all ${
+                      location.colorName === color.name
+                        ? "border-foreground scale-110"
+                        : "border-transparent"
+                    }`}
+                    style={{ backgroundColor: color.value }}
+                    onClick={() =>
+                      updateLocationColor(currentId, color.name as LocationColorName)
+                    }
+                  />
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Member Devices */}
         <Card>

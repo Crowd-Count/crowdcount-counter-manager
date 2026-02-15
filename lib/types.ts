@@ -86,10 +86,11 @@ export interface StoredLocation {
   colorName: string;
   isAuto: boolean;         // auto-created 1:1 location on server
   isOnMap: boolean;        // visible on public map
+  serverColor: string | null; // color from server (for on-map locations)
 }
 
 export interface LocationState extends StoredLocation {
-  totalCount: number;
+  totalCount: number | null; // null = not yet fetched
   isOverLimit: boolean;
   allDevicesOnline: boolean;
   someDevicesOnline: boolean;
@@ -99,6 +100,7 @@ export interface LocationState extends StoredLocation {
 export interface LocationResponse {
   location_id: string;
   location_name: string | null;
+  location_color: string | null;
   devices: Array<{ device_id: string; label: string; current_count: number }>;
   overcrowding_limit: number | null;
   current_count: number;
