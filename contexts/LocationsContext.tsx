@@ -342,12 +342,14 @@ export function LocationsProvider({ children }: { children: React.ReactNode }) {
       .catch((err) => console.error("Failed to sync location change to server:", err));
   }, [storedLocations, devices, updateLocationServerId]);
 
-  // Add a new counter (by ID + password) to an existing location
+  // Add a new counter (by ID + password) to an existing location.
+  // Behind the scenes: find the server location that contains ALL the combined devices
+  // and swap our local entry to point at it. The user sees "counter added to my location."
   const addCounterToLocation = useCallback(
     async (locationId: string, newDeviceId: string, password: string): Promise<{ success: boolean; error?: string }> => {
       const loc = storedLocations.find((l) => l.id === locationId);
       if (!loc) return { success: false, error: "Location not found" };
-      // Capture localId early — we use this for all state updates so they work even after server ID changes
+      // localId is stable — survives server ID changes, keeps the LocationCard mounted
       const stableLocalId = loc.localId;
 
       // 1. Validate password
@@ -358,7 +360,7 @@ export function LocationsProvider({ children }: { children: React.ReactNode }) {
         return { success: false, error: "Failed to validate credentials" };
       }
 
-      // 2. Suppress watch effect for this device
+      // 2. Suppress watch effect for this device to avoid race conditions
       pendingCounterAddRef.current.add(newDeviceId);
 
       try {
@@ -373,6 +375,7 @@ export function LocationsProvider({ children }: { children: React.ReactNode }) {
         const combinedDeviceIds = loc.deviceIds.includes(newDeviceId)
           ? loc.deviceIds
           : [...loc.deviceIds, newDeviceId];
+        const combinedSet = new Set(combinedDeviceIds);
 
         // 5. Build credentials — use password param for new device, devices array for existing
         const creds: Array<{ device_id: string; password: string }> = [];
@@ -387,26 +390,44 @@ export function LocationsProvider({ children }: { children: React.ReactNode }) {
         if (creds.length === 0) return { success: false, error: "No valid credentials" };
         const signingDevice = { deviceId: creds[0].device_id, password: creds[0].password };
 
-        // 6. Optimistic local update — use localId so this works even if server ID changed concurrently
+        // 6. Optimistic local update
         setStoredLocations((prev) =>
           prev.map((l) => l.localId === stableLocalId ? { ...l, deviceIds: combinedDeviceIds } : l)
         );
 
-        // 7. Create location with combined creds — server deduplicates by device-set hash
-        const newServerId = await api.createLocation(creds, signingDevice, loc.name, loc.overcrowdingLimit);
+        // 7. Find the server location that already contains all combined devices.
+        //    Ask the server for all locations the NEW device belongs to, then check
+        //    if any of them is a superset of our combined device set.
+        let newServerId: string;
+        const serverLocations = await api.getLocationsForDevice(newDeviceId, password);
+        const sharedLoc = serverLocations.find((sl) => {
+          const slDeviceIds = new Set(sl.devices.map((d) => d.device_id));
+          return [...combinedSet].every((id) => slDeviceIds.has(id));
+        });
 
-        // 8. Update server ID if it changed (localId stays stable → card doesn't remount)
+        if (sharedLoc) {
+          // Found it — adopt this server location's ID
+          newServerId = sharedLoc.id;
+        } else {
+          // No existing server location has all devices — create one
+          // (server deduplicates by device-set hash, so this is safe to call)
+          newServerId = await api.createLocation(creds, signingDevice, loc.name, loc.overcrowdingLimit);
+        }
+
+        // 8. Swap the local entry to point at the correct server location.
+        //    localId stays the same → card doesn't remount.
+        //    Preserve name + color (local-only fields).
         setStoredLocations((prev) => {
-          // Remove any duplicate entries with the new server ID (e.g. auto-locations from watch effect)
+          // Remove any other storedLocations that have this server ID (e.g. auto-locations or duplicates)
           const cleaned = prev.filter((l) => l.localId === stableLocalId || l.id !== newServerId);
           return cleaned.map((l) =>
             l.localId === stableLocalId
-              ? { ...l, id: newServerId, isAuto: false }
+              ? { ...l, id: newServerId, deviceIds: combinedDeviceIds, isAuto: false }
               : l
           );
         });
 
-        // 9. Clean up auto-locations for the new device
+        // 9. Clean up auto-locations for the new device (they're now redundant)
         setStoredLocations((prev) =>
           prev.filter((l) => !(l.isAuto && l.deviceIds.length === 1 && l.deviceIds[0] === newDeviceId))
         );

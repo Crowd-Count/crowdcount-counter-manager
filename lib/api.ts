@@ -961,6 +961,38 @@ export async function resetLocationData(
   });
 }
 
+// ── Location Count ──
+
+export async function locationAddToCount(
+  locationId: string,
+  credentials: Array<{ device_id: string; password: string }>,
+  signingDevice: SigningCredentials,
+  delta: number
+): Promise<number> {
+  const response = await apiRequest<{ new_count: number }>("/location/add_to_count", {
+    method: "POST",
+    body: JSON.stringify({ location_id: locationId, credentials, count_to_add: delta }),
+    sign: signingDevice,
+    idempotent: true,
+  });
+  return response.new_count;
+}
+
+export async function locationSubFromCount(
+  locationId: string,
+  credentials: Array<{ device_id: string; password: string }>,
+  signingDevice: SigningCredentials,
+  delta: number
+): Promise<number> {
+  const response = await apiRequest<{ new_count: number }>("/location/sub_from_count", {
+    method: "POST",
+    body: JSON.stringify({ location_id: locationId, credentials, count_to_sub: delta }),
+    sign: signingDevice,
+    idempotent: true,
+  });
+  return response.new_count;
+}
+
 // ── Credentials Helper ──
 
 export function getLocationCredentials(

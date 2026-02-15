@@ -41,33 +41,6 @@ interface LocationCardProps {
 }
 
 function CompactDeviceRow({ device }: { device: DeviceState }) {
-  const { updateDeviceCount } = useDevices();
-  const [isModifying, setIsModifying] = useState(false);
-
-  const handleIncrement = async () => {
-    setIsModifying(true);
-    try {
-      const newCount = await api.addToCount(device.deviceId, device.password, 1);
-      updateDeviceCount(device.id, newCount);
-    } catch (error) {
-      console.error("Failed to increment:", error);
-    } finally {
-      setIsModifying(false);
-    }
-  };
-
-  const handleDecrement = async () => {
-    setIsModifying(true);
-    try {
-      const newCount = await api.subFromCount(device.deviceId, device.password, 1);
-      updateDeviceCount(device.id, newCount);
-    } catch (error) {
-      console.error("Failed to decrement:", error);
-    } finally {
-      setIsModifying(false);
-    }
-  };
-
   return (
     <div className="flex items-center gap-2 px-3 py-2 rounded-md bg-muted/50">
       {/* Status dot */}
@@ -81,31 +54,6 @@ function CompactDeviceRow({ device }: { device: DeviceState }) {
       <span className="text-sm font-medium truncate flex-1 min-w-0">
         {device.name || device.deviceId}
       </span>
-
-      {/* +/- count controls */}
-      <div className="flex items-center gap-1 shrink-0">
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-6 w-6"
-          onClick={handleDecrement}
-          disabled={isModifying || device.currentCount === 0}
-        >
-          <Minus className="h-3 w-3" />
-        </Button>
-        <span className="text-sm font-semibold tabular-nums w-8 text-center">
-          {device.currentCount}
-        </span>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-6 w-6"
-          onClick={handleIncrement}
-          disabled={isModifying}
-        >
-          <Plus className="h-3 w-3" />
-        </Button>
-      </div>
 
       {/* Settings gear */}
       <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" asChild>
@@ -126,6 +74,7 @@ export function LocationCard({ location }: LocationCardProps) {
   const [newPassword, setNewPassword] = useState("");
   const [addError, setAddError] = useState("");
   const [isAdding, setIsAdding] = useState(false);
+  const [isModifyingCount, setIsModifyingCount] = useState(false);
 
   const handleAddToLocation = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -160,6 +109,32 @@ export function LocationCard({ location }: LocationCardProps) {
   const memberDevices = devices.filter((d) =>
     location.deviceIds.includes(d.deviceId)
   );
+
+  const locCreds = api.getLocationCredentials(location, devices);
+
+  const handleLocationIncrement = async () => {
+    if (!locCreds) return;
+    setIsModifyingCount(true);
+    try {
+      await api.locationAddToCount(location.id, locCreds.credentials, locCreds.signingDevice, 1);
+    } catch (error) {
+      console.error("Failed to increment:", error);
+    } finally {
+      setIsModifyingCount(false);
+    }
+  };
+
+  const handleLocationDecrement = async () => {
+    if (!locCreds) return;
+    setIsModifyingCount(true);
+    try {
+      await api.locationSubFromCount(location.id, locCreds.credentials, locCreds.signingDevice, 1);
+    } catch (error) {
+      console.error("Failed to decrement:", error);
+    } finally {
+      setIsModifyingCount(false);
+    }
+  };
 
   const colorValue =
     LOCATION_COLORS.find((c) => c.name === location.colorName)?.value ??
@@ -211,15 +186,35 @@ export function LocationCard({ location }: LocationCardProps) {
       </CardHeader>
 
       <CardContent className="space-y-4">
-        {/* Main count display */}
+        {/* Main count display with +/- */}
         <div className="text-center py-2">
-          <p
-            className={`text-6xl font-bold tabular-nums ${
-              location.isOverLimit ? "text-destructive" : ""
-            }`}
-          >
-            {location.totalCount}
-          </p>
+          <div className="flex items-center justify-center gap-4">
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-12 w-12 rounded-full"
+              onClick={handleLocationDecrement}
+              disabled={isModifyingCount || !locCreds || location.totalCount === 0}
+            >
+              <Minus className="h-5 w-5" />
+            </Button>
+            <p
+              className={`text-6xl font-bold tabular-nums ${
+                location.isOverLimit ? "text-destructive" : ""
+              }`}
+            >
+              {location.totalCount}
+            </p>
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-12 w-12 rounded-full"
+              onClick={handleLocationIncrement}
+              disabled={isModifyingCount || !locCreds}
+            >
+              <Plus className="h-5 w-5" />
+            </Button>
+          </div>
           {location.overcrowdingLimit !== null && location.overcrowdingLimit > 0 && (
             <p
               className={`text-sm mt-1 ${
