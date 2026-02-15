@@ -134,17 +134,22 @@ export function LocationsProvider({ children }: { children: React.ReactNode }) {
           if (prev[loc.id] === serverLoc.current_count) return prev;
           return { ...prev, [loc.id]: serverLoc.current_count };
         });
-        // Sync metadata from server (server is authoritative for name, overcrowding, on_map, color)
+        // Sync all metadata from server (server is authoritative)
+        const newName = serverLoc.location_name ?? loc.name;
+        const newColor = serverLoc.location_color ?? loc.serverColor;
+        const newDeviceIds = serverLoc.devices.map((d) => d.device_id).sort();
         setStoredLocations((prev) => {
           const existing = prev.find((l) => l.id === loc.id);
           if (!existing) return prev;
-          const newName = serverLoc.location_name ?? existing.name;
-          const newColor = serverLoc.location_color ?? existing.serverColor;
+          const existingDeviceIds = [...existing.deviceIds].sort();
+          const deviceIdsChanged = newDeviceIds.length !== existingDeviceIds.length ||
+            newDeviceIds.some((id, i) => id !== existingDeviceIds[i]);
           if (
             existing.name === newName &&
             existing.overcrowdingLimit === serverLoc.overcrowding_limit &&
             existing.isOnMap === serverLoc.on_map &&
-            existing.serverColor === newColor
+            existing.serverColor === newColor &&
+            !deviceIdsChanged
           ) {
             return prev; // no change
           }
@@ -156,6 +161,7 @@ export function LocationsProvider({ children }: { children: React.ReactNode }) {
                   overcrowdingLimit: serverLoc.overcrowding_limit,
                   isOnMap: serverLoc.on_map,
                   serverColor: newColor,
+                  deviceIds: deviceIdsChanged ? newDeviceIds : l.deviceIds,
                 }
               : l
           );
