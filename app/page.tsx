@@ -25,12 +25,12 @@ export default function LoginPage() {
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Redirect to dashboard if already has devices
+  // Redirect to dashboard if already has devices (but not during form submission)
   useEffect(() => {
-    if (!isLoading && devices.length > 0) {
+    if (!isLoading && devices.length > 0 && !isSubmitting) {
       router.push("/dashboard");
     }
-  }, [devices, isLoading, router]);
+  }, [devices, isLoading, router, isSubmitting]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

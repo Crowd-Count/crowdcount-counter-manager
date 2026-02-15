@@ -242,9 +242,10 @@ export function LocationsProvider({ children }: { children: React.ReactNode }) {
   const addLocation = useCallback(
     async (name: string, colorName: LocationColorName, serverDeviceIds: string[] = []): Promise<string | null> => {
       // Build credentials from the devices matching these server device IDs
+      const currentDevices = devicesRef.current;
       const creds: Array<{ device_id: string; password: string }> = [];
       for (const sid of serverDeviceIds) {
-        const device = devices.find((d) => d.deviceId === sid);
+        const device = currentDevices.find((d) => d.deviceId === sid);
         if (device) {
           creds.push({ device_id: device.deviceId, password: device.password });
         }
@@ -268,14 +269,21 @@ export function LocationsProvider({ children }: { children: React.ReactNode }) {
           isAuto: false,
           isOnMap: false,
         };
-        setStoredLocations((prev) => [...prev, newLocation]);
+        setStoredLocations((prev) => {
+          // Dedup: if server returned an existing location ID, replace instead of adding
+          const existingIdx = prev.findIndex((l) => l.id === locationId);
+          if (existingIdx >= 0) {
+            return prev.map((l) => l.id === locationId ? { ...l, name, colorName, deviceIds: serverDeviceIds, isAuto: false } : l);
+          }
+          return [...prev, newLocation];
+        });
         return locationId;
       } catch (error) {
         console.error("Failed to create location on server:", error);
         return null;
       }
     },
-    [devices]
+    []
   );
 
   const removeLocation = useCallback(
@@ -284,7 +292,7 @@ export function LocationsProvider({ children }: { children: React.ReactNode }) {
       const currentLocs = storedLocationsRef.current;
       const loc = currentLocs.find((l) => l.id === id);
 
-      // Remove stored location FIRST (before devices, so auto-prune doesn't interfere)
+      // Remove stored location
       setStoredLocations((prev) => prev.filter((l) => l.id !== id));
 
       // Clean up count
@@ -314,15 +322,15 @@ export function LocationsProvider({ children }: { children: React.ReactNode }) {
       prev.map((l) => (l.id === id ? { ...l, name } : l))
     );
     // Sync to server in background
-    const loc = storedLocations.find((l) => l.id === id);
+    const loc = storedLocationsRef.current.find((l) => l.id === id);
     if (loc) {
-      const locCreds = api.getLocationCredentials(loc, devices);
+      const locCreds = api.getLocationCredentials(loc, devicesRef.current);
       if (locCreds) {
         api.updateLocation(id, locCreds.credentials, locCreds.signingDevice, { name })
           .catch((err) => console.error("Failed to update location name on server:", err));
       }
     }
-  }, [storedLocations, devices]);
+  }, []);
 
   const updateLocationColor = useCallback((id: string, colorName: LocationColorName) => {
     // Color is client-only, no server sync needed
@@ -465,22 +473,22 @@ export function LocationsProvider({ children }: { children: React.ReactNode }) {
         )
       );
       // Sync to server
-      const loc = storedLocations.find((l) => l.id === id);
+      const loc = storedLocationsRef.current.find((l) => l.id === id);
       if (loc) {
-        const locCreds = api.getLocationCredentials(loc, devices);
+        const locCreds = api.getLocationCredentials(loc, devicesRef.current);
         if (locCreds) {
           api.updateLocation(id, locCreds.credentials, locCreds.signingDevice, { overcrowdingLimit: normalizedLimit })
             .catch((err) => console.error("Failed to update overcrowding limit on server:", err));
         }
       }
     },
-    [storedLocations, devices]
+    []
   );
 
   // Adopt an auto-location for a device: rename it, mark isAuto: false
   const adoptAutoLocation = useCallback(
     async (serverDeviceId: string, password: string, locationName: string, colorName: LocationColorName = "blue"): Promise<string | null> => {
-      const autoLoc = storedLocations.find(
+      const autoLoc = storedLocationsRef.current.find(
         (l) => l.isAuto && l.deviceIds.includes(serverDeviceId)
       );
 
@@ -561,7 +569,7 @@ export function LocationsProvider({ children }: { children: React.ReactNode }) {
         return null;
       }
     },
-    [storedLocations, devices]
+    []
   );
 
   const getLocation = useCallback(

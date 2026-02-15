@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
 import { useDevices } from "@/contexts/DevicesContext";
+import { useLocations } from "@/contexts/LocationsContext";
 import * as api from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -35,9 +36,9 @@ export default function DeviceSettingsPage() {
   const deviceId = params.id as string;
   const {
     getDevice,
-    removeDevice,
     refreshDevice,
   } = useDevices();
+  const { getLocationForDevice, removeDeviceFromLocation } = useLocations();
 
   const device = getDevice(deviceId);
 
@@ -114,8 +115,12 @@ export default function DeviceSettingsPage() {
     }
   };
 
-  const handleRemoveDevice = () => {
-    removeDevice(device.id);
+  const handleRemoveDevice = async () => {
+    // Find the location containing this device and remove through location-aware flow
+    const loc = getLocationForDevice(device.deviceId);
+    if (loc) {
+      await removeDeviceFromLocation(loc.id, device.deviceId);
+    }
     router.push("/dashboard");
   };
 
