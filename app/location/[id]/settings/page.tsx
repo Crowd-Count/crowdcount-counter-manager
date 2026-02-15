@@ -36,7 +36,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { ThemeToggle } from "@/components/ThemeToggle";
-import { ArrowLeft, Save, Trash2, Plus, X, Clock } from "lucide-react";
+import { ArrowLeft, Save, Trash2, Plus, X, Clock, RotateCcw } from "lucide-react";
 
 const COMMON_TIMEZONES = [
   "America/New_York",
@@ -165,6 +165,24 @@ export default function LocationSettingsPage() {
       setOvercrowdingInput("");
     } else {
       await setLocationOvercrowdingLimit(locationId, limit);
+    }
+  };
+
+  const [isErasing, setIsErasing] = useState(false);
+  const [eraseDialogOpen, setEraseDialogOpen] = useState(false);
+
+  const handleEraseData = async () => {
+    const locCreds = api.getLocationCredentials(location, devices);
+    if (!locCreds) return;
+
+    setEraseDialogOpen(false);
+    setIsErasing(true);
+    try {
+      await api.resetLocationData(locationId, locCreds.credentials, locCreds.signingDevice);
+    } catch (err) {
+      console.error("Failed to erase location data:", err);
+    } finally {
+      setIsErasing(false);
     }
   };
 
@@ -538,7 +556,43 @@ export default function LocationSettingsPage() {
               This action cannot be undone.
             </CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="font-medium">Erase Location Data</p>
+                <p className="text-sm text-muted-foreground">
+                  Clears all location-level history data
+                </p>
+              </div>
+              <Button
+                variant="outline"
+                className="border-destructive text-destructive hover:bg-destructive hover:text-destructive-foreground"
+                onClick={() => setEraseDialogOpen(true)}
+                disabled={isErasing}
+              >
+                <RotateCcw className={`h-4 w-4 mr-1 ${isErasing ? "animate-spin" : ""}`} />
+                {isErasing ? "Erasing..." : "Erase Data"}
+              </Button>
+              <AlertDialog open={eraseDialogOpen} onOpenChange={setEraseDialogOpen}>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Erase Location Data?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      This will erase all location-level history data for &quot;{location.name}&quot;. Individual counter data will not be affected. This cannot be undone.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <Button
+                      variant="destructive"
+                      onClick={handleEraseData}
+                    >
+                      Erase Data
+                    </Button>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            </div>
             <div className="flex items-center justify-between">
               <div>
                 <p className="font-medium">Delete Location</p>

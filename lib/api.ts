@@ -946,6 +946,21 @@ export async function deleteResetSchedule(
   });
 }
 
+// ── Reset Location Data ──
+
+export async function resetLocationData(
+  locationId: string,
+  credentials: Array<{ device_id: string; password: string }>,
+  signingDevice: SigningCredentials
+): Promise<void> {
+  await apiRequest("/reset_location_data", {
+    method: "POST",
+    body: JSON.stringify({ location_id: locationId, credentials }),
+    sign: signingDevice,
+    idempotent: true,
+  });
+}
+
 // ── Credentials Helper ──
 
 export function getLocationCredentials(
