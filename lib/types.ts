@@ -88,6 +88,7 @@ export const POLL_INTERVALS: PollInterval[] = [1, 3, 5, 10, 15, 30, 45, 60];
 // Location types
 export interface StoredLocation {
   id: string;              // Server location_id (UUID from server)
+  localId: string;         // Stable client-side UUID — never changes, used as React key
   name: string;
   deviceIds: string[];     // Server device IDs ("T1234"), NOT local UUIDs
   overcrowdingLimit: number | null;

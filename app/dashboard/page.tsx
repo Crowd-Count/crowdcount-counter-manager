@@ -405,7 +405,7 @@ export default function DashboardPage() {
 
         {/* Location cards */}
         {locations.map((location) => (
-          <LocationCard key={location.id} location={location} />
+          <LocationCard key={location.localId} location={location} />
         ))}
       </main>
 

@@ -35,6 +35,10 @@ const LocationsContext = createContext<LocationsContextType | undefined>(undefin
 
 const STORAGE_KEY = "crowdcount_locations";
 
+function generateLocalId(): string {
+  return crypto.randomUUID();
+}
+
 function loadLocationsFromStorage(): StoredLocation[] {
   if (typeof window === "undefined") return [];
   const stored = localStorage.getItem(STORAGE_KEY);
@@ -45,6 +49,17 @@ function loadLocationsFromStorage(): StoredLocation[] {
     if (parsed.length > 0 && parsed[0].isAuto === undefined) {
       localStorage.removeItem(STORAGE_KEY);
       return [];
+    }
+    // Backfill localId for locations that don't have one yet
+    let needsSave = false;
+    for (const loc of parsed) {
+      if (!loc.localId) {
+        loc.localId = generateLocalId();
+        needsSave = true;
+      }
+    }
+    if (needsSave) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed));
     }
     return parsed;
   } catch {
@@ -124,6 +139,7 @@ export function LocationsProvider({ children }: { children: React.ReactNode }) {
                 // Add new location from server
                 updated.push({
                   id: serverLoc.id,
+                  localId: generateLocalId(),
                   name: serverLoc.name,
                   deviceIds: serverDeviceIds,
                   overcrowdingLimit: serverLoc.overcrowding_limit,
@@ -198,8 +214,6 @@ export function LocationsProvider({ children }: { children: React.ReactNode }) {
       }
 
       if (creds.length === 0) {
-        // Need at least one device credential to create a server location
-        // If no devices selected, we can't create on server
         return null;
       }
 
@@ -209,6 +223,7 @@ export function LocationsProvider({ children }: { children: React.ReactNode }) {
         const locationId = await api.createLocation(creds, signingDevice, name);
         const newLocation: StoredLocation = {
           id: locationId,
+          localId: generateLocalId(),
           name,
           deviceIds: serverDeviceIds,
           overcrowdingLimit: null,
@@ -267,6 +282,34 @@ export function LocationsProvider({ children }: { children: React.ReactNode }) {
     );
   }, []);
 
+  // Helper: update a stored location's server ID + sync server metadata, preserving localId/name/color
+  const updateLocationServerId = useCallback(
+    (localId: string, oldServerId: string, newServerId: string, creds: Array<{ device_id: string; password: string }>, signingDevice: api.SigningCredentials) => {
+      if (newServerId === oldServerId) return;
+      api.getLocation(newServerId, creds, signingDevice)
+        .then((serverLoc) => {
+          const serverDevIds = serverLoc.devices.map((d) => d.device_id);
+          setStoredLocations((prev) => {
+            // Remove any other entries that have the new server ID (duplicates from watch effect)
+            const cleaned = prev.filter((l) => l.localId === localId || l.id !== newServerId);
+            return cleaned.map((l) =>
+              l.localId === localId
+                ? { ...l, id: newServerId, deviceIds: serverDevIds, overcrowdingLimit: serverLoc.overcrowding_limit ?? l.overcrowdingLimit, isOnMap: serverLoc.on_map, isAuto: false }
+                : l
+            );
+          });
+        })
+        .catch(() => {
+          // Fallback: just update the server ID
+          setStoredLocations((prev) => {
+            const cleaned = prev.filter((l) => l.localId === localId || l.id !== newServerId);
+            return cleaned.map((l) => l.localId === localId ? { ...l, id: newServerId } : l);
+          });
+        });
+    },
+    []
+  );
+
   const addDeviceToLocation = useCallback((locationId: string, serverDeviceId: string) => {
     // Used by settings page for moving already-registered devices between locations
     const loc = storedLocations.find((l) => l.id === locationId);
@@ -293,32 +336,19 @@ export function LocationsProvider({ children }: { children: React.ReactNode }) {
 
     // Use createLocation (server deduplicates by device-set hash)
     api.createLocation(creds, signingDevice, loc.name, loc.overcrowdingLimit)
-      .then(async (newId) => {
-        if (newId !== locationId) {
-          try {
-            const serverLoc = await api.getLocation(newId, creds, signingDevice);
-            const serverDevIds = serverLoc.devices.map((d) => d.device_id);
-            setStoredLocations((p) => {
-              const withoutDupe = p.filter((l) => l.id !== newId || l.id === locationId);
-              return withoutDupe.map((l) =>
-                l.id === locationId
-                  ? { ...l, id: newId, deviceIds: serverDevIds, overcrowdingLimit: serverLoc.overcrowding_limit ?? l.overcrowdingLimit, isOnMap: serverLoc.on_map, isAuto: false }
-                  : l
-              );
-            });
-          } catch {
-            setStoredLocations((p) => p.map((l) => l.id === locationId ? { ...l, id: newId } : l));
-          }
-        }
+      .then((newId) => {
+        updateLocationServerId(loc.localId, locationId, newId, creds, signingDevice);
       })
       .catch((err) => console.error("Failed to sync location change to server:", err));
-  }, [storedLocations, devices]);
+  }, [storedLocations, devices, updateLocationServerId]);
 
-  // iOS-aligned flow: add a new counter (by ID + password) to an existing location
+  // Add a new counter (by ID + password) to an existing location
   const addCounterToLocation = useCallback(
     async (locationId: string, newDeviceId: string, password: string): Promise<{ success: boolean; error?: string }> => {
       const loc = storedLocations.find((l) => l.id === locationId);
       if (!loc) return { success: false, error: "Location not found" };
+      // Capture localId early — we use this for all state updates so they work even after server ID changes
+      const stableLocalId = loc.localId;
 
       // 1. Validate password
       try {
@@ -328,18 +358,15 @@ export function LocationsProvider({ children }: { children: React.ReactNode }) {
         return { success: false, error: "Failed to validate credentials" };
       }
 
-      // 2. Mark device as pending so the watch effect skips it
+      // 2. Suppress watch effect for this device
       pendingCounterAddRef.current.add(newDeviceId);
 
       try {
-        // 3. Register the device in DevicesContext (if not already present)
+        // 3. Register device in DevicesContext (if not already present)
         const existing = devices.find((d) => d.deviceId === newDeviceId);
         if (!existing) {
           const added = await addDevice(newDeviceId, password);
-          if (!added) {
-            pendingCounterAddRef.current.delete(newDeviceId);
-            return { success: false, error: "Failed to add counter" };
-          }
+          if (!added) return { success: false, error: "Failed to add counter" };
         }
 
         // 4. Build combined device set
@@ -357,66 +384,29 @@ export function LocationsProvider({ children }: { children: React.ReactNode }) {
             if (device) creds.push({ device_id: device.deviceId, password: device.password });
           }
         }
-        if (creds.length === 0) {
-          pendingCounterAddRef.current.delete(newDeviceId);
-          return { success: false, error: "No valid credentials" };
-        }
+        if (creds.length === 0) return { success: false, error: "No valid credentials" };
         const signingDevice = { deviceId: creds[0].device_id, password: creds[0].password };
 
-        // 6. Optimistic local update
+        // 6. Optimistic local update — use localId so this works even if server ID changed concurrently
         setStoredLocations((prev) =>
-          prev.map((l) => l.id === locationId ? { ...l, deviceIds: combinedDeviceIds } : l)
+          prev.map((l) => l.localId === stableLocalId ? { ...l, deviceIds: combinedDeviceIds } : l)
         );
 
-        // 7. Fetch server locations for the new device to check for shared locations
-        const serverLocations = await api.getLocationsForDevice(newDeviceId, password);
-        const combinedSet = new Set(combinedDeviceIds);
+        // 7. Create location with combined creds — server deduplicates by device-set hash
+        const newServerId = await api.createLocation(creds, signingDevice, loc.name, loc.overcrowdingLimit);
 
-        // 8. Check if any server location's device set is a superset of our combined set
-        const sharedLoc = serverLocations.find((sl) => {
-          const slDeviceIds = sl.devices.map((d) => d.device_id);
-          return [...combinedSet].every((id) => slDeviceIds.includes(id));
+        // 8. Update server ID if it changed (localId stays stable → card doesn't remount)
+        setStoredLocations((prev) => {
+          // Remove any duplicate entries with the new server ID (e.g. auto-locations from watch effect)
+          const cleaned = prev.filter((l) => l.localId === stableLocalId || l.id !== newServerId);
+          return cleaned.map((l) =>
+            l.localId === stableLocalId
+              ? { ...l, id: newServerId, isAuto: false }
+              : l
+          );
         });
 
-        if (sharedLoc) {
-          // Adopt the shared server location
-          const serverDeviceIds = sharedLoc.devices.map((d) => d.device_id);
-          setStoredLocations((prev) => {
-            // Remove any duplicate/auto entries for the shared location ID
-            const cleaned = prev.filter((l) => l.id !== sharedLoc.id || l.id === locationId);
-            return cleaned.map((l) =>
-              l.id === locationId
-                ? { ...l, id: sharedLoc.id, deviceIds: serverDeviceIds, overcrowdingLimit: sharedLoc.overcrowding_limit ?? l.overcrowdingLimit, isOnMap: sharedLoc.on_map, isAuto: false }
-                : l
-            );
-          });
-        } else {
-          // 9. No shared location — create via createLocation (server deduplicates by device-set hash)
-          const newId = await api.createLocation(creds, signingDevice, loc.name, loc.overcrowdingLimit);
-          // Fetch full server metadata
-          try {
-            const serverLoc = await api.getLocation(newId, creds, signingDevice);
-            const serverDeviceIds = serverLoc.devices.map((d) => d.device_id);
-            setStoredLocations((prev) => {
-              const cleaned = prev.filter((l) => l.id !== newId || l.id === locationId);
-              return cleaned.map((l) =>
-                l.id === locationId
-                  ? { ...l, id: newId, deviceIds: serverDeviceIds, overcrowdingLimit: serverLoc.overcrowding_limit ?? l.overcrowdingLimit, isOnMap: serverLoc.on_map, isAuto: false }
-                  : l
-              );
-            });
-          } catch {
-            // Fallback: just update the ID
-            setStoredLocations((prev) => {
-              const cleaned = prev.filter((l) => l.id !== newId || l.id === locationId);
-              return cleaned.map((l) =>
-                l.id === locationId ? { ...l, id: newId } : l
-              );
-            });
-          }
-        }
-
-        // 10. Clean up: remove any auto-locations that were just for the new device
+        // 9. Clean up auto-locations for the new device
         setStoredLocations((prev) =>
           prev.filter((l) => !(l.isAuto && l.deviceIds.length === 1 && l.deviceIds[0] === newDeviceId))
         );
@@ -426,7 +416,6 @@ export function LocationsProvider({ children }: { children: React.ReactNode }) {
         console.error("addCounterToLocation server sync failed:", err);
         return { success: false, error: "Server sync failed" };
       } finally {
-        // Always clear the pending flag so the watch effect can handle this device normally going forward
         pendingCounterAddRef.current.delete(newDeviceId);
       }
     },
@@ -456,27 +445,12 @@ export function LocationsProvider({ children }: { children: React.ReactNode }) {
     if (creds.length > 0) {
       const signingDevice = { deviceId: creds[0].device_id, password: creds[0].password };
       api.createLocation(creds, signingDevice, loc.name, loc.overcrowdingLimit)
-        .then(async (newId) => {
-          if (newId !== locationId) {
-            try {
-              const serverLoc = await api.getLocation(newId, creds, signingDevice);
-              const serverDevIds = serverLoc.devices.map((d) => d.device_id);
-              setStoredLocations((p) => {
-                const withoutDupe = p.filter((l) => l.id !== newId || l.id === locationId);
-                return withoutDupe.map((l) =>
-                  l.id === locationId
-                    ? { ...l, id: newId, deviceIds: serverDevIds, overcrowdingLimit: serverLoc.overcrowding_limit ?? l.overcrowdingLimit, isOnMap: serverLoc.on_map, isAuto: false }
-                    : l
-                );
-              });
-            } catch {
-              setStoredLocations((p) => p.map((l) => l.id === locationId ? { ...l, id: newId } : l));
-            }
-          }
+        .then((newId) => {
+          updateLocationServerId(loc.localId, locationId, newId, creds, signingDevice);
         })
         .catch((err) => console.error("Failed to sync location change to server:", err));
     }
-  }, [storedLocations, devices]);
+  }, [storedLocations, devices, updateLocationServerId]);
 
   const setLocationOvercrowdingLimit = useCallback(
     async (id: string, limit: number | null) => {
@@ -548,6 +522,7 @@ export function LocationsProvider({ children }: { children: React.ReactNode }) {
               ...prev,
               {
                 id: serverAutoLoc.id,
+                localId: generateLocalId(),
                 name: locationName,
                 deviceIds: serverDeviceIds,
                 overcrowdingLimit: serverAutoLoc.overcrowding_limit,
@@ -573,6 +548,7 @@ export function LocationsProvider({ children }: { children: React.ReactNode }) {
           ...prev,
           {
             id: locationId,
+            localId: generateLocalId(),
             name: locationName,
             deviceIds: [serverDeviceId],
             overcrowdingLimit: null,
