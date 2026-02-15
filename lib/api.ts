@@ -110,10 +110,14 @@ export async function checkPassword(
 }
 
 // Count operations
-export async function getCurrentCount(deviceId: string): Promise<number> {
+export async function getCurrentCount(
+  deviceId: string,
+  password: string
+): Promise<number> {
   const response = await apiRequest<CurrentCountResponse>("/currentcount", {
     method: "POST",
-    body: JSON.stringify({ device_id: deviceId }),
+    body: JSON.stringify({ device_id: deviceId, password }),
+    sign: { deviceId, password },
   });
   return response.current_count;
 }
@@ -173,13 +177,15 @@ export async function subFromCount(
 
 // Connection status
 export async function getConnectionStatus(
-  deviceId: string
+  deviceId: string,
+  password: string
 ): Promise<"online" | "offline" | "does_not_exist"> {
   const response = await apiRequest<ConnectionStatusResponse>(
     "/connection_status",
     {
       method: "POST",
-      body: JSON.stringify({ device_id: deviceId }),
+      body: JSON.stringify({ device_id: deviceId, password }),
+      sign: { deviceId, password },
     }
   );
   return response.status;
@@ -187,11 +193,17 @@ export async function getConnectionStatus(
 
 // Overcrowding
 export async function getOvercrowding(
-  deviceId: string
+  deviceId: string,
+  password: string
 ): Promise<number | null> {
   try {
     const response = await apiRequest<OvercrowdingResponse>(
-      `/get_overcrowding?device_name=${deviceId}`
+      "/get_overcrowding",
+      {
+        method: "POST",
+        body: JSON.stringify({ device_name: deviceId, password }),
+        sign: { deviceId, password },
+      }
     );
     return response.overcrowding;
   } catch {

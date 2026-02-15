@@ -140,9 +140,9 @@ export function DevicesProvider({ children }: { children: React.ReactNode }) {
 
   const fetchDeviceData = async (device: StoredDevice): Promise<void> => {
     const [count, status, overcrowdingLimit] = await Promise.all([
-      api.getCurrentCount(device.deviceId).catch(() => null),
-      api.getConnectionStatus(device.deviceId).catch(() => null),
-      api.getOvercrowding(device.deviceId).catch(() => null),
+      api.getCurrentCount(device.deviceId, device.password).catch(() => null),
+      api.getConnectionStatus(device.deviceId, device.password).catch(() => null),
+      api.getOvercrowding(device.deviceId, device.password).catch(() => null),
     ]);
 
     // Only update fields that were successfully fetched
