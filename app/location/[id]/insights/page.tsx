@@ -18,8 +18,8 @@ import { ArrowLeft } from "lucide-react";
 export default function LocationInsightsPage() {
   const params = useParams();
   const locationId = params.id as string;
-  const { devices } = useDevices();
-  const { getLocation } = useLocations();
+  const { devices, isLoading: devicesLoading } = useDevices();
+  const { getLocation, isLoading: locationsLoading } = useLocations();
 
   const location = getLocation(locationId);
 
@@ -42,6 +42,14 @@ export default function LocationInsightsPage() {
   }, [location, devices]);
 
   const data = useInsightsData(credentials, locationParams);
+
+  if (devicesLoading || locationsLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="text-muted-foreground">Loading...</div>
+      </div>
+    );
+  }
 
   if (!location) {
     return (

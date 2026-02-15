@@ -80,7 +80,7 @@ export default function LocationSettingsPage() {
   const router = useRouter();
   const params = useParams();
   const locationId = params.id as string;
-  const { devices } = useDevices();
+  const { devices, isLoading: devicesLoading } = useDevices();
   const {
     getLocation,
     updateLocationName,
@@ -90,6 +90,7 @@ export default function LocationSettingsPage() {
     setLocationOvercrowdingLimit,
     removeLocation,
     getUngroupedDeviceIds,
+    isLoading: locationsLoading,
   } = useLocations();
 
   const location = getLocation(locationId);
@@ -133,6 +134,14 @@ export default function LocationSettingsPage() {
       .catch(() => {})
       .finally(() => setIsLoadingSchedule(false));
   }, [locationId, location, devices]);
+
+  if (devicesLoading || locationsLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="text-muted-foreground">Loading...</div>
+      </div>
+    );
+  }
 
   if (!location) {
     return (

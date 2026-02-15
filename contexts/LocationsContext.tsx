@@ -212,12 +212,13 @@ export function LocationsProvider({ children }: { children: React.ReactNode }) {
           if (prev[loc.id] === serverLoc.current_count) return prev;
           return { ...prev, [loc.id]: serverLoc.current_count };
         });
-        // Sync metadata from server (only if changed)
+        // Sync non-name metadata from server (only if changed)
+        // Name is NOT synced here — it's set locally and pushed to server.
+        // Syncing it back would create race conditions (reverting user renames).
         setStoredLocations((prev) => {
           const existing = prev.find((l) => l.id === loc.id);
           if (!existing) return prev;
           if (
-            existing.name === serverLoc.name &&
             existing.overcrowdingLimit === serverLoc.overcrowding_limit &&
             existing.isOnMap === serverLoc.on_map
           ) {
@@ -227,7 +228,6 @@ export function LocationsProvider({ children }: { children: React.ReactNode }) {
             l.id === loc.id
               ? {
                   ...l,
-                  name: serverLoc.name,
                   overcrowdingLimit: serverLoc.overcrowding_limit,
                   isOnMap: serverLoc.on_map,
                 }
@@ -235,7 +235,9 @@ export function LocationsProvider({ children }: { children: React.ReactNode }) {
           );
         });
       })
-      .catch(() => {});
+      .catch((err) => {
+        console.error(`Failed to poll location ${loc.id}:`, err);
+      });
 
     await Promise.all([locationPromise, ...connectionPromises]);
   }, [updateDeviceOnlineStatus]);
