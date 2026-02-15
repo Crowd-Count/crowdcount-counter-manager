@@ -597,7 +597,7 @@ export default function LocationSettingsPage() {
               <div>
                 <p className="font-medium">Delete Location</p>
                 <p className="text-sm text-muted-foreground">
-                  Ungroups all counters from this location
+                  Remove this location and all its counters from the app
                 </p>
               </div>
               <AlertDialog>
@@ -611,8 +611,7 @@ export default function LocationSettingsPage() {
                   <AlertDialogHeader>
                     <AlertDialogTitle>Delete Location?</AlertDialogTitle>
                     <AlertDialogDescription>
-                      This will delete the location &quot;{location.name}&quot;. All
-                      counters will be ungrouped. This action cannot be undone.
+                      This will remove &quot;{location.name}&quot; and all its counters from this app. Nothing is deleted on the server.
                     </AlertDialogDescription>
                   </AlertDialogHeader>
                   <AlertDialogFooter>

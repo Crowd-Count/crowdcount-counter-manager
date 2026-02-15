@@ -7,7 +7,6 @@ import { useDevices } from "@/contexts/DevicesContext";
 import * as api from "@/lib/api";
 import { POLL_INTERVALS, type PollInterval } from "@/lib/types";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import {
@@ -36,7 +35,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { ThemeToggle } from "@/components/ThemeToggle";
-import { ArrowLeft, Save, Trash2, RefreshCw } from "lucide-react";
+import { ArrowLeft, Trash2, RefreshCw } from "lucide-react";
 
 export default function DeviceSettingsPage() {
   const router = useRouter();
@@ -47,27 +46,14 @@ export default function DeviceSettingsPage() {
     updatePollInterval,
     removeDevice,
     refreshDevice,
-    updateDevicePassword,
   } = useDevices();
 
   const device = getDevice(deviceId);
-
-  // Overcrowding state
-  const [overcrowdingLimit, setOvercrowdingLimit] = useState("");
-  const [isSavingOvercrowding, setIsSavingOvercrowding] = useState(false);
 
   // Direction flip state
   const [directionFlipped, setDirectionFlipped] = useState(false);
   const [isTogglingDirection, setIsTogglingDirection] = useState(false);
   const [isLoadingDirection, setIsLoadingDirection] = useState(true);
-
-  // Password change state
-  const [currentPassword, setCurrentPassword] = useState("");
-  const [newPassword, setNewPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [passwordError, setPasswordError] = useState("");
-  const [isChangingPassword, setIsChangingPassword] = useState(false);
-  const [passwordSuccess, setPasswordSuccess] = useState(false);
 
   // Reset state
   const [isResetting, setIsResetting] = useState(false);
@@ -92,9 +78,6 @@ export default function DeviceSettingsPage() {
   // Load initial data
   useEffect(() => {
     if (device) {
-      setOvercrowdingLimit(
-        device.overcrowdingLimit?.toString() || ""
-      );
       loadDirectionFlipped();
     }
   }, [device, loadDirectionFlipped]);
@@ -112,25 +95,6 @@ export default function DeviceSettingsPage() {
     );
   }
 
-  const handleSaveOvercrowding = async () => {
-    setIsSavingOvercrowding(true);
-    try {
-      const limit = parseInt(overcrowdingLimit, 10);
-      if (!overcrowdingLimit || isNaN(limit) || limit <= 0) {
-        // Remove overcrowding
-        await api.removeOvercrowding(device.deviceId, device.password);
-      } else {
-        // Set overcrowding
-        await api.addOvercrowding(device.deviceId, device.password, limit);
-      }
-      await refreshDevice(device.id);
-    } catch (error) {
-      console.error("Failed to save overcrowding:", error);
-    } finally {
-      setIsSavingOvercrowding(false);
-    }
-  };
-
   const handleToggleDirection = async () => {
     setIsTogglingDirection(true);
     try {
@@ -144,36 +108,6 @@ export default function DeviceSettingsPage() {
       console.error("Failed to toggle direction:", error);
     } finally {
       setIsTogglingDirection(false);
-    }
-  };
-
-  const handleChangePassword = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setPasswordError("");
-    setPasswordSuccess(false);
-
-    if (newPassword !== confirmPassword) {
-      setPasswordError("Passwords do not match");
-      return;
-    }
-
-    if (newPassword.length < 4) {
-      setPasswordError("Password must be at least 4 characters");
-      return;
-    }
-
-    setIsChangingPassword(true);
-    try {
-      await api.setPassword(device.deviceId, currentPassword, newPassword);
-      updateDevicePassword(device.id, newPassword);
-      setCurrentPassword("");
-      setNewPassword("");
-      setConfirmPassword("");
-      setPasswordSuccess(true);
-    } catch (error) {
-      setPasswordError("Failed to change password. Check current password.");
-    } finally {
-      setIsChangingPassword(false);
     }
   };
 
@@ -248,34 +182,6 @@ export default function DeviceSettingsPage() {
           </CardContent>
         </Card>
 
-        {/* Overcrowding Limit */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Overcrowding Limit</CardTitle>
-            <CardDescription>
-              Set a maximum count threshold. Leave empty to disable.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex gap-2">
-              <Input
-                type="number"
-                min="0"
-                placeholder="No limit"
-                value={overcrowdingLimit}
-                onChange={(e) => setOvercrowdingLimit(e.target.value)}
-              />
-              <Button
-                onClick={handleSaveOvercrowding}
-                disabled={isSavingOvercrowding}
-              >
-                <Save className="h-4 w-4 mr-1" />
-                {isSavingOvercrowding ? "Saving..." : "Save"}
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-
         {/* Direction Flip */}
         <Card>
           <CardHeader>
@@ -295,59 +201,6 @@ export default function DeviceSettingsPage() {
                 disabled={isLoadingDirection || isTogglingDirection}
               />
             </div>
-          </CardContent>
-        </Card>
-
-        {/* Change Password */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Change Password</CardTitle>
-            <CardDescription>Update your counter password</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handleChangePassword} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="current-password">Current Password</Label>
-                <Input
-                  id="current-password"
-                  type="password"
-                  value={currentPassword}
-                  onChange={(e) => setCurrentPassword(e.target.value)}
-                  disabled={isChangingPassword}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="new-password">New Password</Label>
-                <Input
-                  id="new-password"
-                  type="password"
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                  disabled={isChangingPassword}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="confirm-password">Confirm New Password</Label>
-                <Input
-                  id="confirm-password"
-                  type="password"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  disabled={isChangingPassword}
-                />
-              </div>
-              {passwordError && (
-                <p className="text-sm text-destructive">{passwordError}</p>
-              )}
-              {passwordSuccess && (
-                <p className="text-sm text-green-600">
-                  Password changed successfully
-                </p>
-              )}
-              <Button type="submit" disabled={isChangingPassword}>
-                {isChangingPassword ? "Changing..." : "Change Password"}
-              </Button>
-            </form>
           </CardContent>
         </Card>
 

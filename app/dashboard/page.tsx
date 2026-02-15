@@ -125,9 +125,9 @@ function MigrationScreen({
 
 export default function DashboardPage() {
   const router = useRouter();
-  const { devices, isLoading, addDevice, refreshAllDevices } =
+  const { devices, isLoading, addDevice } =
     useDevices();
-  const { locations, getUngroupedDeviceIds, addLocation } = useLocations();
+  const { locations, getUngroupedDeviceIds, addLocation, refreshAllLocations } = useLocations();
 
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [migrationDone, setMigrationDone] = useState(false);
@@ -170,7 +170,7 @@ export default function DashboardPage() {
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
-    await refreshAllDevices();
+    await refreshAllLocations();
     setIsRefreshing(false);
   };
 

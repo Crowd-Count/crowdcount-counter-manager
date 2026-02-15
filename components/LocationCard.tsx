@@ -67,7 +67,7 @@ function CompactDeviceRow({ device }: { device: DeviceState }) {
 
 export function LocationCard({ location }: LocationCardProps) {
   const { devices } = useDevices();
-  const { addCounterToLocation } = useLocations();
+  const { addCounterToLocation, refreshLocation } = useLocations();
 
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [newDeviceId, setNewDeviceId] = useState("");
@@ -117,6 +117,7 @@ export function LocationCard({ location }: LocationCardProps) {
     setIsModifyingCount(true);
     try {
       await api.locationAddToCount(location.id, locCreds.credentials, locCreds.signingDevice, 1);
+      await refreshLocation(location.id);
     } catch (error) {
       console.error("Failed to increment:", error);
     } finally {
@@ -129,6 +130,7 @@ export function LocationCard({ location }: LocationCardProps) {
     setIsModifyingCount(true);
     try {
       await api.locationSubFromCount(location.id, locCreds.credentials, locCreds.signingDevice, 1);
+      await refreshLocation(location.id);
     } catch (error) {
       console.error("Failed to decrement:", error);
     } finally {

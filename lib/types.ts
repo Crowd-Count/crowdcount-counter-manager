@@ -9,10 +9,7 @@ export interface StoredDevice {
 
 // Device state with live data
 export interface DeviceState extends StoredDevice {
-  currentCount: number;
-  overcrowdingLimit: number | null;
   isOnline: boolean;
-  directionFlipped: boolean;
   lastUpdated: Date | null;
 }
 
