@@ -80,6 +80,10 @@ export function LocationsProvider({ children }: { children: React.ReactNode }) {
     }
   }, [storedLocations, isLoading]);
 
+  // Device IDs currently being processed by addCounterToLocation —
+  // the watch effect must skip these to avoid race conditions
+  const pendingCounterAddRef = useRef<Set<string>>(new Set());
+
   // Watch for new devices and auto-fetch their server locations
   const prevDeviceIdsRef = useRef<Set<string>>(new Set());
   useEffect(() => {
@@ -87,8 +91,10 @@ export function LocationsProvider({ children }: { children: React.ReactNode }) {
     const currentDeviceIds = new Set(devices.map((d) => d.deviceId));
     const prevIds = prevDeviceIdsRef.current;
 
-    // Find newly added devices
-    const newDevices = devices.filter((d) => !prevIds.has(d.deviceId));
+    // Find newly added devices (skip those being handled by addCounterToLocation)
+    const newDevices = devices.filter(
+      (d) => !prevIds.has(d.deviceId) && !pendingCounterAddRef.current.has(d.deviceId)
+    );
     prevDeviceIdsRef.current = currentDeviceIds;
 
     if (newDevices.length === 0) return;
@@ -322,42 +328,51 @@ export function LocationsProvider({ children }: { children: React.ReactNode }) {
         return { success: false, error: "Failed to validate credentials" };
       }
 
-      // 2. Register the device in DevicesContext (if not already present)
-      const existing = devices.find((d) => d.deviceId === newDeviceId);
-      if (!existing) {
-        const added = await addDevice(newDeviceId, password);
-        if (!added) return { success: false, error: "Failed to add counter" };
-      }
-
-      // 3. Build combined device set
-      const combinedDeviceIds = loc.deviceIds.includes(newDeviceId)
-        ? loc.deviceIds
-        : [...loc.deviceIds, newDeviceId];
-
-      // 4. Build credentials — use password param for new device, devices array for existing
-      const creds: Array<{ device_id: string; password: string }> = [];
-      for (const sid of combinedDeviceIds) {
-        if (sid === newDeviceId) {
-          creds.push({ device_id: sid, password });
-        } else {
-          const device = devices.find((d) => d.deviceId === sid);
-          if (device) creds.push({ device_id: device.deviceId, password: device.password });
-        }
-      }
-      if (creds.length === 0) return { success: false, error: "No valid credentials" };
-      const signingDevice = { deviceId: creds[0].device_id, password: creds[0].password };
-
-      // 5. Optimistic local update
-      setStoredLocations((prev) =>
-        prev.map((l) => l.id === locationId ? { ...l, deviceIds: combinedDeviceIds } : l)
-      );
+      // 2. Mark device as pending so the watch effect skips it
+      pendingCounterAddRef.current.add(newDeviceId);
 
       try {
-        // 6. Fetch server locations for the new device to check for shared locations
+        // 3. Register the device in DevicesContext (if not already present)
+        const existing = devices.find((d) => d.deviceId === newDeviceId);
+        if (!existing) {
+          const added = await addDevice(newDeviceId, password);
+          if (!added) {
+            pendingCounterAddRef.current.delete(newDeviceId);
+            return { success: false, error: "Failed to add counter" };
+          }
+        }
+
+        // 4. Build combined device set
+        const combinedDeviceIds = loc.deviceIds.includes(newDeviceId)
+          ? loc.deviceIds
+          : [...loc.deviceIds, newDeviceId];
+
+        // 5. Build credentials — use password param for new device, devices array for existing
+        const creds: Array<{ device_id: string; password: string }> = [];
+        for (const sid of combinedDeviceIds) {
+          if (sid === newDeviceId) {
+            creds.push({ device_id: sid, password });
+          } else {
+            const device = devices.find((d) => d.deviceId === sid);
+            if (device) creds.push({ device_id: device.deviceId, password: device.password });
+          }
+        }
+        if (creds.length === 0) {
+          pendingCounterAddRef.current.delete(newDeviceId);
+          return { success: false, error: "No valid credentials" };
+        }
+        const signingDevice = { deviceId: creds[0].device_id, password: creds[0].password };
+
+        // 6. Optimistic local update
+        setStoredLocations((prev) =>
+          prev.map((l) => l.id === locationId ? { ...l, deviceIds: combinedDeviceIds } : l)
+        );
+
+        // 7. Fetch server locations for the new device to check for shared locations
         const serverLocations = await api.getLocationsForDevice(newDeviceId, password);
         const combinedSet = new Set(combinedDeviceIds);
 
-        // 7. Check if any server location's device set is a superset of our combined set
+        // 8. Check if any server location's device set is a superset of our combined set
         const sharedLoc = serverLocations.find((sl) => {
           const slDeviceIds = sl.devices.map((d) => d.device_id);
           return [...combinedSet].every((id) => slDeviceIds.includes(id));
@@ -376,7 +391,7 @@ export function LocationsProvider({ children }: { children: React.ReactNode }) {
             );
           });
         } else {
-          // 8. No shared location — create via createLocation (server deduplicates by device-set hash)
+          // 9. No shared location — create via createLocation (server deduplicates by device-set hash)
           const newId = await api.createLocation(creds, signingDevice, loc.name, loc.overcrowdingLimit);
           // Fetch full server metadata
           try {
@@ -401,7 +416,7 @@ export function LocationsProvider({ children }: { children: React.ReactNode }) {
           }
         }
 
-        // 9. Clean up: remove any auto-locations that were just for the new device
+        // 10. Clean up: remove any auto-locations that were just for the new device
         setStoredLocations((prev) =>
           prev.filter((l) => !(l.isAuto && l.deviceIds.length === 1 && l.deviceIds[0] === newDeviceId))
         );
@@ -409,8 +424,10 @@ export function LocationsProvider({ children }: { children: React.ReactNode }) {
         return { success: true };
       } catch (err) {
         console.error("addCounterToLocation server sync failed:", err);
-        // Optimistic update is kept — device is in the location locally
         return { success: false, error: "Server sync failed" };
+      } finally {
+        // Always clear the pending flag so the watch effect can handle this device normally going forward
+        pendingCounterAddRef.current.delete(newDeviceId);
       }
     },
     [storedLocations, devices, addDevice]
