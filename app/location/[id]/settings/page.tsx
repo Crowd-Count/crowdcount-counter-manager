@@ -26,14 +26,12 @@ import {
 } from "@/components/ui/card";
 import {
   AlertDialog,
-  AlertDialogAction,
   AlertDialogCancel,
   AlertDialogContent,
   AlertDialogDescription,
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { ArrowLeft, Save, Trash2, X, Clock, RotateCcw } from "lucide-react";
@@ -180,6 +178,7 @@ export default function LocationSettingsPage() {
 
   const [isErasing, setIsErasing] = useState(false);
   const [eraseDialogOpen, setEraseDialogOpen] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
   const handleEraseData = async () => {
     const locCreds = api.getLocationCredentials(location, devices);
@@ -197,6 +196,7 @@ export default function LocationSettingsPage() {
   };
 
   const handleDeleteLocation = async () => {
+    setDeleteDialogOpen(false);
     await removeLocation(location.localId);
     router.push("/dashboard");
   };
@@ -565,13 +565,14 @@ export default function LocationSettingsPage() {
                   Remove this location and all its counters from the app
                 </p>
               </div>
-              <AlertDialog>
-                <AlertDialogTrigger asChild>
-                  <Button variant="destructive">
-                    <Trash2 className="h-4 w-4 mr-1" />
-                    Delete
-                  </Button>
-                </AlertDialogTrigger>
+              <Button
+                variant="destructive"
+                onClick={() => setDeleteDialogOpen(true)}
+              >
+                <Trash2 className="h-4 w-4 mr-1" />
+                Delete
+              </Button>
+              <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
                 <AlertDialogContent>
                   <AlertDialogHeader>
                     <AlertDialogTitle>Delete Location?</AlertDialogTitle>
@@ -581,12 +582,12 @@ export default function LocationSettingsPage() {
                   </AlertDialogHeader>
                   <AlertDialogFooter>
                     <AlertDialogCancel>Cancel</AlertDialogCancel>
-                    <AlertDialogAction
+                    <Button
+                      variant="destructive"
                       onClick={handleDeleteLocation}
-                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                     >
                       Delete Location
-                    </AlertDialogAction>
+                    </Button>
                   </AlertDialogFooter>
                 </AlertDialogContent>
               </AlertDialog>
