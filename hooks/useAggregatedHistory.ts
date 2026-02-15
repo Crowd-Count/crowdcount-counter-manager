@@ -5,7 +5,6 @@ import { useDataCache } from "@/contexts/DataCacheContext";
 import {
   fetchAvailableDates,
   fetchHistoryCharts,
-  fetchLocationAvailableDates,
   fetchLocationHistoryCharts,
   makeCredKey,
   type ChartData,
@@ -108,9 +107,8 @@ export function useAggregatedHistory(
 
     setIsLoadingDates(true);
     try {
-      const dates = stableLocationParams
-        ? await fetchLocationAvailableDates(stableLocationParams)
-        : await fetchAvailableDates(stableCredentials);
+      // Always use per-device available dates — no server endpoint for location-level dates
+      const dates = await fetchAvailableDates(stableCredentials);
       datesFetched.current = true;
       setAvailableDates(dates);
       setCachedDates(credKey, dates);

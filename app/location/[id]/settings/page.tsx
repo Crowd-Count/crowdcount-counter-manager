@@ -369,9 +369,14 @@ export default function LocationSettingsPage() {
                     variant="ghost"
                     size="icon"
                     className="h-8 w-8"
-                    onClick={() =>
-                      removeDeviceFromLocation(currentId, device.deviceId)
-                    }
+                    onClick={async () => {
+                      const newId = await removeDeviceFromLocation(currentId, device.deviceId);
+                      if (newId && newId !== currentId) {
+                        router.replace(`/location/${newId}/settings`);
+                      } else if (!newId) {
+                        router.push("/dashboard");
+                      }
+                    }}
                   >
                     <X className="h-4 w-4" />
                   </Button>

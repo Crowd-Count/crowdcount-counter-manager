@@ -12,7 +12,7 @@ import { useDevices } from "@/contexts/DevicesContext";
 import { useLocations } from "@/contexts/LocationsContext";
 import {
   fetchLocationInsights,
-  fetchLocationAvailableDates,
+  fetchAvailableDates,
   fetchLocationHistoryCharts,
   type DeviceCredentials,
   type InsightsCacheEntry,
@@ -107,13 +107,14 @@ export function DataCacheProvider({ children }: { children: React.ReactNode }) {
   // Pre-fetch all data for a location credential set
   const prefetchForCredSet = useCallback(async (
     credKey: string,
+    credentials: DeviceCredentials[],
     locationParams: LocationFetchParams,
     force: boolean
   ) => {
     try {
-      // Fetch dates + insights in parallel
+      // Fetch dates (per-device, no server endpoint for location dates) + insights in parallel
       const [dates, insights] = await Promise.all([
-        fetchLocationAvailableDates(locationParams, force).catch(() => [] as string[]),
+        fetchAvailableDates(credentials, force).catch(() => [] as string[]),
         fetchLocationInsights(locationParams, force).catch(() => null),
       ]);
 
@@ -153,8 +154,8 @@ export function DataCacheProvider({ children }: { children: React.ReactNode }) {
     if (credSets.length === 0) return;
 
     await Promise.all(
-      credSets.map(({ credKey, locationParams }) =>
-        prefetchForCredSet(credKey, locationParams, force)
+      credSets.map(({ credKey, credentials, locationParams }) =>
+        prefetchForCredSet(credKey, credentials, locationParams, force)
       )
     );
     setCacheVersion((v) => v + 1);

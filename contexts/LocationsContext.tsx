@@ -21,7 +21,7 @@ interface LocationsContextType {
   updateLocationName: (id: string, name: string) => void;
   updateLocationColor: (id: string, colorName: LocationColorName) => void;
   addCounterToLocation: (locationId: string, newDeviceId: string, password: string) => Promise<{ success: boolean; error?: string }>;
-  removeDeviceFromLocation: (locationId: string, serverDeviceId: string) => Promise<void>;
+  removeDeviceFromLocation: (locationId: string, serverDeviceId: string) => Promise<string | null>;
   setLocationOvercrowdingLimit: (id: string, limit: number | null) => Promise<void>;
   getLocation: (id: string) => LocationState | undefined;
   getLocationForDevice: (serverDeviceId: string) => LocationState | undefined;
@@ -467,9 +467,9 @@ export function LocationsProvider({ children }: { children: React.ReactNode }) {
     [addDevice]
   );
 
-  const removeDeviceFromLocation = useCallback(async (locationId: string, serverDeviceId: string) => {
+  const removeDeviceFromLocation = useCallback(async (locationId: string, serverDeviceId: string): Promise<string | null> => {
     const loc = storedLocationsRef.current.find((l) => l.id === locationId || l.localId === locationId);
-    if (!loc) return;
+    if (!loc) return null;
     const stableLocalId = loc.localId;
 
     const currentDevices = devicesRef.current;
@@ -481,7 +481,7 @@ export function LocationsProvider({ children }: { children: React.ReactNode }) {
     if (remainingDeviceIds.length === 0) {
       setStoredLocations((prev) => prev.filter((l) => l.localId !== stableLocalId));
       if (device) removeDevice(device.id);
-      return;
+      return null;
     }
 
     // Build remaining credentials (BEFORE removing anything)
@@ -492,32 +492,66 @@ export function LocationsProvider({ children }: { children: React.ReactNode }) {
         creds.push({ device_id: d.deviceId, password: d.password });
       }
     }
-    if (creds.length === 0) return;
+    if (creds.length === 0) return null;
     const signingDevice = { deviceId: creds[0].device_id, password: creds[0].password };
 
     try {
       // Create location with remaining devices (server deduplicates)
       const newServerId = await api.createLocation(creds, signingDevice, loc.name, loc.overcrowdingLimit);
 
-      // Swap local location to new server ID + remaining devices
+      // Fetch server metadata for the new location
+      let serverName = loc.name;
+      let serverOvercrowding = loc.overcrowdingLimit;
+      let serverOnMap = loc.isOnMap;
+      let serverColor = loc.serverColor;
+      let serverCount: number | null = null;
+      try {
+        const serverLoc = await api.getLocation(newServerId, creds, signingDevice);
+        serverName = serverLoc.location_name ?? loc.name;
+        serverOvercrowding = serverLoc.overcrowding_limit;
+        serverOnMap = serverLoc.on_map;
+        serverColor = serverLoc.location_color ?? loc.serverColor;
+        serverCount = serverLoc.current_count;
+      } catch {
+        // Fall back to local values if fetch fails
+      }
+
+      // Swap local location to new server ID + remaining devices + server metadata
       setStoredLocations((prev) => {
         const cleaned = prev.filter((l) => l.localId === stableLocalId || l.id !== newServerId);
         return cleaned.map((l) =>
           l.localId === stableLocalId
-            ? { ...l, id: newServerId, deviceIds: remainingDeviceIds }
+            ? { ...l, id: newServerId, deviceIds: remainingDeviceIds, name: serverName, overcrowdingLimit: serverOvercrowding, isOnMap: serverOnMap, serverColor }
             : l
         );
       });
 
-      // Ensure server has correct name
-      api.updateLocation(newServerId, creds, signingDevice, { name: loc.name })
-        .catch((err) => console.error("Failed to update location name on server:", err));
+      // Update count for the new server ID + clean up old count
+      if (serverCount !== null) {
+        setLocationCounts((prev) => {
+          const next = { ...prev };
+          delete next[loc.id]; // Remove old server ID entry
+          next[newServerId] = serverCount;
+          return next;
+        });
+      }
+
+      // For non-on-map locations, push local name to server
+      // (createLocation doesn't update name on existing locations)
+      if (!serverOnMap) {
+        api.updateLocation(newServerId, creds, signingDevice, { name: loc.name })
+          .catch((err) => console.error("Failed to update location name on server:", err));
+      }
+
+      // Remove device from app — counter is fully gone
+      if (device) removeDevice(device.id);
+      return newServerId;
     } catch (err) {
       console.error("Failed to sync location change to server:", err);
+      // Still remove device locally even if server sync failed
+      if (device) removeDevice(device.id);
+      return loc.id;
     }
-
-    // Remove device from app — counter is fully gone
-    if (device) removeDevice(device.id);
   }, [removeDevice]);
 
   const setLocationOvercrowdingLimit = useCallback(
