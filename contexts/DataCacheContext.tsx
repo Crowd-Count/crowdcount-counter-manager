@@ -119,7 +119,9 @@ export function DataCacheProvider({ children }: { children: React.ReactNode }) {
         fetchInsightsForCredentials(credentials, force).catch(() => null),
       ]);
 
-      datesCache.current.set(credKey, dates);
+      if (dates.length > 0) {
+        datesCache.current.set(credKey, dates);
+      }
       if (insights) {
         insightsCache.current.set(credKey, insights);
       }

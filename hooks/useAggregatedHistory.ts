@@ -67,15 +67,16 @@ export function useAggregatedHistory(
 
   const hasData = !!stableLocationParams || stableCredentials.length > 0;
 
-  // Check dates cache synchronously
-  const initialDates = credKey ? getCachedDates(credKey) : null;
+  // Check dates cache synchronously — only use non-empty cached dates
+  const rawCachedDates = credKey ? getCachedDates(credKey) : null;
+  const initialDates = rawCachedDates && rawCachedDates.length > 0 ? rawCachedDates : null;
 
   const [dataType, setDataType] = useState<DataType>("population");
   const [availableDates, setAvailableDates] = useState<string[]>(initialDates ?? []);
   const [isLoadingDates, setIsLoadingDates] = useState(!initialDates && hasData);
 
   // Compute initial date selections from cached dates
-  const initialMostRecent = initialDates && initialDates.length > 0 ? initialDates[initialDates.length - 1] : "";
+  const initialMostRecent = initialDates ? initialDates[initialDates.length - 1] : "";
   const initialYear = initialMostRecent ? initialMostRecent.split("-")[0] : "";
 
   const [selectedDate, setSelectedDate] = useState<string>(initialMostRecent);
@@ -110,7 +111,9 @@ export function useAggregatedHistory(
       const dates = await fetchAvailableDates(stableCredentials);
       datesFetched.current = true;
       setAvailableDates(dates);
-      setCachedDates(credKey, dates);
+      if (dates.length > 0) {
+        setCachedDates(credKey, dates);
+      }
 
       if (dates.length > 0) {
         const mostRecent = dates[dates.length - 1];
