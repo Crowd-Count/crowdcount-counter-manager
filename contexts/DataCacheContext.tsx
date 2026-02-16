@@ -11,9 +11,9 @@ import React, {
 import { useDevices } from "@/contexts/DevicesContext";
 import { useLocations } from "@/contexts/LocationsContext";
 import {
-  fetchLocationInsights,
-  fetchLocationAvailableDates,
-  fetchLocationHistoryCharts,
+  fetchInsightsForCredentials,
+  fetchAvailableDates,
+  fetchHistoryCharts,
   type DeviceCredentials,
   type InsightsCacheEntry,
   type HistoryCacheEntry,
@@ -112,10 +112,11 @@ export function DataCacheProvider({ children }: { children: React.ReactNode }) {
     force: boolean
   ) => {
     try {
-      // Fetch dates + insights in parallel
+      // Fetch dates + insights in parallel (per-device aggregation — location-level
+      // endpoints may lack data for newly created or switched-to locations)
       const [dates, insights] = await Promise.all([
-        fetchLocationAvailableDates(locationParams, force).catch(() => [] as string[]),
-        fetchLocationInsights(locationParams, force).catch(() => null),
+        fetchAvailableDates(credentials, force).catch(() => [] as string[]),
+        fetchInsightsForCredentials(credentials, force).catch(() => null),
       ]);
 
       datesCache.current.set(credKey, dates);
@@ -128,10 +129,11 @@ export function DataCacheProvider({ children }: { children: React.ReactNode }) {
         const mostRecent = dates[dates.length - 1];
         const year = mostRecent.split("-")[0];
 
-        // Fetch both population and entries in parallel
+        // Fetch both population and entries in parallel (per-device aggregation —
+        // location-level endpoints may lack data for newly created locations)
         const [popHistory, entryHistory] = await Promise.all([
-          fetchLocationHistoryCharts(locationParams, mostRecent, mostRecent, year, "population", force).catch(() => null),
-          fetchLocationHistoryCharts(locationParams, mostRecent, mostRecent, year, "entries", force).catch(() => null),
+          fetchHistoryCharts(credentials, mostRecent, mostRecent, year, "population", force).catch(() => null),
+          fetchHistoryCharts(credentials, mostRecent, mostRecent, year, "entries", force).catch(() => null),
         ]);
 
         if (popHistory) {

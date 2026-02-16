@@ -4,7 +4,6 @@ import { useState, useEffect, useRef } from "react";
 import { useDataCache } from "@/contexts/DataCacheContext";
 import {
   fetchInsightsForCredentials,
-  fetchLocationInsights,
   makeCredKey,
   type DeviceCredentials,
   type InsightsCacheEntry,
@@ -106,9 +105,9 @@ export function useInsightsData(
     let cancelled = false;
     setIsLoading(true);
 
-    const fetchPromise = stableLocationParams
-      ? fetchLocationInsights(stableLocationParams)
-      : fetchInsightsForCredentials(stableCredentials);
+    // Always use per-device aggregation — location-level endpoints may lack
+    // data for newly created or switched-to locations.
+    const fetchPromise = fetchInsightsForCredentials(stableCredentials);
 
     fetchPromise
       .then((result) => {
