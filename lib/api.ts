@@ -32,11 +32,7 @@ import { signRequest, generateIdempotencyKey } from "./crypto";
 
 export function getApiBaseUrl(): string {
   if (typeof window === "undefined") return "https://api.crowdcount.tech";
-  // Explicit localStorage toggle overrides hostname detection
-  const testingFlag = localStorage.getItem("crowdcount_testing");
-  if (testingFlag === "false") return "https://api.crowdcount.tech";
-  if (testingFlag === "true") return "https://api-staging.crowdcount.tech";
-  // Auto-detect from hostname
+  // Auto-detect from hostname (staging site uses staging API)
   if (window.location.hostname.includes("staging")) {
     return "https://api-staging.crowdcount.tech";
   }

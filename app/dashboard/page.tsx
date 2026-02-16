@@ -32,7 +32,6 @@ import {
   RefreshCw,
   MapPin,
   ExternalLink,
-  FlaskConical,
 } from "lucide-react";
 
 // Migration screen for existing users who have devices but no locations
@@ -141,26 +140,6 @@ export default function DashboardPage() {
   const [isCreatingLocation, setIsCreatingLocation] = useState(false);
   const [createLocationError, setCreateLocationError] = useState("");
 
-  // Testing toggle — localStorage overrides hostname detection
-  const [isTesting, setIsTesting] = useState(false);
-  useEffect(() => {
-    const flag = localStorage.getItem("crowdcount_testing");
-    if (flag === "false") {
-      setIsTesting(false);
-    } else if (flag === "true") {
-      setIsTesting(true);
-    } else {
-      setIsTesting(window.location.hostname.includes("staging"));
-    }
-  }, []);
-
-  const handleToggleTesting = () => {
-    const newValue = !isTesting;
-    localStorage.setItem("crowdcount_testing", newValue ? "true" : "false");
-    // Reload to re-fetch all data from new API
-    window.location.reload();
-  };
-
   // Redirect to login if no devices
   useEffect(() => {
     if (!isLoading && devices.length === 0) {
@@ -251,13 +230,6 @@ export default function DashboardPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Staging banner */}
-      {isTesting && (
-        <div className="bg-yellow-500 text-black text-center py-2 px-4 font-bold text-sm sticky top-0 z-50">
-          STAGING MODE — Connected to api-staging.crowdcount.tech
-        </div>
-      )}
-
       {/* Header */}
       <header className="border-b">
         <div className="container mx-auto px-4 py-4">
@@ -410,20 +382,6 @@ export default function DashboardPage() {
         ))}
       </main>
 
-      {/* Footer with testing toggle */}
-      <footer className="border-t mt-8">
-        <div className="container mx-auto px-4 py-3">
-          <div className="flex items-center justify-center">
-            <button
-              onClick={handleToggleTesting}
-              className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
-            >
-              <FlaskConical className="h-3 w-3" />
-              {isTesting ? "Switch to Production" : "Switch to Staging"}
-            </button>
-          </div>
-        </div>
-      </footer>
     </div>
   );
 }
