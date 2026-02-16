@@ -12,7 +12,7 @@ import { useDevices } from "@/contexts/DevicesContext";
 import { useLocations } from "@/contexts/LocationsContext";
 import {
   fetchLocationInsights,
-  fetchAvailableDates,
+  fetchLocationAvailableDates,
   fetchLocationHistoryCharts,
   type DeviceCredentials,
   type InsightsCacheEntry,
@@ -112,9 +112,9 @@ export function DataCacheProvider({ children }: { children: React.ReactNode }) {
     force: boolean
   ) => {
     try {
-      // Fetch dates (per-device, no server endpoint for location dates) + insights in parallel
+      // Fetch dates + insights in parallel
       const [dates, insights] = await Promise.all([
-        fetchAvailableDates(credentials, force).catch(() => [] as string[]),
+        fetchLocationAvailableDates(locationParams, force).catch(() => [] as string[]),
         fetchLocationInsights(locationParams, force).catch(() => null),
       ]);
 
