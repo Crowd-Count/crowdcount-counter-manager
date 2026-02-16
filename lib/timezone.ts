@@ -81,7 +81,10 @@ export function utcDatesToLocalDates(utcDates: string[]): string[] {
     const utcDayEnd = new Date(Date.UTC(y, m - 1, d, 23, 59, 0));
     localDateSet.add(formatDateAsLocal(utcDayEnd));
   }
-  return Array.from(localDateSet).sort();
+  // Filter out future local dates — e.g. in UTC-7, a UTC "tomorrow" date
+  // maps to a local date that hasn't started yet
+  const today = formatLocalDate();
+  return Array.from(localDateSet).filter((d) => d <= today).sort();
 }
 
 /** Get the current local day-of-week index (Monday=0, ..., Sunday=6) */
