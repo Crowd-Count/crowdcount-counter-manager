@@ -12,9 +12,8 @@ import { useDevices } from "@/contexts/DevicesContext";
 import { useLocations } from "@/contexts/LocationsContext";
 import {
   fetchLocationInsights,
-  fetchAvailableDates,
+  fetchLocationAvailableDates,
   fetchLocationHistoryCharts,
-  type DeviceCredentials,
   type InsightsCacheEntry,
   type HistoryCacheEntry,
   type LocationFetchParams,
@@ -73,12 +72,10 @@ export function DataCacheProvider({ children }: { children: React.ReactNode }) {
   // Build credential sets for locations that need pre-fetching
   const buildCredentialSets = useCallback((): {
     credKey: string;
-    credentials: DeviceCredentials[];
     locationParams: LocationFetchParams;
   }[] => {
     const sets: {
       credKey: string;
-      credentials: DeviceCredentials[];
       locationParams: LocationFetchParams;
     }[] = [];
     const seen = new Set<string>();
@@ -91,7 +88,6 @@ export function DataCacheProvider({ children }: { children: React.ReactNode }) {
         seen.add(locKey);
         sets.push({
           credKey: locKey,
-          credentials: locCreds.credentials.map((c) => ({ deviceId: c.device_id, password: c.password })),
           locationParams: {
             locationId: location.id,
             credentials: locCreds.credentials,
@@ -107,14 +103,13 @@ export function DataCacheProvider({ children }: { children: React.ReactNode }) {
   // Pre-fetch all data for a location credential set
   const prefetchForCredSet = useCallback(async (
     credKey: string,
-    credentials: DeviceCredentials[],
     locationParams: LocationFetchParams,
     force: boolean
   ) => {
     try {
-      // Fetch dates (per-device) + insights (location-level) in parallel
+      // Fetch dates + insights (both location-level) in parallel
       const [dates, insights] = await Promise.all([
-        fetchAvailableDates(credentials, force).catch(() => [] as string[]),
+        fetchLocationAvailableDates(locationParams, force).catch(() => [] as string[]),
         fetchLocationInsights(locationParams, force).catch(() => null),
       ]);
 
@@ -150,8 +145,8 @@ export function DataCacheProvider({ children }: { children: React.ReactNode }) {
     if (credSets.length === 0) return;
 
     await Promise.all(
-      credSets.map(({ credKey, credentials, locationParams }) =>
-        prefetchForCredSet(credKey, credentials, locationParams, force)
+      credSets.map(({ credKey, locationParams }) =>
+        prefetchForCredSet(credKey, locationParams, force)
       )
     );
     setCacheVersion((v) => v + 1);

@@ -4,6 +4,7 @@ import { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import { useDataCache } from "@/contexts/DataCacheContext";
 import {
   fetchAvailableDates,
+  fetchLocationAvailableDates,
   fetchHistoryCharts,
   fetchLocationHistoryCharts,
   makeCredKey,
@@ -116,8 +117,9 @@ export function useAggregatedHistory(
 
     setIsLoadingDates(true);
     try {
-      // Use per-device available dates (location-level endpoint not reliably available)
-      const rawDates = await fetchAvailableDates(stableCredentials);
+      const rawDates = stableLocationParams
+        ? await fetchLocationAvailableDates(stableLocationParams)
+        : await fetchAvailableDates(stableCredentials);
       const dates = filterFutureDates(rawDates);
       datesFetched.current = true;
       setAvailableDates(dates);
