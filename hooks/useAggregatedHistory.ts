@@ -5,6 +5,7 @@ import { useDataCache } from "@/contexts/DataCacheContext";
 import {
   fetchAvailableDates,
   fetchHistoryCharts,
+  fetchLocationHistoryCharts,
   makeCredKey,
   type ChartData,
   type DeviceCredentials,
@@ -159,9 +160,9 @@ export function useAggregatedHistory(
     setIsLoadingWeek(true);
     setIsLoadingYear(true);
 
-    // Always use per-device aggregation for history charts — location-level endpoints
-    // may have no data for newly created or switched-to locations, while devices do.
-    const fetchPromise = fetchHistoryCharts(stableCredentials, selectedDate, selectedWeekDate, selectedYear, dataType);
+    const fetchPromise = stableLocationParams
+      ? fetchLocationHistoryCharts(stableLocationParams, selectedDate, selectedWeekDate, selectedYear, dataType)
+      : fetchHistoryCharts(stableCredentials, selectedDate, selectedWeekDate, selectedYear, dataType);
 
     fetchPromise
       .then((result) => {

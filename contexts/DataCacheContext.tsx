@@ -11,9 +11,9 @@ import React, {
 import { useDevices } from "@/contexts/DevicesContext";
 import { useLocations } from "@/contexts/LocationsContext";
 import {
-  fetchInsightsForCredentials,
+  fetchLocationInsights,
   fetchAvailableDates,
-  fetchHistoryCharts,
+  fetchLocationHistoryCharts,
   type DeviceCredentials,
   type InsightsCacheEntry,
   type HistoryCacheEntry,
@@ -112,11 +112,10 @@ export function DataCacheProvider({ children }: { children: React.ReactNode }) {
     force: boolean
   ) => {
     try {
-      // Fetch dates + insights in parallel (per-device aggregation — location-level
-      // endpoints may lack data for newly created or switched-to locations)
+      // Fetch dates (per-device) + insights (location-level) in parallel
       const [dates, insights] = await Promise.all([
         fetchAvailableDates(credentials, force).catch(() => [] as string[]),
-        fetchInsightsForCredentials(credentials, force).catch(() => null),
+        fetchLocationInsights(locationParams, force).catch(() => null),
       ]);
 
       if (dates.length > 0) {
@@ -131,11 +130,10 @@ export function DataCacheProvider({ children }: { children: React.ReactNode }) {
         const mostRecent = dates[dates.length - 1];
         const year = mostRecent.split("-")[0];
 
-        // Fetch both population and entries in parallel (per-device aggregation —
-        // location-level endpoints may lack data for newly created locations)
+        // Fetch both population and entries in parallel (location-level)
         const [popHistory, entryHistory] = await Promise.all([
-          fetchHistoryCharts(credentials, mostRecent, mostRecent, year, "population", force).catch(() => null),
-          fetchHistoryCharts(credentials, mostRecent, mostRecent, year, "entries", force).catch(() => null),
+          fetchLocationHistoryCharts(locationParams, mostRecent, mostRecent, year, "population", force).catch(() => null),
+          fetchLocationHistoryCharts(locationParams, mostRecent, mostRecent, year, "entries", force).catch(() => null),
         ]);
 
         if (popHistory) {
