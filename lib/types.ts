@@ -108,8 +108,8 @@ export interface LocationResponse {
   current_count: number;
   on_map: boolean;
   is_auto?: boolean;
-  latitude?: number | null;
-  longitude?: number | null;
+  location_latitude?: number | null;
+  location_longitude?: number | null;
 }
 
 // Reset schedule

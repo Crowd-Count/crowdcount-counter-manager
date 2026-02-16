@@ -156,8 +156,8 @@ export function LocationsProvider({ children }: { children: React.ReactNode }) {
           if (!existing) return prev;
           const newName = serverLoc.location_name ?? existing.name;
           const newColor = serverLoc.location_color ?? existing.serverColor;
-          const newLat = serverLoc.latitude ?? existing.latitude;
-          const newLng = serverLoc.longitude ?? existing.longitude;
+          const newLat = serverLoc.location_latitude ?? existing.latitude;
+          const newLng = serverLoc.location_longitude ?? existing.longitude;
           if (
             existing.name === newName &&
             existing.overcrowdingLimit === serverLoc.overcrowding_limit &&
@@ -461,8 +461,8 @@ export function LocationsProvider({ children }: { children: React.ReactNode }) {
           serverOvercrowding = sharedLoc.overcrowding_limit;
           serverOnMap = sharedLoc.on_map;
           serverColor = sharedLoc.location_color ?? loc.serverColor;
-          serverLat = sharedLoc.latitude ?? loc.latitude;
-          serverLng = sharedLoc.longitude ?? loc.longitude;
+          serverLat = sharedLoc.location_latitude ?? loc.latitude;
+          serverLng = sharedLoc.location_longitude ?? loc.longitude;
         } else {
           // No match — create new location
           newServerId = await api.createLocation(creds, signingDevice, loc.name, loc.overcrowdingLimit);
@@ -472,8 +472,8 @@ export function LocationsProvider({ children }: { children: React.ReactNode }) {
             serverOvercrowding = serverLoc.overcrowding_limit;
             serverOnMap = serverLoc.on_map;
             serverColor = serverLoc.location_color ?? loc.serverColor;
-            serverLat = serverLoc.latitude ?? loc.latitude;
-            serverLng = serverLoc.longitude ?? loc.longitude;
+            serverLat = serverLoc.location_latitude ?? loc.latitude;
+            serverLng = serverLoc.location_longitude ?? loc.longitude;
           } catch {
             // Fall back to local values if fetch fails
           }
@@ -560,8 +560,8 @@ export function LocationsProvider({ children }: { children: React.ReactNode }) {
         serverOvercrowding = sharedLoc.overcrowding_limit;
         serverOnMap = sharedLoc.on_map;
         serverColor = sharedLoc.location_color ?? loc.serverColor;
-        serverLat = sharedLoc.latitude ?? loc.latitude;
-        serverLng = sharedLoc.longitude ?? loc.longitude;
+        serverLat = sharedLoc.location_latitude ?? loc.latitude;
+        serverLng = sharedLoc.location_longitude ?? loc.longitude;
         serverCount = sharedLoc.current_count;
       } else {
         // No match — create new location
@@ -572,8 +572,8 @@ export function LocationsProvider({ children }: { children: React.ReactNode }) {
           serverOvercrowding = serverLoc.overcrowding_limit;
           serverOnMap = serverLoc.on_map;
           serverColor = serverLoc.location_color ?? loc.serverColor;
-          serverLat = serverLoc.latitude ?? loc.latitude;
-          serverLng = serverLoc.longitude ?? loc.longitude;
+          serverLat = serverLoc.location_latitude ?? loc.latitude;
+          serverLng = serverLoc.location_longitude ?? loc.longitude;
           serverCount = serverLoc.current_count;
         } catch {
           // Fall back to local values if fetch fails
@@ -687,8 +687,8 @@ export function LocationsProvider({ children }: { children: React.ReactNode }) {
                 isAuto: false,
                 isOnMap: serverAutoLoc.on_map,
                 serverColor: serverAutoLoc.location_color ?? null,
-                latitude: serverAutoLoc.latitude ?? null,
-                longitude: serverAutoLoc.longitude ?? null,
+                latitude: serverAutoLoc.location_latitude ?? null,
+                longitude: serverAutoLoc.location_longitude ?? null,
               },
             ];
           });
