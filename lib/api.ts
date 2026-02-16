@@ -31,11 +31,6 @@ import type {
 import { signRequest, generateIdempotencyKey } from "./crypto";
 
 export function getApiBaseUrl(): string {
-  if (typeof window === "undefined") return "https://api.crowdcount.tech";
-  // Auto-detect from hostname (staging site uses staging API)
-  if (window.location.hostname.includes("staging")) {
-    return "https://api-staging.crowdcount.tech";
-  }
   return "https://api.crowdcount.tech";
 }
 
