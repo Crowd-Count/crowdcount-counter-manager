@@ -92,13 +92,11 @@ export function LocationsProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   // Save locations to storage when they change
+  // NOTE: localStorage removal is handled explicitly by removeLocation (synchronous write)
+  // to prevent accidental wipes from transient empty state
   useEffect(() => {
-    if (!isLoading) {
-      if (storedLocations.length > 0) {
-        saveLocationsToStorage(storedLocations);
-      } else {
-        localStorage.removeItem(STORAGE_KEY);
-      }
+    if (!isLoading && storedLocations.length > 0) {
+      saveLocationsToStorage(storedLocations);
     }
   }, [storedLocations, isLoading]);
 
@@ -134,22 +132,19 @@ export function LocationsProvider({ children }: { children: React.ReactNode }) {
           if (prev[loc.id] === serverLoc.current_count) return prev;
           return { ...prev, [loc.id]: serverLoc.current_count };
         });
-        // Sync all metadata from server (server is authoritative)
-        const newName = serverLoc.location_name ?? loc.name;
-        const newColor = serverLoc.location_color ?? loc.serverColor;
-        const newDeviceIds = serverLoc.devices.map((d) => d.device_id).sort();
+        // Sync metadata from server (server is authoritative for name, overcrowding, on_map, color)
+        // NOTE: deviceIds are NOT synced from polling — they're managed by addCounterToLocation/removeDeviceFromLocation
+        // to avoid race conditions where partial credentials return a partial device list
         setStoredLocations((prev) => {
           const existing = prev.find((l) => l.id === loc.id);
           if (!existing) return prev;
-          const existingDeviceIds = [...existing.deviceIds].sort();
-          const deviceIdsChanged = newDeviceIds.length !== existingDeviceIds.length ||
-            newDeviceIds.some((id, i) => id !== existingDeviceIds[i]);
+          const newName = serverLoc.location_name ?? existing.name;
+          const newColor = serverLoc.location_color ?? existing.serverColor;
           if (
             existing.name === newName &&
             existing.overcrowdingLimit === serverLoc.overcrowding_limit &&
             existing.isOnMap === serverLoc.on_map &&
-            existing.serverColor === newColor &&
-            !deviceIdsChanged
+            existing.serverColor === newColor
           ) {
             return prev; // no change
           }
@@ -161,7 +156,6 @@ export function LocationsProvider({ children }: { children: React.ReactNode }) {
                   overcrowdingLimit: serverLoc.overcrowding_limit,
                   isOnMap: serverLoc.on_map,
                   serverColor: newColor,
-                  deviceIds: deviceIdsChanged ? newDeviceIds : l.deviceIds,
                 }
               : l
           );
@@ -392,10 +386,11 @@ export function LocationsProvider({ children }: { children: React.ReactNode }) {
 
       try {
         // 2. Register device in DevicesContext (if not already present)
+        //    addDevice returns false if device already exists OR if checkPassword fails.
+        //    Since we already validated password in step 1, false means "already exists" — safe to continue.
         const existing = devicesRef.current.find((d) => d.deviceId === newDeviceId);
         if (!existing) {
-          const added = await addDevice(newDeviceId, password);
-          if (!added) return { success: false, error: "Failed to add counter" };
+          await addDevice(newDeviceId, password);
         }
 
         // 3. Build combined device set (dedup)
