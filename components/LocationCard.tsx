@@ -36,6 +36,7 @@ import {
   Plus,
   Loader2,
 } from "lucide-react";
+import { MapBackground } from "@/components/MapBackground";
 
 interface LocationCardProps {
   location: LocationState;
@@ -144,8 +145,20 @@ export function LocationCard({ location }: LocationCardProps) {
       ? location.serverColor
       : LOCATION_COLORS.find((c) => c.name === location.colorName)?.value ?? "#3b82f6";
 
+  const showMapBackground =
+    location.isOnMap &&
+    location.latitude != null &&
+    location.longitude != null;
+
   return (
-    <Card className={`mb-6 ${location.isOverLimit ? "border-destructive" : ""}`}>
+    <Card className={`mb-6 relative overflow-hidden ${location.isOverLimit ? "border-destructive" : ""}`}>
+      {showMapBackground && (
+        <>
+          <MapBackground latitude={location.latitude!} longitude={location.longitude!} />
+          <div className="absolute inset-0 z-[1] bg-card/80 dark:bg-card/85" />
+        </>
+      )}
+      <div className="relative z-[2]">
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -319,6 +332,7 @@ export function LocationCard({ location }: LocationCardProps) {
           </Dialog>
         </div>
       </CardContent>
+      </div>
     </Card>
   );
 }

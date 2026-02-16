@@ -1,0 +1,70 @@
+"use client";
+
+import { useState, useEffect } from "react";
+
+const STAGING_TOKEN =
+  "eyJraWQiOiI3RlRSM1gzS1JKIiwidHlwIjoiSldUIiwiYWxnIjoiRVMyNTYifQ.eyJpc3MiOiI0NVQ1NlFCMlBZIiwiaWF0IjoxNzcxMjgzMjU3LCJvcmlnaW4iOiJjb3VudGVyLXN0YWdpbmcuY3Jvd2Rjb3VudC50ZWNoIn0.BcBjf_kgq-zkRgrNhN9ZvJQ1zyVawWLiVHkDZJEHr8rehzV8SGiPl4BgZoe3v-5hbHCWFvBCuPJr5l5o4yXuZA";
+
+const PRODUCTION_TOKEN =
+  "eyJraWQiOiI2OE4yQTQ4S1pTIiwidHlwIjoiSldUIiwiYWxnIjoiRVMyNTYifQ.eyJpc3MiOiI0NVQ1NlFCMlBZIiwiaWF0IjoxNzcxMjgzMjM1LCJvcmlnaW4iOiJjb3VudGVyLmNyb3dkY291bnQudGVjaCJ9.yxRsNA0ztx2Tdfu_rv0k1Fmx6a0dtF1Sr3Syhr_is6ypxxM_behaFRv3XOpMqYJO6SF1qS-i4WNivT7vparqCg";
+
+function getMapKitToken(): string {
+  const hostname = window.location.hostname;
+  if (hostname === "counter.crowdcount.tech") return PRODUCTION_TOKEN;
+  // staging + localhost + any other hostname → staging token
+  return STAGING_TOKEN;
+}
+
+// Singleton state — shared across all hook instances
+let loadState: "idle" | "loading" | "ready" | "error" = "idle";
+const listeners = new Set<() => void>();
+
+function notifyListeners() {
+  for (const fn of listeners) fn();
+}
+
+function loadMapKit() {
+  if (loadState !== "idle") return;
+  loadState = "loading";
+
+  const script = document.createElement("script");
+  script.src = "https://cdn.apple-mapkit.com/mk/5.x.x/mapkit.js";
+  script.crossOrigin = "anonymous";
+
+  script.onload = () => {
+    try {
+      mapkit.init({
+        authorizationCallback: (done) => done(getMapKitToken()),
+      });
+      loadState = "ready";
+    } catch {
+      loadState = "error";
+    }
+    notifyListeners();
+  };
+
+  script.onerror = () => {
+    loadState = "error";
+    notifyListeners();
+  };
+
+  document.head.appendChild(script);
+}
+
+export function useMapKit(): { isReady: boolean } {
+  const [, forceUpdate] = useState(0);
+
+  useEffect(() => {
+    const listener = () => forceUpdate((n) => n + 1);
+    listeners.add(listener);
+
+    // Kick off loading if not already started
+    loadMapKit();
+
+    return () => {
+      listeners.delete(listener);
+    };
+  }, []);
+
+  return { isReady: loadState === "ready" };
+}

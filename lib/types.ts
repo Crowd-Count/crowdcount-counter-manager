@@ -87,6 +87,8 @@ export interface StoredLocation {
   isAuto: boolean;         // auto-created 1:1 location on server
   isOnMap: boolean;        // visible on public map
   serverColor: string | null; // color from server (for on-map locations)
+  latitude: number | null;
+  longitude: number | null;
 }
 
 export interface LocationState extends StoredLocation {
@@ -106,6 +108,8 @@ export interface LocationResponse {
   current_count: number;
   on_map: boolean;
   is_auto?: boolean;
+  latitude?: number | null;
+  longitude?: number | null;
 }
 
 // Reset schedule
