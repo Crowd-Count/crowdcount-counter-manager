@@ -29,6 +29,7 @@ interface LocationsContextType {
   adoptAutoLocation: (serverDeviceId: string, password: string, locationName: string, colorName?: LocationColorName) => Promise<string | null>;
   refreshAllLocations: () => Promise<void>;
   refreshLocation: (id: string) => Promise<void>;
+  hasConnectionError: boolean;
 }
 
 const LocationsContext = createContext<LocationsContextType | undefined>(undefined);
@@ -99,6 +100,7 @@ export function LocationsProvider({ children }: { children: React.ReactNode }) {
 
   // Location counts from server polling: locationServerId → current_count
   const [locationCounts, setLocationCounts] = useState<Record<string, number>>({});
+  const [hasConnectionError, setHasConnectionError] = useState(false);
 
   // Load locations from storage on mount
   useEffect(() => {
@@ -125,10 +127,11 @@ export function LocationsProvider({ children }: { children: React.ReactNode }) {
   devicesRef.current = devices;
 
   // Fetch data for a single location (count + per-device connection status)
-  const fetchLocationData = useCallback(async (loc: StoredLocation) => {
+  // Returns true if the location fetch succeeded, false otherwise
+  const fetchLocationData = useCallback(async (loc: StoredLocation): Promise<boolean> => {
     const currentDevices = devicesRef.current;
     const locCreds = api.getLocationCredentials(loc, currentDevices);
-    if (!locCreds) return;
+    if (!locCreds) return false;
 
     // Fetch location count + per-device connection status in parallel
     const connectionPromises = loc.deviceIds.map((serverDeviceId) => {
@@ -141,8 +144,10 @@ export function LocationsProvider({ children }: { children: React.ReactNode }) {
         .catch(() => {});
     });
 
+    let locationSuccess = false;
     const locationPromise = api.getLocation(loc.id, locCreds.credentials, locCreds.signingDevice)
       .then((serverLoc) => {
+        locationSuccess = true;
         // Update count (only if changed to avoid re-renders)
         setLocationCounts((prev) => {
           if (prev[loc.id] === serverLoc.current_count) return prev;
@@ -188,6 +193,7 @@ export function LocationsProvider({ children }: { children: React.ReactNode }) {
       });
 
     await Promise.all([locationPromise, ...connectionPromises]);
+    return locationSuccess;
   }, [updateDeviceOnlineStatus]);
 
   // Poll all non-auto locations
@@ -195,7 +201,10 @@ export function LocationsProvider({ children }: { children: React.ReactNode }) {
     const locs = storedLocationsRef.current.filter(
       (l) => !l.isAuto && l.deviceIds.length > 0
     );
-    await Promise.all(locs.map((loc) => fetchLocationData(loc)));
+    if (locs.length === 0) return;
+    const results = await Promise.all(locs.map((loc) => fetchLocationData(loc)));
+    const anySucceeded = results.some((ok) => ok === true);
+    setHasConnectionError(!anySucceeded);
   }, [fetchLocationData]);
 
   // Polling interval
@@ -770,6 +779,7 @@ export function LocationsProvider({ children }: { children: React.ReactNode }) {
         adoptAutoLocation,
         refreshAllLocations,
         refreshLocation,
+        hasConnectionError,
       }}
     >
       {children}

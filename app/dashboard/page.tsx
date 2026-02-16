@@ -32,6 +32,7 @@ import {
   RefreshCw,
   MapPin,
   ExternalLink,
+  WifiOff,
 } from "lucide-react";
 
 // Migration screen for existing users who have devices but no locations
@@ -126,7 +127,7 @@ export default function DashboardPage() {
   const router = useRouter();
   const { devices, isLoading, addDevice } =
     useDevices();
-  const { locations, getUngroupedDeviceIds, addLocation, refreshAllLocations } = useLocations();
+  const { locations, getUngroupedDeviceIds, addLocation, refreshAllLocations, hasConnectionError } = useLocations();
 
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [migrationDone, setMigrationDone] = useState(false);
@@ -375,6 +376,25 @@ export default function DashboardPage() {
             here
           </a>.
         </p>
+
+        {hasConnectionError && (
+          <div className="bg-destructive/10 border border-destructive/30 rounded-lg px-4 py-4 mb-4 text-center space-y-1">
+            <div className="flex items-center justify-center gap-2">
+              <WifiOff className="h-4 w-4 text-destructive" />
+              <span className="text-sm font-medium">We&apos;re having trouble connecting you.</span>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              This could be due to low connection strength, a network issue on our end, or server maintenance.
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Please be patient and try again later.{" "}
+              <a href="https://crowdcount.tech/status" className="underline hover:text-foreground" target="_blank" rel="noopener noreferrer">
+                Visit our status page
+              </a>{" "}
+              if the issue persists.
+            </p>
+          </div>
+        )}
 
         <div className="bg-muted/60 border border-border rounded-lg px-4 py-3 mb-4 text-center text-sm">
           <span className="font-medium">Counter offline?</span>{" "}
