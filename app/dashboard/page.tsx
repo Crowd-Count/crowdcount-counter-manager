@@ -376,6 +376,11 @@ export default function DashboardPage() {
           </a>.
         </p>
 
+        <div className="bg-muted/60 border border-border rounded-lg px-4 py-3 mb-4 text-center text-sm">
+          <span className="font-medium">Counter offline?</span>{" "}
+          <span className="text-muted-foreground">Try unplugging it from power and plugging it back in.</span>
+        </div>
+
         {/* Location cards */}
         {locations.map((location) => (
           <LocationCard key={location.localId} location={location} />
