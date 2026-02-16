@@ -125,24 +125,18 @@ export function DataCacheProvider({ children }: { children: React.ReactNode }) {
         insightsCache.current.set(credKey, insights);
       }
 
-      // Fetch default history for the most recent date
+      // Prefetch default history (population only — entries fetched on demand)
       if (dates.length > 0) {
         const mostRecent = dates[dates.length - 1];
         const year = mostRecent.split("-")[0];
 
-        // Fetch both population and entries in parallel (location-level)
-        const [popHistory, entryHistory] = await Promise.all([
-          fetchLocationHistoryCharts(locationParams, mostRecent, mostRecent, year, "population", force).catch(() => null),
-          fetchLocationHistoryCharts(locationParams, mostRecent, mostRecent, year, "entries", force).catch(() => null),
-        ]);
+        const popHistory = await fetchLocationHistoryCharts(
+          locationParams, mostRecent, mostRecent, year, "population", force
+        ).catch(() => null);
 
         if (popHistory) {
           const histKey = `${credKey}:${mostRecent}:${mostRecent}:${year}:population`;
           historyCache.current.set(histKey, popHistory);
-        }
-        if (entryHistory) {
-          const histKey = `${credKey}:${mostRecent}:${mostRecent}:${year}:entries`;
-          historyCache.current.set(histKey, entryHistory);
         }
       }
     } catch (error) {

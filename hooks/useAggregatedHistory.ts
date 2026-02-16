@@ -12,6 +12,13 @@ import {
   type DataType,
   type LocationFetchParams,
 } from "@/lib/dataFetchers";
+import { formatLocalDate } from "@/lib/timezone";
+
+/** Strip any dates after today's local date (belt-and-suspenders for timezone edge cases) */
+function filterFutureDates(dates: string[]): string[] {
+  const today = formatLocalDate();
+  return dates.filter((d) => d <= today);
+}
 
 export type { ChartData, DeviceCredentials, DataType, LocationFetchParams } from "@/lib/dataFetchers";
 
@@ -68,9 +75,10 @@ export function useAggregatedHistory(
 
   const hasData = !!stableLocationParams || stableCredentials.length > 0;
 
-  // Check dates cache synchronously — only use non-empty cached dates
+  // Check dates cache synchronously — only use non-empty cached dates, strip future
   const rawCachedDates = credKey ? getCachedDates(credKey) : null;
-  const initialDates = rawCachedDates && rawCachedDates.length > 0 ? rawCachedDates : null;
+  const filteredCachedDates = rawCachedDates ? filterFutureDates(rawCachedDates) : null;
+  const initialDates = filteredCachedDates && filteredCachedDates.length > 0 ? filteredCachedDates : null;
 
   const [dataType, setDataType] = useState<DataType>("population");
   const [availableDates, setAvailableDates] = useState<string[]>(initialDates ?? []);
@@ -109,7 +117,8 @@ export function useAggregatedHistory(
     setIsLoadingDates(true);
     try {
       // Use per-device available dates (location-level endpoint not reliably available)
-      const dates = await fetchAvailableDates(stableCredentials);
+      const rawDates = await fetchAvailableDates(stableCredentials);
+      const dates = filterFutureDates(rawDates);
       datesFetched.current = true;
       setAvailableDates(dates);
       if (dates.length > 0) {
@@ -196,10 +205,10 @@ export function useAggregatedHistory(
   useEffect(() => {
     if (!credKey || cacheVersion === 0) return;
 
-    // Update dates
+    // Update dates — filter future dates as safety net
     const cachedDates = getCachedDates(credKey);
     if (cachedDates) {
-      setAvailableDates(cachedDates);
+      setAvailableDates(filterFutureDates(cachedDates));
       datesFetched.current = true;
       setIsLoadingDates(false);
     }
