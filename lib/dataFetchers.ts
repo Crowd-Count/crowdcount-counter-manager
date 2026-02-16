@@ -164,39 +164,34 @@ export async function fetchInsightsForCredentials(
   const now = new Date();
   const currentYear = now.getUTCFullYear();
 
+  // Device-level: only fetch actual data, not averages (averages are location-level only)
   const allResults = await Promise.all(
     credentials.map(async (cred) => {
       const [
-        day1, avgDay1, entryDay1, avgEntryDay1,
-        day2, avgDay2, entryDay2, avgEntryDay2,
-        week, avgWeek, entryWeek, avgEntryWeek,
-        year, avgYear, entryYear, avgEntryYear,
+        day1, entryDay1,
+        day2, entryDay2,
+        week, entryWeek,
+        year, entryYear,
       ] = await Promise.all([
         cachedApiCall("getDayData", cred.deviceId, utcDate1, () => api.getDayData(cred.deviceId, cred.password, utcDate1), force).catch(() => ({})),
-        cachedApiCall("getAverageDayData", cred.deviceId, utcDate1, () => api.getAverageDayData(cred.deviceId, cred.password, utcDate1), force).catch(() => ({})),
         cachedApiCall("getEntryDayData", cred.deviceId, utcDate1, () => api.getEntryDayData(cred.deviceId, cred.password, utcDate1), force).catch(() => ({})),
-        cachedApiCall("getAverageEntryDayData", cred.deviceId, utcDate1, () => api.getAverageEntryDayData(cred.deviceId, cred.password, utcDate1), force).catch(() => ({})),
         needsSecondDate ? cachedApiCall("getDayData", cred.deviceId, utcDate2, () => api.getDayData(cred.deviceId, cred.password, utcDate2), force).catch(() => ({})) : Promise.resolve({} as Record<string, number>),
-        needsSecondDate ? cachedApiCall("getAverageDayData", cred.deviceId, utcDate2, () => api.getAverageDayData(cred.deviceId, cred.password, utcDate2), force).catch(() => ({})) : Promise.resolve({} as Record<string, number>),
         needsSecondDate ? cachedApiCall("getEntryDayData", cred.deviceId, utcDate2, () => api.getEntryDayData(cred.deviceId, cred.password, utcDate2), force).catch(() => ({})) : Promise.resolve({} as Record<string, number>),
-        needsSecondDate ? cachedApiCall("getAverageEntryDayData", cred.deviceId, utcDate2, () => api.getAverageEntryDayData(cred.deviceId, cred.password, utcDate2), force).catch(() => ({})) : Promise.resolve({} as Record<string, number>),
         cachedApiCall("getWeekData", cred.deviceId, localDate, () => api.getWeekData(cred.deviceId, cred.password, localDate), force).catch(() => ({})),
-        cachedApiCall("getAverageWeekData", cred.deviceId, localDate, () => api.getAverageWeekData(cred.deviceId, cred.password, localDate), force).catch(() => ({})),
         cachedApiCall("getEntryWeekData", cred.deviceId, localDate, () => api.getEntryWeekData(cred.deviceId, cred.password, localDate), force).catch(() => ({})),
-        cachedApiCall("getAverageEntryWeekData", cred.deviceId, localDate, () => api.getAverageEntryWeekData(cred.deviceId, cred.password, localDate), force).catch(() => ({})),
         cachedApiCall("getYearData", cred.deviceId, String(currentYear), () => api.getYearData(cred.deviceId, cred.password, currentYear), force).catch(() => ({})),
-        cachedApiCall("getAverageYearData", cred.deviceId, String(currentYear), () => api.getAverageYearData(cred.deviceId, cred.password, currentYear), force).catch(() => null),
         cachedApiCall("getEntryYearData", cred.deviceId, String(currentYear), () => api.getEntryYearData(cred.deviceId, cred.password, currentYear), force).catch(() => ({})),
-        cachedApiCall("getAverageEntryYearData", cred.deviceId, String(currentYear), () => api.getAverageEntryYearData(cred.deviceId, cred.password, currentYear), force).catch(() => null),
       ]);
 
       return {
         day: shiftDayDataToLocal(day1, day2, utcMinutesAtMidnight),
-        avgDay: shiftDayDataToLocal(avgDay1, avgDay2, utcMinutesAtMidnight),
+        avgDay: {} as Record<string, number>,
         entryDay: shiftDayDataToLocal(entryDay1, entryDay2, utcMinutesAtMidnight),
-        avgEntryDay: shiftDayDataToLocal(avgEntryDay1, avgEntryDay2, utcMinutesAtMidnight),
-        week, avgWeek, entryWeek, avgEntryWeek,
-        year, avgYear, entryYear, avgEntryYear,
+        avgEntryDay: {} as Record<string, number>,
+        week, avgWeek: {} as Record<string, number>,
+        entryWeek, avgEntryWeek: {} as Record<string, number>,
+        year, avgYear: null as Record<string, number> | null,
+        entryYear, avgEntryYear: null as Record<string, number> | null,
       };
     })
   );
@@ -263,40 +258,30 @@ export async function fetchHistoryCharts(
   const needsSecondDate = utcDate1 !== utcDate2;
 
   const getDayFn = dataType === "entries" ? api.getEntryDayData : api.getDayData;
-  const getAvgDayFn = dataType === "entries" ? api.getAverageEntryDayData : api.getAverageDayData;
   const getWeekFn = dataType === "entries" ? api.getEntryWeekData : api.getWeekData;
-  const getAvgWeekFn = dataType === "entries" ? api.getAverageEntryWeekData : api.getAverageWeekData;
   const getYearFn = dataType === "entries" ? api.getEntryYearData : api.getYearData;
-  const getAvgYearFn = dataType === "entries" ? api.getAverageEntryYearData : api.getAverageYearData;
 
   const dayFnName = dataType === "entries" ? "getEntryDayData" : "getDayData";
-  const avgDayFnName = dataType === "entries" ? "getAverageEntryDayData" : "getAverageDayData";
   const weekFnName = dataType === "entries" ? "getEntryWeekData" : "getWeekData";
-  const avgWeekFnName = dataType === "entries" ? "getAverageEntryWeekData" : "getAverageWeekData";
   const yearFnName = dataType === "entries" ? "getEntryYearData" : "getYearData";
-  const avgYearFnName = dataType === "entries" ? "getAverageEntryYearData" : "getAverageYearData";
 
-  // All devices in parallel — apiCache deduplicates concurrent requests for the same device
+  // Device-level: only fetch actual data, not averages (averages are location-level only)
   const allDeviceResults = await Promise.all(
     credentials.map(async (cred) => {
-      const [dayD1, dayAvg1, dayD2, dayAvg2, weekD, weekAvg, yearD, yearAvg] = await Promise.all([
+      const [dayD1, dayD2, weekD, yearD] = await Promise.all([
         cachedApiCall(dayFnName, cred.deviceId, utcDate1, () => getDayFn(cred.deviceId, cred.password, utcDate1), force).catch(() => ({})),
-        cachedApiCall(avgDayFnName, cred.deviceId, utcDate1, () => getAvgDayFn(cred.deviceId, cred.password, utcDate1), force).catch(() => ({})),
         needsSecondDate ? cachedApiCall(dayFnName, cred.deviceId, utcDate2, () => getDayFn(cred.deviceId, cred.password, utcDate2), force).catch(() => ({})) : Promise.resolve({} as Record<string, number>),
-        needsSecondDate ? cachedApiCall(avgDayFnName, cred.deviceId, utcDate2, () => getAvgDayFn(cred.deviceId, cred.password, utcDate2), force).catch(() => ({})) : Promise.resolve({} as Record<string, number>),
         cachedApiCall(weekFnName, cred.deviceId, weekDate, () => getWeekFn(cred.deviceId, cred.password, weekDate), force).catch(() => ({})),
-        cachedApiCall(avgWeekFnName, cred.deviceId, weekDate, () => getAvgWeekFn(cred.deviceId, cred.password, weekDate), force).catch(() => ({})),
         cachedApiCall(yearFnName, cred.deviceId, String(yearNum), () => getYearFn(cred.deviceId, cred.password, yearNum), force).catch(() => ({})),
-        cachedApiCall(avgYearFnName, cred.deviceId, String(yearNum), () => getAvgYearFn(cred.deviceId, cred.password, yearNum), force).catch(() => null),
       ]);
 
       return {
         day: {
           data: shiftDayDataToLocal(dayD1, dayD2, utcMinutesAtMidnight),
-          avgData: shiftDayDataToLocal(dayAvg1, dayAvg2 as Record<string, number>, utcMinutesAtMidnight),
+          avgData: {} as Record<string, number>,
         },
-        week: { data: weekD, avgData: weekAvg },
-        year: { data: yearD, avgData: yearAvg ?? {} },
+        week: { data: weekD, avgData: {} as Record<string, number> },
+        year: { data: yearD, avgData: {} as Record<string, number> },
       };
     })
   );
