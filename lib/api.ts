@@ -964,6 +964,32 @@ export async function getLocationHistoryBundle(
   });
 }
 
+// Detailed 15-minute interval day data (for CSV downloads)
+export interface DayDataDetailedResponse {
+  data: Record<string, number>;
+  average: Record<string, number>;
+}
+
+export async function getLocationDayDataDetailed(
+  locationId: string,
+  credentials: Array<{ device_id: string; password: string }>,
+  signingDevice: SigningCredentials,
+  date: string,
+  dataType: "count" | "entries"
+): Promise<DayDataDetailedResponse> {
+  return apiRequest<DayDataDetailedResponse>("/get_location_day_data_detailed", {
+    method: "POST",
+    body: JSON.stringify({
+      location_id: locationId,
+      credentials,
+      date,
+      data_type: dataType,
+      tz_offset_minutes: new Date().getTimezoneOffset() * -1,
+    }),
+    sign: signingDevice,
+  });
+}
+
 // Location available dates
 export async function getLocationAvailableDates(
   locationId: string,

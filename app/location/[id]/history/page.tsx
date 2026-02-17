@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useCallback, useMemo } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { useDevices } from "@/contexts/DevicesContext";
@@ -45,6 +45,46 @@ export default function LocationHistoryPage() {
   }, [location, devices]);
 
   const history = useAggregatedHistory(credentials, locationParams);
+
+  const handleDownloadDay = useCallback(async (date: string, dataType: string, filename: string) => {
+    if (!locationParams) return;
+    const response = await api.getLocationDayDataDetailed(
+      locationParams.locationId,
+      locationParams.credentials,
+      locationParams.signingDevice,
+      date,
+      dataType === "entries" ? "entries" : "count"
+    );
+    // Build ChartData[] sorted by time label for CSV
+    const allSlots: { label: string; sortKey: number; value: number; average?: number }[] = [];
+    for (let slot = 0; slot < 96; slot++) {
+      const hour = Math.floor(slot / 4);
+      const minute = (slot % 4) * 15;
+      const label = `${hour}:${minute.toString().padStart(2, "0")}`;
+      const value = response.data[label] ?? 0;
+      const average = response.average[label];
+      allSlots.push({ label, sortKey: slot, value, average });
+    }
+    allSlots.sort((a, b) => a.sortKey - b.sortKey);
+    // Filter to only slots where data exists (or include all if data exists)
+    const hasData = allSlots.some((s) => s.value > 0);
+    const chartData = hasData
+      ? allSlots.map((s) => ({ label: s.label, value: s.value, average: s.average }))
+      : [];
+    // Download CSV
+    const header = `Label,${dataType === "entries" ? "Entries" : "Count"},Average`;
+    const rows = chartData.map((d) => `${d.label},${d.value},${d.average ?? ""}`);
+    const csv = [header, ...rows].join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${filename}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, [locationParams]);
 
   if (devicesLoading || locationsLoading) {
     return (
@@ -111,6 +151,7 @@ export default function LocationHistoryPage() {
           dayDescription="Combined hourly count from location counters"
           weekDescription="Combined daily count from location counters"
           yearDescription="Combined monthly count from location counters"
+          onDownloadDay={handleDownloadDay}
         />
       </main>
     </div>

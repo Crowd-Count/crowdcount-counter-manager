@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import type { ChartData, AggregatedHistoryResult } from "@/hooks/useAggregatedHistory";
 import { Button } from "@/components/ui/button";
 import {
@@ -49,6 +50,8 @@ interface HistoryContentProps {
   dayDescription?: string;
   weekDescription?: string;
   yearDescription?: string;
+  /** If provided, fetches 15-min interval data for daily CSV download instead of using hourly chart data */
+  onDownloadDay?: (date: string, dataType: string, filename: string) => Promise<void>;
 }
 
 export function HistoryContent({
@@ -57,6 +60,7 @@ export function HistoryContent({
   dayDescription = "Hourly count breakdown",
   weekDescription = "Daily count breakdown",
   yearDescription = "Monthly count breakdown",
+  onDownloadDay,
 }: HistoryContentProps) {
   const {
     availableDates,
@@ -77,6 +81,8 @@ export function HistoryContent({
     isLoadingYear,
     availableYears,
   } = history;
+
+  const [isDayDownloading, setIsDayDownloading] = useState(false);
 
   const dataLabel = dataType === "entries" ? "Entries" : "Count";
 
@@ -142,16 +148,26 @@ export function HistoryContent({
                     <Button
                       variant="outline"
                       size="icon"
-                      disabled={isLoadingDay || dayData.length === 0}
-                      onClick={() =>
-                        downloadCsv(
-                          dayData,
-                          `${filenamePrefix}-day-${selectedDate}-${dataType}`,
-                          dataType
-                        )
-                      }
+                      disabled={isLoadingDay || isDayDownloading || dayData.length === 0}
+                      onClick={async () => {
+                        const filename = `${filenamePrefix}-day-${selectedDate}-${dataType}`;
+                        if (onDownloadDay) {
+                          setIsDayDownloading(true);
+                          try {
+                            await onDownloadDay(selectedDate, dataType, filename);
+                          } finally {
+                            setIsDayDownloading(false);
+                          }
+                        } else {
+                          downloadCsv(dayData, filename, dataType);
+                        }
+                      }}
                     >
-                      <Download className="h-4 w-4" />
+                      {isDayDownloading ? (
+                        <RefreshCw className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Download className="h-4 w-4" />
+                      )}
                     </Button>
                   </div>
                 </div>
