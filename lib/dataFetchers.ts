@@ -8,7 +8,7 @@ import {
   isDateInCurrentLocalWeek,
   utcDatesToLocalDates,
 } from "@/lib/timezone";
-import { getOrFetch, forceRefresh } from "@/lib/apiCache";
+import { getOrFetch, forceRefresh, setCached } from "@/lib/apiCache";
 
 // ── Types ──
 
@@ -326,6 +326,72 @@ export async function fetchLocationInsights(
   const now = new Date();
   const currentYear = now.getUTCFullYear();
 
+  // Try bundle endpoint first (1 request instead of 16)
+  try {
+    const bundle = await api.getLocationInsightsBundle(
+      locationId, credentials, signingDevice,
+      utcDate1, needsSecondDate ? utcDate2 : null,
+      localDate, currentYear
+    );
+
+    // Seed individual cache entries so per-key invalidation still works
+    const seed = (fnName: string, params: string, value: unknown) =>
+      setCached(`loc:${fnName}:${locationId}:${params}`, value);
+
+    seed("getDayData", utcDate1, bundle.day_view);
+    seed("getAverageDayData", utcDate1, bundle.average_day_view);
+    seed("getEntryDayData", utcDate1, bundle.entry_day_view);
+    seed("getAverageEntryDayData", utcDate1, bundle.average_entry_day_view);
+    if (needsSecondDate) {
+      seed("getDayData", utcDate2, bundle.day_view_2 ?? {});
+      seed("getAverageDayData", utcDate2, bundle.average_day_view_2 ?? {});
+      seed("getEntryDayData", utcDate2, bundle.entry_day_view_2 ?? {});
+      seed("getAverageEntryDayData", utcDate2, bundle.average_entry_day_view_2 ?? {});
+    }
+    seed("getWeekData", localDate, bundle.week_view);
+    seed("getAverageWeekData", localDate, bundle.average_week_view);
+    seed("getEntryWeekData", localDate, bundle.entry_week_view);
+    seed("getAverageEntryWeekData", localDate, bundle.average_entry_week_view);
+    seed("getYearData", String(currentYear), bundle.year_view);
+    seed("getAverageYearData", String(currentYear), bundle.average_year_view);
+    seed("getEntryYearData", String(currentYear), bundle.entry_year_view);
+    seed("getAverageEntryYearData", String(currentYear), bundle.average_entry_year_view);
+
+    const day2Data = needsSecondDate ? (bundle.day_view_2 ?? {}) : {};
+    const avgDay2Data = needsSecondDate ? (bundle.average_day_view_2 ?? {}) : {};
+    const entryDay2Data = needsSecondDate ? (bundle.entry_day_view_2 ?? {}) : {};
+    const avgEntryDay2Data = needsSecondDate ? (bundle.average_entry_day_view_2 ?? {}) : {};
+
+    // Filter future local days from current-week data
+    const maxIdx = getLocalDayOfWeekIndex();
+    const daysOfWeek = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+    function stripFutureDays(rec: Record<string, number>): Record<string, number> {
+      const out: Record<string, number> = {};
+      for (const [key, val] of Object.entries(rec)) {
+        const idx = daysOfWeek.indexOf(key);
+        if (idx === -1 || idx <= maxIdx) out[key] = val;
+      }
+      return out;
+    }
+
+    return {
+      dayData: shiftDayDataToLocal(bundle.day_view, day2Data, utcMinutesAtMidnight),
+      avgDayData: shiftDayDataToLocal(bundle.average_day_view, avgDay2Data, utcMinutesAtMidnight),
+      entryDayData: shiftDayDataToLocal(bundle.entry_day_view, entryDay2Data, utcMinutesAtMidnight),
+      avgEntryDayData: shiftDayDataToLocal(bundle.average_entry_day_view, avgEntryDay2Data, utcMinutesAtMidnight),
+      weekData: stripFutureDays(bundle.week_view),
+      avgWeekData: bundle.average_week_view,
+      entryWeekData: stripFutureDays(bundle.entry_week_view),
+      avgEntryWeekData: bundle.average_entry_week_view,
+      yearData: bundle.year_view,
+      avgYearData: bundle.average_year_view,
+      entryYearData: bundle.entry_year_view,
+      avgEntryYearData: bundle.average_entry_year_view,
+    };
+  } catch {
+    // Fallback to individual calls if bundle endpoint not available (404)
+  }
+
   const [
     day1, avgDay1, entryDay1, avgEntryDay1,
     day2, avgDay2, entryDay2, avgEntryDay2,
@@ -403,6 +469,60 @@ export async function fetchLocationHistoryCharts(
   const yearNum = parseInt(year, 10);
   const { utcDate1, utcDate2, utcMinutesAtMidnight } = getLocalDayUTCBounds(date);
   const needsSecondDate = utcDate1 !== utcDate2;
+
+  // Try bundle endpoint first (1 request instead of 8)
+  try {
+    const bundleDataType = dataType === "entries" ? "entries" : "count";
+    const bundle = await api.getLocationHistoryBundle(
+      locationId, credentials, signingDevice,
+      utcDate1, needsSecondDate ? utcDate2 : null,
+      weekDate, yearNum, bundleDataType
+    );
+
+    // Seed individual cache entries
+    const dayFnName = dataType === "entries" ? "getEntryDayData" : "getDayData";
+    const avgDayFnName = dataType === "entries" ? "getAverageEntryDayData" : "getAverageDayData";
+    const weekFnName = dataType === "entries" ? "getEntryWeekData" : "getWeekData";
+    const avgWeekFnName = dataType === "entries" ? "getAverageEntryWeekData" : "getAverageWeekData";
+    const yearFnName = dataType === "entries" ? "getEntryYearData" : "getYearData";
+    const avgYearFnName = dataType === "entries" ? "getAverageEntryYearData" : "getAverageYearData";
+
+    const seed = (fnName: string, params: string, value: unknown) =>
+      setCached(`loc:${fnName}:${locationId}:${params}`, value);
+
+    seed(dayFnName, utcDate1, bundle.day_view);
+    seed(avgDayFnName, utcDate1, bundle.average_day_view);
+    if (needsSecondDate) {
+      seed(dayFnName, utcDate2, bundle.day_view_2 ?? {});
+      seed(avgDayFnName, utcDate2, bundle.average_day_view_2 ?? {});
+    }
+    seed(weekFnName, weekDate, bundle.week_view);
+    seed(avgWeekFnName, weekDate, bundle.average_week_view);
+    seed(yearFnName, String(yearNum), bundle.year_view);
+    seed(avgYearFnName, String(yearNum), bundle.average_year_view);
+
+    const dayD2 = needsSecondDate ? (bundle.day_view_2 ?? {}) : {};
+    const dayAvg2 = needsSecondDate ? (bundle.average_day_view_2 ?? {}) : {};
+
+    const dayResult = {
+      data: shiftDayDataToLocal(bundle.day_view, dayD2, utcMinutesAtMidnight),
+      avgData: shiftDayDataToLocal(bundle.average_day_view, dayAvg2, utcMinutesAtMidnight),
+    };
+    const weekResult = { data: bundle.week_view, avgData: bundle.average_week_view };
+    const yearResult = { data: bundle.year_view, avgData: bundle.average_year_view ?? {} };
+
+    const maxDayIndex = isDateInCurrentLocalWeek(weekDate)
+      ? getLocalDayOfWeekIndex()
+      : undefined;
+
+    return {
+      dayData: buildDayChart([dayResult]),
+      weekData: buildWeekChart([weekResult], maxDayIndex),
+      yearData: buildYearChart([yearResult]),
+    };
+  } catch {
+    // Fallback to individual calls if bundle endpoint not available
+  }
 
   const getDayFn = dataType === "entries" ? api.getLocationEntryDayData : api.getLocationDayData;
   const getAvgDayFn = dataType === "entries" ? api.getLocationAverageEntryDayData : api.getLocationAverageDayData;

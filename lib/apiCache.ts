@@ -49,3 +49,8 @@ export async function forceRefresh<T>(key: string, fetcher: () => Promise<T>): P
 export function getCached<T>(key: string): T | undefined {
   return cache.get(key) as T | undefined;
 }
+
+/** Manually set a cache entry (e.g. from bundle response). */
+export function setCached<T>(key: string, value: T): void {
+  cache.set(key, value);
+}

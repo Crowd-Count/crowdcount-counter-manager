@@ -880,6 +880,88 @@ export async function getLocationAverageEntryYearData(
   return response.data;
 }
 
+// ── Location Bundle Endpoints ──
+
+export interface InsightsBundleResponse {
+  day_view: Record<string, number>;
+  average_day_view: Record<string, number>;
+  entry_day_view: Record<string, number>;
+  average_entry_day_view: Record<string, number>;
+  day_view_2?: Record<string, number>;
+  average_day_view_2?: Record<string, number>;
+  entry_day_view_2?: Record<string, number>;
+  average_entry_day_view_2?: Record<string, number>;
+  week_view: Record<string, number>;
+  average_week_view: Record<string, number>;
+  entry_week_view: Record<string, number>;
+  average_entry_week_view: Record<string, number>;
+  year_view: Record<string, number>;
+  average_year_view: Record<string, number> | null;
+  entry_year_view: Record<string, number>;
+  average_entry_year_view: Record<string, number> | null;
+}
+
+export interface HistoryBundleResponse {
+  day_view: Record<string, number>;
+  average_day_view: Record<string, number>;
+  day_view_2?: Record<string, number>;
+  average_day_view_2?: Record<string, number>;
+  week_view: Record<string, number>;
+  average_week_view: Record<string, number>;
+  year_view: Record<string, number>;
+  average_year_view: Record<string, number> | null;
+}
+
+export async function getLocationInsightsBundle(
+  locationId: string,
+  credentials: Array<{ device_id: string; password: string }>,
+  signingDevice: SigningCredentials,
+  date: string,
+  date2: string | null,
+  weekDate: string,
+  year: number
+): Promise<InsightsBundleResponse> {
+  const body: Record<string, unknown> = {
+    location_id: locationId,
+    credentials,
+    date,
+    week_date: weekDate,
+    year,
+  };
+  if (date2) body.date2 = date2;
+  return apiRequest<InsightsBundleResponse>("/get_location_insights_bundle", {
+    method: "POST",
+    body: JSON.stringify(body),
+    sign: signingDevice,
+  });
+}
+
+export async function getLocationHistoryBundle(
+  locationId: string,
+  credentials: Array<{ device_id: string; password: string }>,
+  signingDevice: SigningCredentials,
+  date: string,
+  date2: string | null,
+  weekDate: string,
+  year: number,
+  dataType: "count" | "entries"
+): Promise<HistoryBundleResponse> {
+  const body: Record<string, unknown> = {
+    location_id: locationId,
+    credentials,
+    date,
+    week_date: weekDate,
+    year,
+    data_type: dataType,
+  };
+  if (date2) body.date2 = date2;
+  return apiRequest<HistoryBundleResponse>("/get_location_history_bundle", {
+    method: "POST",
+    body: JSON.stringify(body),
+    sign: signingDevice,
+  });
+}
+
 // Location available dates
 export async function getLocationAvailableDates(
   locationId: string,
