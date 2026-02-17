@@ -5,6 +5,18 @@ declare namespace mapkit {
     constructor(container: HTMLElement, options?: MapConstructorOptions);
     colorScheme: string;
     destroy(): void;
+
+    static readonly MapTypes: {
+      Standard: string;
+      MutedStandard: string;
+      Satellite: string;
+      Hybrid: string;
+    };
+
+    static readonly ColorSchemes: {
+      Light: string;
+      Dark: string;
+    };
   }
 
   class Coordinate {
@@ -19,16 +31,10 @@ declare namespace mapkit {
     constructor(latitudeDelta: number, longitudeDelta: number);
   }
 
-  const ColorScheme: {
-    Light: string;
-    Dark: string;
-  };
-
-  const MapType: {
-    Standard: string;
-    MutedStandard: string;
-    Satellite: string;
-    Hybrid: string;
+  const FeatureVisibility: {
+    Hidden: string;
+    Visible: string;
+    Adaptive: string;
   };
 
   interface MapConstructorOptions {

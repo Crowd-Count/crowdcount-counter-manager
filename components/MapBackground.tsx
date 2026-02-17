@@ -29,16 +29,16 @@ export const MapBackground = memo(function MapBackground({
           new mapkit.Coordinate(latitude, longitude),
           new mapkit.CoordinateSpan(0.01, 0.01)
         ),
-        mapType: mapkit.MapType.MutedStandard,
+        mapType: mapkit.Map.MapTypes.MutedStandard,
         colorScheme:
-          theme === "dark" ? mapkit.ColorScheme.Dark : mapkit.ColorScheme.Light,
+          theme === "dark" ? mapkit.Map.ColorSchemes.Dark : mapkit.Map.ColorSchemes.Light,
         isScrollEnabled: false,
         isZoomEnabled: false,
         isRotationEnabled: false,
-        showsCompass: "hidden",
+        showsCompass: mapkit.FeatureVisibility.Hidden,
         showsMapTypeControl: false,
         showsZoomControl: false,
-        showsScale: "hidden",
+        showsScale: mapkit.FeatureVisibility.Hidden,
       });
 
       mapRef.current = map;
@@ -58,7 +58,7 @@ export const MapBackground = memo(function MapBackground({
   useEffect(() => {
     if (mapRef.current) {
       mapRef.current.colorScheme =
-        theme === "dark" ? mapkit.ColorScheme.Dark : mapkit.ColorScheme.Light;
+        theme === "dark" ? mapkit.Map.ColorSchemes.Dark : mapkit.Map.ColorSchemes.Light;
     }
   }, [theme]);
 
