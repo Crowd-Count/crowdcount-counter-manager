@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import type { LocationState, DeviceState } from "@/lib/types";
-import { getLocationColorHex } from "@/lib/types";
+import { LOCATION_COLORS, getAppleColorHex } from "@/lib/types";
 import { useDevices } from "@/contexts/DevicesContext";
 import { useLocations } from "@/contexts/LocationsContext";
 import { useTheme } from "@/contexts/ThemeContext";
@@ -147,9 +147,9 @@ export function LocationCard({ location }: LocationCardProps) {
   };
 
   const colorValue =
-    (location.isOnMap && location.serverColor)
-      ? location.serverColor
-      : getLocationColorHex(location.colorName, theme);
+    location.isOnMap
+      ? (location.serverColor || getAppleColorHex(location.colorName, theme))
+      : (LOCATION_COLORS.find((c) => c.name === location.colorName)?.value ?? "#3b82f6");
 
   const showMapBackground =
     location.isOnMap &&

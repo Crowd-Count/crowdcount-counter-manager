@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import { useDevices } from "@/contexts/DevicesContext";
 import { useLocations } from "@/contexts/LocationsContext";
 import { LOCATION_COLORS, type LocationColorName } from "@/lib/types";
-import { useTheme } from "@/contexts/ThemeContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -129,7 +128,6 @@ export default function DashboardPage() {
   const { devices, isLoading, addDevice } =
     useDevices();
   const { locations, getUngroupedDeviceIds, addLocation, refreshAllLocations, hasConnectionError } = useLocations();
-  const { theme } = useTheme();
 
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [migrationDone, setMigrationDone] = useState(false);
@@ -309,7 +307,7 @@ export default function DashboardPage() {
                     {/* Color picker */}
                     <div className="space-y-2">
                       <Label>Color</Label>
-                      <div className="flex flex-wrap gap-2">
+                      <div className="flex gap-2">
                         {LOCATION_COLORS.map((color) => (
                           <button
                             key={color.name}
@@ -319,7 +317,7 @@ export default function DashboardPage() {
                                 ? "border-foreground scale-110"
                                 : "border-transparent"
                             }`}
-                            style={{ backgroundColor: theme === "dark" ? color.dark : color.light }}
+                            style={{ backgroundColor: color.value }}
                             onClick={() => setNewLocationColor(color.name as LocationColorName)}
                             disabled={isCreatingLocation}
                           />
