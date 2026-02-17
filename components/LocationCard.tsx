@@ -3,9 +3,10 @@
 import { useState } from "react";
 import Link from "next/link";
 import type { LocationState, DeviceState } from "@/lib/types";
-import { LOCATION_COLORS } from "@/lib/types";
+import { getLocationColorHex } from "@/lib/types";
 import { useDevices } from "@/contexts/DevicesContext";
 import { useLocations } from "@/contexts/LocationsContext";
+import { useTheme } from "@/contexts/ThemeContext";
 import * as api from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -74,6 +75,7 @@ function CompactDeviceRow({ device, hasMap }: { device: DeviceState; hasMap?: bo
 export function LocationCard({ location }: LocationCardProps) {
   const { devices } = useDevices();
   const { addCounterToLocation, refreshLocation } = useLocations();
+  const { theme } = useTheme();
 
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [newDeviceId, setNewDeviceId] = useState("");
@@ -147,7 +149,7 @@ export function LocationCard({ location }: LocationCardProps) {
   const colorValue =
     (location.isOnMap && location.serverColor)
       ? location.serverColor
-      : LOCATION_COLORS.find((c) => c.name === location.colorName)?.value ?? "#3b82f6";
+      : getLocationColorHex(location.colorName, theme);
 
   const showMapBackground =
     location.isOnMap &&

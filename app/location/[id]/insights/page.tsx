@@ -5,7 +5,8 @@ import { useParams } from "next/navigation";
 import Link from "next/link";
 import { useDevices } from "@/contexts/DevicesContext";
 import { useLocations } from "@/contexts/LocationsContext";
-import { LOCATION_COLORS } from "@/lib/types";
+import { getLocationColorHex } from "@/lib/types";
+import { useTheme } from "@/contexts/ThemeContext";
 import * as api from "@/lib/api";
 import { useInsightsData } from "@/hooks/useInsightsData";
 import type { DeviceCredentials } from "@/hooks/useAggregatedHistory";
@@ -20,6 +21,7 @@ export default function LocationInsightsPage() {
   const locationId = params.id as string;
   const { devices, isLoading: devicesLoading } = useDevices();
   const { getLocation, isLoading: locationsLoading } = useLocations();
+  const { theme } = useTheme();
 
   const location = getLocation(locationId);
 
@@ -64,9 +66,7 @@ export default function LocationInsightsPage() {
     );
   }
 
-  const colorValue =
-    LOCATION_COLORS.find((c) => c.name === location.colorName)?.value ??
-    "#3b82f6";
+  const colorValue = getLocationColorHex(location.colorName, theme);
 
   return (
     <div className="min-h-screen bg-background">

@@ -133,15 +133,27 @@ export interface SigningCredentials {
 }
 
 export const LOCATION_COLORS = [
-  { name: "red", value: "#ef4444" },
-  { name: "orange", value: "#f97316" },
-  { name: "yellow", value: "#eab308" },
-  { name: "green", value: "#22c55e" },
-  { name: "blue", value: "#3b82f6" },
-  { name: "purple", value: "#a855f7" },
+  { name: "red", light: "#FF383C", dark: "#FF4245" },
+  { name: "orange", light: "#FF8D28", dark: "#FF9230" },
+  { name: "yellow", light: "#FFCC00", dark: "#FFD600" },
+  { name: "green", light: "#34C759", dark: "#30D158" },
+  { name: "mint", light: "#00C8B3", dark: "#00DAC3" },
+  { name: "teal", light: "#00C3D0", dark: "#00D2E0" },
+  { name: "cyan", light: "#00C0E8", dark: "#3CD3FE" },
+  { name: "blue", light: "#0088FF", dark: "#0091FF" },
+  { name: "indigo", light: "#6155F5", dark: "#6D7CFF" },
+  { name: "purple", light: "#CB30E0", dark: "#DB34F2" },
+  { name: "pink", light: "#FF2D55", dark: "#FF375F" },
+  { name: "brown", light: "#AC7F5E", dark: "#B78A66" },
 ] as const;
 
 export type LocationColorName = (typeof LOCATION_COLORS)[number]["name"];
+
+export function getLocationColorHex(name: string, theme: "light" | "dark"): string {
+  const color = LOCATION_COLORS.find((c) => c.name === name);
+  if (!color) return theme === "dark" ? "#0091FF" : "#0088FF";
+  return theme === "dark" ? color.dark : color.light;
+}
 
 // Location API response types
 export interface CreateLocationResponse {

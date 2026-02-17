@@ -5,7 +5,8 @@ import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
 import { useDevices } from "@/contexts/DevicesContext";
 import { useLocations } from "@/contexts/LocationsContext";
-import { LOCATION_COLORS, type LocationColorName, type ResetSchedule } from "@/lib/types";
+import { LOCATION_COLORS, getLocationColorHex, type LocationColorName, type ResetSchedule } from "@/lib/types";
+import { useTheme } from "@/contexts/ThemeContext";
 import * as api from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -88,6 +89,7 @@ export default function LocationSettingsPage() {
     removeLocation,
     isLoading: locationsLoading,
   } = useLocations();
+  const { theme } = useTheme();
 
   const location = getLocation(locationId);
 
@@ -253,7 +255,7 @@ export default function LocationSettingsPage() {
   const colorValue =
     (location.isOnMap && location.serverColor)
       ? location.serverColor
-      : LOCATION_COLORS.find((c) => c.name === location.colorName)?.value ?? "#3b82f6";
+      : getLocationColorHex(location.colorName, theme);
 
   return (
     <div className="min-h-screen bg-background">
@@ -330,7 +332,7 @@ export default function LocationSettingsPage() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="flex gap-3">
+              <div className="flex flex-wrap gap-3">
                 {LOCATION_COLORS.map((color) => (
                   <button
                     key={color.name}
@@ -340,7 +342,7 @@ export default function LocationSettingsPage() {
                         ? "border-foreground scale-110"
                         : "border-transparent"
                     }`}
-                    style={{ backgroundColor: color.value }}
+                    style={{ backgroundColor: theme === "dark" ? color.dark : color.light }}
                     onClick={() =>
                       updateLocationColor(currentId, color.name as LocationColorName)
                     }

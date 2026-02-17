@@ -72,3 +72,14 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* Move Apple Maps attribution to bottom-right */
+.mk-map-view .mk-controls-container {
+  right: 8px !important;
+  left: auto !important;
+}
+.mk-map-view .mk-map-attribution {
+  right: 0 !important;
+  left: auto !important;
+  text-align: right !important;
+}
