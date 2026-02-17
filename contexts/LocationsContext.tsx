@@ -105,7 +105,7 @@ export function LocationsProvider({ children }: { children: React.ReactNode }) {
   const [serverDeviceCounts, setServerDeviceCounts] = useState<Record<string, number>>({});
   const [hasConnectionError, setHasConnectionError] = useState(false);
   const consecutiveFailuresRef = useRef(0);
-  const incompleteCheckDoneRef = useRef(false);
+  const lastIncompleteCheckRef = useRef(0);
 
   // Load locations from storage on mount
   useEffect(() => {
@@ -201,6 +201,48 @@ export function LocationsProvider({ children }: { children: React.ReactNode }) {
     return locationSuccess;
   }, [updateDeviceOnlineStatus]);
 
+  // Check for incomplete on-map locations (like iOS checkForIncompleteOnMapLocations)
+  // Uses getLocationsForDevice which returns the FULL device list from the server
+  // Throttled to run at most once every 30 seconds
+  const checkIncompleteLocations = useCallback(async () => {
+    const now = Date.now();
+    if (now - lastIncompleteCheckRef.current < 30000) return;
+    lastIncompleteCheckRef.current = now;
+
+    const currentDevices = devicesRef.current;
+    const currentLocs = storedLocationsRef.current;
+    if (currentDevices.length === 0 || currentLocs.length === 0) return;
+
+    const localDeviceIds = new Set(currentDevices.map((d) => d.deviceId));
+    const checkedServerLocs = new Set<string>();
+    const newCounts: Record<string, number> = {};
+
+    for (const device of currentDevices) {
+      try {
+        const serverLocations = await api.getLocationsForDevice(device.deviceId, device.password);
+        for (const serverLoc of serverLocations) {
+          if (!serverLoc.on_map || checkedServerLocs.has(serverLoc.location_id)) continue;
+          checkedServerLocs.add(serverLoc.location_id);
+
+          const serverDeviceIds = serverLoc.devices.map((d) => d.device_id);
+          const missingCount = serverDeviceIds.filter((id) => !localDeviceIds.has(id)).length;
+          if (missingCount > 0) {
+            const localLoc = currentLocs.find((l) =>
+              !l.isAuto && l.deviceIds.some((did) => serverDeviceIds.includes(did))
+            );
+            if (localLoc) {
+              newCounts[localLoc.localId] = serverDeviceIds.length;
+            }
+          }
+        }
+      } catch {
+        // Ignore failures for individual devices
+      }
+    }
+
+    setServerDeviceCounts(newCounts);
+  }, []);
+
   // Poll all non-auto locations
   const pollAllLocations = useCallback(async () => {
     const locs = storedLocationsRef.current.filter(
@@ -213,6 +255,8 @@ export function LocationsProvider({ children }: { children: React.ReactNode }) {
     if (anySucceeded) {
       consecutiveFailuresRef.current = 0;
       setHasConnectionError(false);
+      // Check for incomplete on-map locations (throttled internally)
+      checkIncompleteLocations();
     } else {
       consecutiveFailuresRef.current += 1;
       // Only show error after 2 consecutive failures (~5s) AND a healthcheck confirms server is down
@@ -221,7 +265,7 @@ export function LocationsProvider({ children }: { children: React.ReactNode }) {
         setHasConnectionError(!serverUp);
       }
     }
-  }, [fetchLocationData]);
+  }, [fetchLocationData, checkIncompleteLocations]);
 
   // Polling interval
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -255,62 +299,6 @@ export function LocationsProvider({ children }: { children: React.ReactNode }) {
     document.addEventListener("visibilitychange", handler);
     return () => document.removeEventListener("visibilitychange", handler);
   }, [pollAllLocations]);
-
-  // Check for incomplete on-map locations (like iOS checkForIncompleteOnMapLocations)
-  // Uses getLocationsForDevice which returns the FULL device list from the server
-  useEffect(() => {
-    if (isLoading) return;
-    const locs = storedLocationsRef.current.filter((l) => !l.isAuto && l.deviceIds.length > 0);
-    if (locs.length === 0) return;
-
-    let cancelled = false;
-
-    // Delay to let initial polling finish first
-    const timeout = setTimeout(async () => {
-      if (cancelled || incompleteCheckDoneRef.current) return;
-      incompleteCheckDoneRef.current = true;
-
-      const currentDevices = devicesRef.current;
-      const currentLocs = storedLocationsRef.current;
-      const localDeviceIds = new Set(currentDevices.map((d) => d.deviceId));
-      const checkedServerLocs = new Set<string>(); // deduplicate by server location ID
-      const newCounts: Record<string, number> = {};
-
-      for (const device of currentDevices) {
-        if (cancelled) return;
-        try {
-          const serverLocations = await api.getLocationsForDevice(device.deviceId, device.password);
-          for (const serverLoc of serverLocations) {
-            if (!serverLoc.on_map || checkedServerLocs.has(serverLoc.location_id)) continue;
-            checkedServerLocs.add(serverLoc.location_id);
-
-            const serverDeviceIds = serverLoc.devices.map((d) => d.device_id);
-            const missingCount = serverDeviceIds.filter((id) => !localDeviceIds.has(id)).length;
-            if (missingCount > 0) {
-              // Find the local location that contains any of these devices
-              const localLoc = currentLocs.find((l) =>
-                !l.isAuto && l.deviceIds.some((did) => serverDeviceIds.includes(did))
-              );
-              if (localLoc) {
-                newCounts[localLoc.localId] = serverDeviceIds.length;
-              }
-            }
-          }
-        } catch {
-          // Ignore failures for individual devices
-        }
-      }
-
-      if (!cancelled) {
-        setServerDeviceCounts(newCounts);
-      }
-    }, 3000);
-
-    return () => {
-      cancelled = true;
-      clearTimeout(timeout);
-    };
-  }, [isLoading]);
 
   // Exposed refresh functions
   const refreshAllLocations = useCallback(async () => {
