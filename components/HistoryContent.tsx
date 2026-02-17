@@ -178,7 +178,7 @@ export function HistoryContent({
                     <RefreshCw className="h-6 w-6 animate-spin text-muted-foreground" />
                   </div>
                 ) : (
-                  <HistoryChart data={dayData} />
+                  <HistoryChart data={dayData} dataType={dataType} />
                 )}
               </CardContent>
             </Card>
@@ -230,7 +230,7 @@ export function HistoryContent({
                     <RefreshCw className="h-6 w-6 animate-spin text-muted-foreground" />
                   </div>
                 ) : (
-                  <HistoryChart data={weekData} />
+                  <HistoryChart data={weekData} dataType={dataType} />
                 )}
               </CardContent>
             </Card>
@@ -279,7 +279,7 @@ export function HistoryContent({
                     <RefreshCw className="h-6 w-6 animate-spin text-muted-foreground" />
                   </div>
                 ) : (
-                  <HistoryChart data={yearData} />
+                  <HistoryChart data={yearData} dataType={dataType} />
                 )}
               </CardContent>
             </Card>

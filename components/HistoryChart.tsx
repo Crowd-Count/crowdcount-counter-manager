@@ -19,9 +19,10 @@ interface ChartData {
 
 interface HistoryChartProps {
   data: ChartData[];
+  dataType?: "population" | "entries";
 }
 
-export function HistoryChart({ data }: HistoryChartProps) {
+export function HistoryChart({ data, dataType }: HistoryChartProps) {
   if (data.length === 0) {
     return (
       <div className="flex items-center justify-center h-[300px] text-muted-foreground">
@@ -71,7 +72,7 @@ export function HistoryChart({ data }: HistoryChartProps) {
           )}
           <Bar
             dataKey="value"
-            name="Count"
+            name={dataType === "entries" ? "Entries" : "Count"}
             fill="#3b82f6"
             fillOpacity={0.9}
             radius={[4, 4, 0, 0]}
