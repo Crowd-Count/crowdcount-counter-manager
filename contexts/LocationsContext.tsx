@@ -259,14 +259,17 @@ export function LocationsProvider({ children }: { children: React.ReactNode }) {
   // Check for incomplete on-map locations (like iOS checkForIncompleteOnMapLocations)
   // Uses getLocationsForDevice which returns the FULL device list from the server
   useEffect(() => {
-    if (isLoading || incompleteCheckDoneRef.current) return;
+    if (isLoading) return;
     const locs = storedLocationsRef.current.filter((l) => !l.isAuto && l.deviceIds.length > 0);
     if (locs.length === 0) return;
 
-    incompleteCheckDoneRef.current = true;
+    let cancelled = false;
 
     // Delay to let initial polling finish first
     const timeout = setTimeout(async () => {
+      if (cancelled || incompleteCheckDoneRef.current) return;
+      incompleteCheckDoneRef.current = true;
+
       const currentDevices = devicesRef.current;
       const currentLocs = storedLocationsRef.current;
       const localDeviceIds = new Set(currentDevices.map((d) => d.deviceId));
@@ -274,6 +277,7 @@ export function LocationsProvider({ children }: { children: React.ReactNode }) {
       const newCounts: Record<string, number> = {};
 
       for (const device of currentDevices) {
+        if (cancelled) return;
         try {
           const serverLocations = await api.getLocationsForDevice(device.deviceId, device.password);
           for (const serverLoc of serverLocations) {
@@ -297,10 +301,15 @@ export function LocationsProvider({ children }: { children: React.ReactNode }) {
         }
       }
 
-      setServerDeviceCounts(newCounts);
+      if (!cancelled) {
+        setServerDeviceCounts(newCounts);
+      }
     }, 3000);
 
-    return () => clearTimeout(timeout);
+    return () => {
+      cancelled = true;
+      clearTimeout(timeout);
+    };
   }, [isLoading]);
 
   // Exposed refresh functions

@@ -297,7 +297,7 @@ export function LocationCard({ location }: LocationCardProps) {
             }}
           >
             <DialogTrigger asChild>
-              <button style={{ opacity: 0.5, transition: "opacity 200ms ease-in-out" }} onMouseEnter={(e) => { e.currentTarget.style.opacity = "1"; }} onMouseLeave={(e) => { e.currentTarget.style.opacity = "0.5"; }} className={`flex items-center gap-2 px-3 py-2 rounded-md w-full text-sm text-foreground bg-muted`}>
+              <button className="flex items-center gap-2 px-3 py-2 rounded-md w-full text-sm text-foreground bg-muted opacity-50 hover:opacity-100 transition-opacity duration-200 ease-in-out">
                 <Plus className="h-3.5 w-3.5" />
                 Add Counter
               </button>
