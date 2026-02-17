@@ -356,7 +356,7 @@ export function LocationCard({ location }: LocationCardProps) {
       {showMapBackground ? (
         <>
           <MapBackground latitude={location.latitude!} longitude={location.longitude!} />
-          <div className="absolute inset-0 z-[1] bg-card/5 dark:bg-card/70" />
+          <div className="absolute inset-0 z-[1] bg-card/5 dark:bg-card/55" />
           <div className="relative z-[2]">{cardContent}</div>
         </>
       ) : (
