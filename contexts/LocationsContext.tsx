@@ -86,6 +86,13 @@ function saveLocationsToStorage(locations: StoredLocation[]): void {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(locations));
 }
 
+// Extract device IDs from server response — handles both tuple format ["id", "label"]
+// and object format {device_id: "id", ...}
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function extractDeviceIds(devices: any[]): string[] {
+  return devices.map((d) => (Array.isArray(d) ? d[0] : d.device_id));
+}
+
 function setsEqual<T>(a: Set<T>, b: Set<T>): boolean {
   return a.size === b.size && [...a].every((x) => b.has(x));
 }
@@ -211,48 +218,35 @@ export function LocationsProvider({ children }: { children: React.ReactNode }) {
 
     const currentDevices = devicesRef.current;
     const currentLocs = storedLocationsRef.current;
-    if (currentDevices.length === 0 || currentLocs.length === 0) {
-      console.log("[IncompleteCheck] Skipped: no devices or locations");
-      return;
-    }
+    if (currentDevices.length === 0 || currentLocs.length === 0) return;
 
     const localDeviceIds = new Set(currentDevices.map((d) => d.deviceId));
-    console.log("[IncompleteCheck] Starting check with", currentDevices.length, "devices:", [...localDeviceIds]);
     const checkedServerLocs = new Set<string>();
     const newCounts: Record<string, number> = {};
 
     for (const device of currentDevices) {
       try {
         const serverLocations = await api.getLocationsForDevice(device.deviceId, device.password);
-        console.log(`[IncompleteCheck] Device ${device.deviceId} → ${serverLocations.length} server locations`);
         for (const serverLoc of serverLocations) {
-          console.log(`[IncompleteCheck]   RAW keys:`, Object.keys(serverLoc), `devices[0]:`, JSON.stringify(serverLoc.devices?.[0]));
-          const serverDeviceIds = serverLoc.devices.map((d: Record<string, unknown>) =>
-            typeof d === "string" ? d : (d.device_id ?? d.deviceId ?? d.id)
-          ) as string[];
-          console.log(`[IncompleteCheck]   Location '${serverLoc.location_name}' (id=${serverLoc.location_id}, on_map=${serverLoc.on_map}, devices=${serverDeviceIds.join(",")})`);
-
           if (!serverLoc.on_map || checkedServerLocs.has(serverLoc.location_id)) continue;
           checkedServerLocs.add(serverLoc.location_id);
 
-          const missingIds = serverDeviceIds.filter((id) => !localDeviceIds.has(id));
-          console.log(`[IncompleteCheck]   Missing devices: [${missingIds.join(",")}]`);
-          if (missingIds.length > 0) {
+          const serverDeviceIds = extractDeviceIds(serverLoc.devices);
+          const missingCount = serverDeviceIds.filter((id) => !localDeviceIds.has(id)).length;
+          if (missingCount > 0) {
             const localLoc = currentLocs.find((l) =>
               !l.isAuto && l.deviceIds.some((did) => serverDeviceIds.includes(did))
             );
-            console.log(`[IncompleteCheck]   Matched local location: ${localLoc?.name ?? "NONE"} (localId=${localLoc?.localId ?? "N/A"})`);
             if (localLoc) {
               newCounts[localLoc.localId] = serverDeviceIds.length;
             }
           }
         }
-      } catch (err) {
-        console.error(`[IncompleteCheck] Failed for device ${device.deviceId}:`, err);
+      } catch {
+        // Ignore failures for individual devices
       }
     }
 
-    console.log("[IncompleteCheck] Final newCounts:", newCounts);
     setServerDeviceCounts(newCounts);
   }, []);
 
@@ -529,7 +523,7 @@ export function LocationsProvider({ children }: { children: React.ReactNode }) {
         const serverLocations = await api.getLocationsForDevice(newDeviceId, password);
         const combinedSet = new Set(combinedDeviceIds);
         const sharedLoc = serverLocations.find((sl) => {
-          const serverSet = new Set(sl.devices.map((d) => d.device_id));
+          const serverSet = new Set(extractDeviceIds(sl.devices));
           return sl.on_map
             ? setsEqual(serverSet, combinedSet)
             : isSuperset(serverSet, combinedSet);
@@ -627,7 +621,7 @@ export function LocationsProvider({ children }: { children: React.ReactNode }) {
       const serverLocations = await api.getLocationsForDevice(creds[0].device_id, creds[0].password);
       const remainingSet = new Set(remainingDeviceIds);
       const sharedLoc = serverLocations.find((sl) => {
-        const serverSet = new Set(sl.devices.map((d) => d.device_id));
+        const serverSet = new Set(extractDeviceIds(sl.devices));
         return sl.on_map
           ? setsEqual(serverSet, remainingSet)
           : isSuperset(serverSet, remainingSet);
@@ -749,12 +743,12 @@ export function LocationsProvider({ children }: { children: React.ReactNode }) {
       try {
         const serverLocations = await api.getLocationsForDevice(serverDeviceId, password);
         const serverAutoLoc = serverLocations.find(
-          (sl) => sl.is_auto && sl.devices.some((d) => d.device_id === serverDeviceId)
+          (sl) => sl.is_auto && extractDeviceIds(sl.devices).includes(serverDeviceId)
         );
 
         if (serverAutoLoc) {
           const serverLocId = serverAutoLoc.location_id;
-          const serverDeviceIds = serverAutoLoc.devices.map((d) => d.device_id);
+          const serverDeviceIds = extractDeviceIds(serverAutoLoc.devices);
           setStoredLocations((prev) => {
             const existingIdx = prev.findIndex((l) => l.id === serverLocId);
             if (existingIdx >= 0) {
