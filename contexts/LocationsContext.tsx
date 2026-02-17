@@ -522,15 +522,12 @@ export function LocationsProvider({ children }: { children: React.ReactNode }) {
         // 5. iOS-style lookup: find existing location with matching device set
         const serverLocations = await api.getLocationsForDevice(newDeviceId, password);
         const combinedSet = new Set(combinedDeviceIds);
-        console.log("[AddCounter] combinedSet:", [...combinedSet]);
         const sharedLoc = serverLocations.find((sl) => {
           const serverSet = new Set(extractDeviceIds(sl.devices));
-          console.log("[AddCounter] Checking location", sl.location_name, "on_map=", sl.on_map, "serverSet:", [...serverSet], "match:", sl.on_map ? setsEqual(serverSet, combinedSet) : isSuperset(serverSet, combinedSet));
           return sl.on_map
             ? setsEqual(serverSet, combinedSet)
             : isSuperset(serverSet, combinedSet);
         });
-        console.log("[AddCounter] sharedLoc:", sharedLoc?.location_name ?? "NONE");
 
         let newServerId: string;
         let serverName = loc.name;
