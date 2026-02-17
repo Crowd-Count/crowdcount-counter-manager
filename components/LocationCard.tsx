@@ -178,6 +178,8 @@ export function LocationCard({ location }: LocationCardProps) {
                 <span className="text-xs">
                   {memberDevices.length === 0 ? (
                     <WifiOff className="h-3 w-3 text-muted-foreground inline" />
+                  ) : memberDevices.every((d) => d.lastUpdated === null) ? (
+                    <Wifi className="h-3 w-3 text-gray-400 inline" />
                   ) : location.allDevicesOnline ? (
                     <Wifi className="h-3 w-3 text-green-500 inline" />
                   ) : location.someDevicesOnline ? (
@@ -280,7 +282,7 @@ export function LocationCard({ location }: LocationCardProps) {
             }}
           >
             <DialogTrigger asChild>
-              <button className={`flex items-center gap-2 px-3 py-2 rounded-md transition-opacity duration-200 ease-in-out w-full text-sm text-muted-foreground opacity-60 hover:opacity-100 ${showMapBackground ? "bg-muted/50" : "bg-muted/30"}`}>
+              <button className={`flex items-center gap-2 px-3 py-2 rounded-md transition-all duration-200 ease-in-out w-full text-sm text-muted-foreground/50 hover:text-muted-foreground ${showMapBackground ? "bg-muted/30 hover:bg-muted/50" : "bg-muted/20 hover:bg-muted/40"}`}>
                 <Plus className="h-3.5 w-3.5" />
                 Add Counter
               </button>
@@ -333,7 +335,7 @@ export function LocationCard({ location }: LocationCardProps) {
   );
 
   return (
-    <Card className={`mb-6 ${showMapBackground ? "relative overflow-hidden" : ""} ${location.isOverLimit ? "border-destructive" : ""}`}>
+    <Card className={`mb-6 rounded-2xl ${showMapBackground ? "relative overflow-hidden" : ""} ${location.isOverLimit ? "border-destructive" : ""}`}>
       {showMapBackground ? (
         <>
           <MapBackground latitude={location.latitude!} longitude={location.longitude!} />

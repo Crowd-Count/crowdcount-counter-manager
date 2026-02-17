@@ -158,7 +158,9 @@ export function DevicesProvider({ children }: { children: React.ReactNode }) {
   const updateDeviceOnlineStatus = useCallback((id: string, isOnline: boolean) => {
     setDevices((prev) => {
       const device = prev.find((d) => d.id === id);
-      if (!device || device.isOnline === isOnline) return prev; // no change → skip re-render
+      if (!device) return prev;
+      // Skip re-render only if value unchanged AND we've already polled at least once
+      if (device.isOnline === isOnline && device.lastUpdated !== null) return prev;
       return prev.map((d) =>
         d.id === id ? { ...d, isOnline, lastUpdated: new Date() } : d
       );
