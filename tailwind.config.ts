@@ -44,6 +44,9 @@ const config: Config = {
           foreground: "hsl(var(--popover-foreground))",
         },
       },
+      fontFamily: {
+        sans: ['"SF Pro Display"', 'sans-serif'],
+      },
       borderRadius: {
         lg: "var(--radius)",
         md: "calc(var(--radius) - 2px)",

@@ -17,7 +17,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className="dark" suppressHydrationWarning>
-      <body className="min-h-screen flex flex-col" style={{ fontFamily: '"SF Pro Display", sans-serif' }}>
+      <body className="min-h-screen flex flex-col font-sans">
         <ThemeProvider>
           <DevicesProvider>
             <LocationsProvider>
