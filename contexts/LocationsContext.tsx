@@ -226,7 +226,10 @@ export function LocationsProvider({ children }: { children: React.ReactNode }) {
         const serverLocations = await api.getLocationsForDevice(device.deviceId, device.password);
         console.log(`[IncompleteCheck] Device ${device.deviceId} → ${serverLocations.length} server locations`);
         for (const serverLoc of serverLocations) {
-          const serverDeviceIds = serverLoc.devices.map((d) => d.device_id);
+          console.log(`[IncompleteCheck]   RAW keys:`, Object.keys(serverLoc), `devices[0]:`, JSON.stringify(serverLoc.devices?.[0]));
+          const serverDeviceIds = serverLoc.devices.map((d: Record<string, unknown>) =>
+            typeof d === "string" ? d : (d.device_id ?? d.deviceId ?? d.id)
+          ) as string[];
           console.log(`[IncompleteCheck]   Location '${serverLoc.location_name}' (id=${serverLoc.location_id}, on_map=${serverLoc.on_map}, devices=${serverDeviceIds.join(",")})`);
 
           if (!serverLoc.on_map || checkedServerLocs.has(serverLoc.location_id)) continue;
