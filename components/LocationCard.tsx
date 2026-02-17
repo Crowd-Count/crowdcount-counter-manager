@@ -60,6 +60,9 @@ function CompactDeviceRow({ device, hasMap }: { device: DeviceState; hasMap?: bo
       {/* Name */}
       <span className="text-sm font-medium truncate flex-1 min-w-0">
         {device.name || device.deviceId}
+        {device.lastUpdated !== null && !device.isOnline && (
+          <span className="text-destructive"> - offline</span>
+        )}
       </span>
 
       {/* Settings gear */}
