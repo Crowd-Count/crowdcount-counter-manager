@@ -211,35 +211,45 @@ export function LocationsProvider({ children }: { children: React.ReactNode }) {
 
     const currentDevices = devicesRef.current;
     const currentLocs = storedLocationsRef.current;
-    if (currentDevices.length === 0 || currentLocs.length === 0) return;
+    if (currentDevices.length === 0 || currentLocs.length === 0) {
+      console.log("[IncompleteCheck] Skipped: no devices or locations");
+      return;
+    }
 
     const localDeviceIds = new Set(currentDevices.map((d) => d.deviceId));
+    console.log("[IncompleteCheck] Starting check with", currentDevices.length, "devices:", [...localDeviceIds]);
     const checkedServerLocs = new Set<string>();
     const newCounts: Record<string, number> = {};
 
     for (const device of currentDevices) {
       try {
         const serverLocations = await api.getLocationsForDevice(device.deviceId, device.password);
+        console.log(`[IncompleteCheck] Device ${device.deviceId} → ${serverLocations.length} server locations`);
         for (const serverLoc of serverLocations) {
+          const serverDeviceIds = serverLoc.devices.map((d) => d.device_id);
+          console.log(`[IncompleteCheck]   Location '${serverLoc.location_name}' (id=${serverLoc.location_id}, on_map=${serverLoc.on_map}, devices=${serverDeviceIds.join(",")})`);
+
           if (!serverLoc.on_map || checkedServerLocs.has(serverLoc.location_id)) continue;
           checkedServerLocs.add(serverLoc.location_id);
 
-          const serverDeviceIds = serverLoc.devices.map((d) => d.device_id);
-          const missingCount = serverDeviceIds.filter((id) => !localDeviceIds.has(id)).length;
-          if (missingCount > 0) {
+          const missingIds = serverDeviceIds.filter((id) => !localDeviceIds.has(id));
+          console.log(`[IncompleteCheck]   Missing devices: [${missingIds.join(",")}]`);
+          if (missingIds.length > 0) {
             const localLoc = currentLocs.find((l) =>
               !l.isAuto && l.deviceIds.some((did) => serverDeviceIds.includes(did))
             );
+            console.log(`[IncompleteCheck]   Matched local location: ${localLoc?.name ?? "NONE"} (localId=${localLoc?.localId ?? "N/A"})`);
             if (localLoc) {
               newCounts[localLoc.localId] = serverDeviceIds.length;
             }
           }
         }
-      } catch {
-        // Ignore failures for individual devices
+      } catch (err) {
+        console.error(`[IncompleteCheck] Failed for device ${device.deviceId}:`, err);
       }
     }
 
+    console.log("[IncompleteCheck] Final newCounts:", newCounts);
     setServerDeviceCounts(newCounts);
   }, []);
 
