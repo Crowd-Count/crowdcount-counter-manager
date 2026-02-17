@@ -107,10 +107,22 @@ export function DataCacheProvider({ children }: { children: React.ReactNode }) {
     force: boolean
   ) => {
     try {
-      // Fetch dates + insights (both location-level) in parallel
-      const [dates, insights] = await Promise.all([
-        fetchLocationAvailableDates(locationParams, force).catch(() => [] as string[]),
-        fetchLocationInsights(locationParams, force).catch(() => null),
+      // Fetch dates, insights, and default history all in parallel
+      const datesPromise = fetchLocationAvailableDates(locationParams, force).catch(() => [] as string[]);
+      const insightsPromise = fetchLocationInsights(locationParams, force).catch(() => null);
+
+      // Start history fetch immediately (uses "today" as default date)
+      // We don't wait for dates to finish — use current local date as best guess
+      const now = new Date();
+      const todayLocal = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+      const currentYear = String(now.getFullYear());
+
+      const historyPromise = fetchLocationHistoryCharts(
+        locationParams, todayLocal, todayLocal, currentYear, "population", force
+      ).catch(() => null);
+
+      const [dates, insights, popHistory] = await Promise.all([
+        datesPromise, insightsPromise, historyPromise,
       ]);
 
       if (dates.length > 0) {
@@ -119,20 +131,9 @@ export function DataCacheProvider({ children }: { children: React.ReactNode }) {
       if (insights) {
         insightsCache.current.set(credKey, insights);
       }
-
-      // Prefetch default history (population only — entries fetched on demand)
-      if (dates.length > 0) {
-        const mostRecent = dates[dates.length - 1];
-        const year = mostRecent.split("-")[0];
-
-        const popHistory = await fetchLocationHistoryCharts(
-          locationParams, mostRecent, mostRecent, year, "population", force
-        ).catch(() => null);
-
-        if (popHistory) {
-          const histKey = `${credKey}:${mostRecent}:${mostRecent}:${year}:population`;
-          historyCache.current.set(histKey, popHistory);
-        }
+      if (popHistory) {
+        const histKey = `${credKey}:${todayLocal}:${todayLocal}:${currentYear}:population`;
+        historyCache.current.set(histKey, popHistory);
       }
     } catch (error) {
       console.error(`Failed to prefetch data for ${credKey}:`, error);

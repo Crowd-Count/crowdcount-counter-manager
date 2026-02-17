@@ -927,6 +927,7 @@ export async function getLocationInsightsBundle(
     date,
     week_date: weekDate,
     year,
+    tz_offset_minutes: new Date().getTimezoneOffset() * -1,
   };
   if (date2) body.date2 = date2;
   return apiRequest<InsightsBundleResponse>("/get_location_insights_bundle", {
@@ -953,6 +954,7 @@ export async function getLocationHistoryBundle(
     week_date: weekDate,
     year,
     data_type: dataType,
+    tz_offset_minutes: new Date().getTimezoneOffset() * -1,
   };
   if (date2) body.date2 = date2;
   return apiRequest<HistoryBundleResponse>("/get_location_history_bundle", {
