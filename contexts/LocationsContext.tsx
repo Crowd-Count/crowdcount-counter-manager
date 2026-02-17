@@ -101,6 +101,8 @@ export function LocationsProvider({ children }: { children: React.ReactNode }) {
 
   // Location counts from server polling: locationServerId → current_count
   const [locationCounts, setLocationCounts] = useState<Record<string, number>>({});
+  // Server device counts: locationServerId → number of devices the server knows about
+  const [serverDeviceCounts, setServerDeviceCounts] = useState<Record<string, number>>({});
   const [hasConnectionError, setHasConnectionError] = useState(false);
   const consecutiveFailuresRef = useRef(0);
 
@@ -154,6 +156,12 @@ export function LocationsProvider({ children }: { children: React.ReactNode }) {
         setLocationCounts((prev) => {
           if (prev[loc.id] === serverLoc.current_count) return prev;
           return { ...prev, [loc.id]: serverLoc.current_count };
+        });
+        // Track how many devices the server knows about
+        setServerDeviceCounts((prev) => {
+          const count = serverLoc.devices?.length ?? 0;
+          if (prev[loc.id] === count) return prev;
+          return { ...prev, [loc.id]: count };
         });
         // Sync metadata from server (server is authoritative for name, overcrowding, on_map, color)
         // NOTE: deviceIds are NOT synced from polling — they're managed by addCounterToLocation/removeDeviceFromLocation
@@ -281,16 +289,18 @@ export function LocationsProvider({ children }: { children: React.ReactNode }) {
         totalCount > loc.overcrowdingLimit;
       const allDevicesOnline = memberDevices.every((d) => d.isOnline);
       const someDevicesOnline = memberDevices.some((d) => d.isOnline);
+      const serverDeviceCount = loc.id in serverDeviceCounts ? serverDeviceCounts[loc.id] : null;
       result.push({
         ...loc,
         totalCount,
         isOverLimit,
         allDevicesOnline,
         someDevicesOnline,
+        serverDeviceCount,
       });
     }
     return result;
-  }, [storedLocations, devices, locationCounts]);
+  }, [storedLocations, devices, locationCounts, serverDeviceCounts]);
 
   const addLocation = useCallback(
     async (name: string, colorName: LocationColorName, serverDeviceIds: string[] = [], passwordOverride?: string): Promise<string | null> => {

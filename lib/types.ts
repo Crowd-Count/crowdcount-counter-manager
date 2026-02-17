@@ -96,6 +96,7 @@ export interface LocationState extends StoredLocation {
   isOverLimit: boolean;
   allDevicesOnline: boolean;
   someDevicesOnline: boolean;
+  serverDeviceCount: number | null; // total devices server knows about (null = not yet fetched)
 }
 
 // API response for location endpoints

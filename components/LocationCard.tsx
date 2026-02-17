@@ -245,13 +245,13 @@ export function LocationCard({ location }: LocationCardProps) {
             </p>
           )}
           <div className="flex gap-2 mt-3 justify-center">
-            <Button variant="outline" size="sm" asChild>
+            <Button variant="outline" asChild>
               <Link href={`/location/${location.id}/history`}>
                 <BarChart3 className="h-4 w-4 mr-1" />
                 View History
               </Link>
             </Button>
-            <Button variant="outline" size="sm" asChild>
+            <Button variant="outline" asChild>
               <Link href={`/location/${location.id}/insights`}>
                 <Lightbulb className="h-4 w-4 mr-1" />
                 View Insights
@@ -269,6 +269,22 @@ export function LocationCard({ location }: LocationCardProps) {
             <CompactDeviceRow key={device.id} device={device} hasMap={showMapBackground} />
           ))}
 
+          {/* Incomplete on-map location warning */}
+          {location.isOnMap &&
+            location.serverDeviceCount !== null &&
+            location.serverDeviceCount > location.deviceIds.length && (() => {
+              const missing = location.serverDeviceCount - location.deviceIds.length;
+              return (
+                <div className="flex items-start gap-2 px-3 py-2.5 rounded-lg bg-orange-500/10 border border-orange-500/20">
+                  <AlertTriangle className="h-3.5 w-3.5 text-orange-500 shrink-0 mt-0.5" />
+                  <p className="text-xs text-foreground">
+                    This location has <span className="font-semibold">{location.serverDeviceCount}</span> counter{location.serverDeviceCount !== 1 ? "s" : ""} on the map. Add the remaining{" "}
+                    <span className="font-semibold">{missing}</span> counter{missing !== 1 ? "s" : ""} for complete data.
+                  </p>
+                </div>
+              );
+            })()}
+
           {/* Add counter to location */}
           <Dialog
             open={isAddOpen}
@@ -282,7 +298,7 @@ export function LocationCard({ location }: LocationCardProps) {
             }}
           >
             <DialogTrigger asChild>
-              <button className={`flex items-center gap-2 px-3 py-2 rounded-md transition-all duration-200 ease-in-out w-full text-sm text-muted-foreground/50 hover:text-muted-foreground ${showMapBackground ? "bg-muted/30 hover:bg-muted/50" : "bg-muted/20 hover:bg-muted/40"}`}>
+              <button style={{ opacity: 0.35, transition: "opacity 200ms ease-in-out" }} onMouseEnter={(e) => { e.currentTarget.style.opacity = "1"; }} onMouseLeave={(e) => { e.currentTarget.style.opacity = "0.35"; }} className={`flex items-center gap-2 px-3 py-2 rounded-md w-full text-sm text-muted-foreground ${showMapBackground ? "bg-muted/30" : "bg-muted/20"}`}>
                 <Plus className="h-3.5 w-3.5" />
                 Add Counter
               </button>
@@ -335,11 +351,11 @@ export function LocationCard({ location }: LocationCardProps) {
   );
 
   return (
-    <Card className={`mb-6 rounded-2xl ${showMapBackground ? "relative overflow-hidden" : ""} ${location.isOverLimit ? "border-destructive" : ""}`}>
+    <Card className={`mb-6 rounded-3xl ${showMapBackground ? "relative overflow-hidden" : ""} ${location.isOverLimit ? "border-destructive" : ""}`}>
       {showMapBackground ? (
         <>
           <MapBackground latitude={location.latitude!} longitude={location.longitude!} />
-          <div className="absolute inset-0 z-[1] bg-card/20 dark:bg-card/70" />
+          <div className="absolute inset-0 z-[1] bg-card/5 dark:bg-card/70" />
           <div className="relative z-[2]">{cardContent}</div>
         </>
       ) : (

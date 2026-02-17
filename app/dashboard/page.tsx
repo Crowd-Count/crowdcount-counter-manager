@@ -378,7 +378,7 @@ export default function DashboardPage() {
         </p>
 
         {hasConnectionError && (
-          <div className="bg-destructive/10 border border-destructive/30 rounded-lg px-4 py-4 mb-4 text-center space-y-1">
+          <div className="bg-destructive/10 border border-destructive/30 rounded-2xl px-4 py-4 mb-4 text-center space-y-1">
             <div className="flex items-center justify-center gap-2">
               <WifiOff className="h-4 w-4 text-destructive" />
               <span className="text-sm font-medium">We&apos;re having trouble connecting you.</span>
@@ -396,7 +396,7 @@ export default function DashboardPage() {
           </div>
         )}
 
-        <div className="bg-muted/60 border border-border rounded-lg px-4 py-3 mb-4 text-center text-sm">
+        <div className="bg-muted/60 border border-border rounded-2xl px-4 py-3 mb-4 text-center text-sm">
           <span className="font-medium">Counter offline?</span>{" "}
           <span className="text-muted-foreground">Try unplugging it from power and plugging it back in.</span>
         </div>
