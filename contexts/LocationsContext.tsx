@@ -101,10 +101,11 @@ export function LocationsProvider({ children }: { children: React.ReactNode }) {
 
   // Location counts from server polling: locationServerId → current_count
   const [locationCounts, setLocationCounts] = useState<Record<string, number>>({});
-  // Server device counts: locationServerId → number of devices the server knows about
+  // Incomplete on-map location warnings: local localId → total device count the server expects
   const [serverDeviceCounts, setServerDeviceCounts] = useState<Record<string, number>>({});
   const [hasConnectionError, setHasConnectionError] = useState(false);
   const consecutiveFailuresRef = useRef(0);
+  const incompleteCheckDoneRef = useRef(false);
 
   // Load locations from storage on mount
   useEffect(() => {
@@ -156,12 +157,6 @@ export function LocationsProvider({ children }: { children: React.ReactNode }) {
         setLocationCounts((prev) => {
           if (prev[loc.id] === serverLoc.current_count) return prev;
           return { ...prev, [loc.id]: serverLoc.current_count };
-        });
-        // Track how many devices the server knows about
-        setServerDeviceCounts((prev) => {
-          const count = serverLoc.devices?.length ?? 0;
-          if (prev[loc.id] === count) return prev;
-          return { ...prev, [loc.id]: count };
         });
         // Sync metadata from server (server is authoritative for name, overcrowding, on_map, color)
         // NOTE: deviceIds are NOT synced from polling — they're managed by addCounterToLocation/removeDeviceFromLocation
@@ -261,6 +256,53 @@ export function LocationsProvider({ children }: { children: React.ReactNode }) {
     return () => document.removeEventListener("visibilitychange", handler);
   }, [pollAllLocations]);
 
+  // Check for incomplete on-map locations (like iOS checkForIncompleteOnMapLocations)
+  // Uses getLocationsForDevice which returns the FULL device list from the server
+  useEffect(() => {
+    if (isLoading || incompleteCheckDoneRef.current) return;
+    const locs = storedLocationsRef.current.filter((l) => !l.isAuto && l.deviceIds.length > 0);
+    if (locs.length === 0) return;
+
+    incompleteCheckDoneRef.current = true;
+
+    // Delay to let initial polling finish first
+    const timeout = setTimeout(async () => {
+      const currentDevices = devicesRef.current;
+      const currentLocs = storedLocationsRef.current;
+      const localDeviceIds = new Set(currentDevices.map((d) => d.deviceId));
+      const checkedServerLocs = new Set<string>(); // deduplicate by server location ID
+      const newCounts: Record<string, number> = {};
+
+      for (const device of currentDevices) {
+        try {
+          const serverLocations = await api.getLocationsForDevice(device.deviceId, device.password);
+          for (const serverLoc of serverLocations) {
+            if (!serverLoc.on_map || checkedServerLocs.has(serverLoc.location_id)) continue;
+            checkedServerLocs.add(serverLoc.location_id);
+
+            const serverDeviceIds = serverLoc.devices.map((d) => d.device_id);
+            const missingCount = serverDeviceIds.filter((id) => !localDeviceIds.has(id)).length;
+            if (missingCount > 0) {
+              // Find the local location that contains any of these devices
+              const localLoc = currentLocs.find((l) =>
+                !l.isAuto && l.deviceIds.some((did) => serverDeviceIds.includes(did))
+              );
+              if (localLoc) {
+                newCounts[localLoc.localId] = serverDeviceIds.length;
+              }
+            }
+          }
+        } catch {
+          // Ignore failures for individual devices
+        }
+      }
+
+      setServerDeviceCounts(newCounts);
+    }, 3000);
+
+    return () => clearTimeout(timeout);
+  }, [isLoading]);
+
   // Exposed refresh functions
   const refreshAllLocations = useCallback(async () => {
     await pollAllLocations();
@@ -289,7 +331,7 @@ export function LocationsProvider({ children }: { children: React.ReactNode }) {
         totalCount > loc.overcrowdingLimit;
       const allDevicesOnline = memberDevices.every((d) => d.isOnline);
       const someDevicesOnline = memberDevices.some((d) => d.isOnline);
-      const serverDeviceCount = loc.id in serverDeviceCounts ? serverDeviceCounts[loc.id] : null;
+      const serverDeviceCount = loc.localId in serverDeviceCounts ? serverDeviceCounts[loc.localId] : null;
       result.push({
         ...loc,
         totalCount,

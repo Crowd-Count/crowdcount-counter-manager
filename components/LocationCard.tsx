@@ -270,8 +270,7 @@ export function LocationCard({ location }: LocationCardProps) {
           ))}
 
           {/* Incomplete on-map location warning */}
-          {location.isOnMap &&
-            location.serverDeviceCount != null &&
+          {location.serverDeviceCount != null &&
             location.serverDeviceCount > location.deviceIds.length ? (() => {
               const missing = location.serverDeviceCount - location.deviceIds.length;
               return (
