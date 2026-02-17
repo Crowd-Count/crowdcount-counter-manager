@@ -274,9 +274,9 @@ export function LocationCard({ location }: LocationCardProps) {
             location.serverDeviceCount > location.deviceIds.length ? (() => {
               const missing = location.serverDeviceCount - location.deviceIds.length;
               return (
-                <div className="flex items-start gap-2 px-3 py-2.5 rounded-lg bg-orange-500/10 border border-orange-500/20">
-                  <AlertTriangle className="h-3.5 w-3.5 text-orange-500 shrink-0 mt-0.5" />
-                  <p className="text-xs text-foreground">
+                <div className="flex items-start gap-2 px-3 py-2 rounded-lg bg-orange-500/10 border border-orange-500/20">
+                  <AlertTriangle className="h-4 w-4 text-orange-500 shrink-0 mt-0.5" />
+                  <p className="text-sm text-foreground">
                     This location has <span className="font-semibold">{location.serverDeviceCount}</span> counter{location.serverDeviceCount !== 1 ? "s" : ""} on the map. Add the remaining{" "}
                     <span className="font-semibold">{missing}</span> counter{missing !== 1 ? "s" : ""} for complete data.
                   </p>
