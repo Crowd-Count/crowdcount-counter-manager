@@ -293,7 +293,9 @@ export default function LocationSettingsPage() {
           <CardHeader>
             <CardTitle>Location Name</CardTitle>
             <CardDescription>
-              A friendly name for this group of counters
+              {location.isOnMap
+                ? "Name is synced from the public map. Email info@crowdcount.tech to request changes."
+                : "A friendly name for this group of counters"}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -302,14 +304,18 @@ export default function LocationSettingsPage() {
                 value={editName}
                 onChange={(e) => setEditName(e.target.value)}
                 placeholder="Location name"
+                disabled={!!location.isOnMap}
+                className={location.isOnMap ? "opacity-50" : ""}
               />
-              <Button
-                onClick={handleSaveName}
-                disabled={!editName.trim() || editName.trim() === location.name}
-              >
-                <Save className="h-4 w-4 mr-1" />
-                Save
-              </Button>
+              {!location.isOnMap && (
+                <Button
+                  onClick={handleSaveName}
+                  disabled={!editName.trim() || editName.trim() === location.name}
+                >
+                  <Save className="h-4 w-4 mr-1" />
+                  Save
+                </Button>
+              )}
             </div>
           </CardContent>
         </Card>

@@ -42,9 +42,9 @@ interface LocationCardProps {
   location: LocationState;
 }
 
-function CompactDeviceRow({ device }: { device: DeviceState }) {
+function CompactDeviceRow({ device, hasMap }: { device: DeviceState; hasMap?: boolean }) {
   return (
-    <div className="flex items-center gap-2 px-3 py-2 rounded-md bg-muted/50">
+    <div className={`flex items-center gap-2 px-3 py-2 rounded-md ${hasMap ? "bg-muted" : "bg-muted/50"}`}>
       {/* Status dot */}
       <div
         className={`h-2 w-2 rounded-full shrink-0 ${
@@ -150,16 +150,12 @@ export function LocationCard({ location }: LocationCardProps) {
     location.latitude != null &&
     location.longitude != null;
 
-  if (location.isOnMap) {
-    console.log(`[LocationCard] ${location.name}: isOnMap=${location.isOnMap}, lat=${location.latitude}, lng=${location.longitude}, showMap=${showMapBackground}`);
-  }
-
   return (
     <Card className={`mb-6 relative overflow-hidden ${location.isOverLimit ? "border-destructive" : ""}`}>
       {showMapBackground && (
         <>
           <MapBackground latitude={location.latitude!} longitude={location.longitude!} />
-          <div className="absolute inset-0 z-[1] bg-card/80 dark:bg-card/85" />
+          <div className="absolute inset-0 z-[1] bg-card/60 dark:bg-card/80" />
         </>
       )}
       <div className="relative z-[2]">
@@ -271,7 +267,7 @@ export function LocationCard({ location }: LocationCardProps) {
             Counters
           </p>
           {memberDevices.map((device) => (
-            <CompactDeviceRow key={device.id} device={device} />
+            <CompactDeviceRow key={device.id} device={device} hasMap={showMapBackground} />
           ))}
 
           {/* Add counter to location */}
@@ -287,7 +283,7 @@ export function LocationCard({ location }: LocationCardProps) {
             }}
           >
             <DialogTrigger asChild>
-              <button className="flex items-center gap-2 px-3 py-2 rounded-md bg-muted/30 hover:bg-muted/60 transition-colors w-full text-sm text-muted-foreground">
+              <button className={`flex items-center gap-2 px-3 py-2 rounded-md transition-colors w-full text-sm text-muted-foreground ${showMapBackground ? "bg-muted hover:bg-muted/80" : "bg-muted/30 hover:bg-muted/60"}`}>
                 <Plus className="h-3.5 w-3.5" />
                 Add Counter
               </button>
