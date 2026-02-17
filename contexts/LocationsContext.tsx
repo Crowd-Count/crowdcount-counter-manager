@@ -12,6 +12,7 @@ import React, {
 import type { StoredLocation, LocationState, LocationColorName } from "@/lib/types";
 import { useDevices } from "@/contexts/DevicesContext";
 import * as api from "@/lib/api";
+import { encrypt } from "@/lib/secureStorage";
 
 interface LocationsContextType {
   locations: LocationState[];
@@ -360,9 +361,14 @@ export function LocationsProvider({ children }: { children: React.ReactNode }) {
       if (remainingDevices.length === 0) {
         localStorage.removeItem("crowdcount_devices");
       } else {
-        localStorage.setItem("crowdcount_devices", JSON.stringify(
+        // Encrypt before writing — fire-and-forget (React state update also triggers a save)
+        const devicesJson = JSON.stringify(
           remainingDevices.map((d) => ({ id: d.id, deviceId: d.deviceId, password: d.password, name: d.name }))
-        ));
+        );
+        encrypt(devicesJson).then(
+          (enc) => localStorage.setItem("crowdcount_devices", enc),
+          () => localStorage.setItem("crowdcount_devices", devicesJson) // fallback
+        );
       }
 
       // 3. Schedule React state updates (will commit on next render)

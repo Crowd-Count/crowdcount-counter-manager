@@ -22,30 +22,34 @@ export const MapBackground = memo(function MapBackground({
   useEffect(() => {
     if (!isReady || !containerRef.current) return;
 
-    const map = new mapkit.Map(containerRef.current, {
-      center: new mapkit.Coordinate(latitude, longitude),
-      region: new mapkit.CoordinateRegion(
-        new mapkit.Coordinate(latitude, longitude),
-        new mapkit.CoordinateSpan(0.01, 0.01)
-      ),
-      mapType: mapkit.MapType.MutedStandard,
-      colorScheme:
-        theme === "dark" ? mapkit.ColorScheme.Dark : mapkit.ColorScheme.Light,
-      isScrollEnabled: false,
-      isZoomEnabled: false,
-      isRotationEnabled: false,
-      showsCompass: "hidden",
-      showsMapTypeControl: false,
-      showsZoomControl: false,
-      showsScale: "hidden",
-    });
+    try {
+      const map = new mapkit.Map(containerRef.current, {
+        center: new mapkit.Coordinate(latitude, longitude),
+        region: new mapkit.CoordinateRegion(
+          new mapkit.Coordinate(latitude, longitude),
+          new mapkit.CoordinateSpan(0.01, 0.01)
+        ),
+        mapType: mapkit.MapType.MutedStandard,
+        colorScheme:
+          theme === "dark" ? mapkit.ColorScheme.Dark : mapkit.ColorScheme.Light,
+        isScrollEnabled: false,
+        isZoomEnabled: false,
+        isRotationEnabled: false,
+        showsCompass: "hidden",
+        showsMapTypeControl: false,
+        showsZoomControl: false,
+        showsScale: "hidden",
+      });
 
-    mapRef.current = map;
+      mapRef.current = map;
 
-    return () => {
-      map.destroy();
-      mapRef.current = null;
-    };
+      return () => {
+        map.destroy();
+        mapRef.current = null;
+      };
+    } catch (e) {
+      console.warn("[MapBackground] Failed to create map:", e);
+    }
     // Only recreate if coordinates change or MapKit becomes ready
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isReady, latitude, longitude]);

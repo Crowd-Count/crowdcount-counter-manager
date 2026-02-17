@@ -10,6 +10,7 @@ import React, {
 } from "react";
 import type { StoredDevice, DeviceState } from "@/lib/types";
 import * as api from "@/lib/api";
+import { encrypt, decrypt, isEncrypted } from "@/lib/secureStorage";
 
 interface DevicesContextType {
   devices: DeviceState[];
@@ -35,20 +36,33 @@ function generateId(): string {
   return crypto.randomUUID();
 }
 
-function loadDevicesFromStorage(): StoredDevice[] {
+async function loadDevicesFromStorage(): Promise<StoredDevice[]> {
   if (typeof window === "undefined") return [];
   const stored = localStorage.getItem(STORAGE_KEY);
   if (!stored) return [];
   try {
-    return JSON.parse(stored);
+    let json: string;
+    if (isEncrypted(stored)) {
+      json = await decrypt(stored);
+    } else {
+      // Migration: plain JSON from before encryption was added
+      json = stored;
+    }
+    return JSON.parse(json);
   } catch {
     return [];
   }
 }
 
-function saveDevicesToStorage(devices: StoredDevice[]): void {
+async function saveDevicesToStorage(devices: StoredDevice[]): Promise<void> {
   if (typeof window === "undefined") return;
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(devices));
+  try {
+    const encrypted = await encrypt(JSON.stringify(devices));
+    localStorage.setItem(STORAGE_KEY, encrypted);
+  } catch {
+    // Fallback to plain storage if encryption fails (e.g. IndexedDB blocked)
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(devices));
+  }
 }
 
 export function DevicesProvider({ children }: { children: React.ReactNode }) {
@@ -57,21 +71,22 @@ export function DevicesProvider({ children }: { children: React.ReactNode }) {
 
   // Load devices from storage on mount
   useEffect(() => {
-    const stored = loadDevicesFromStorage();
-    const initialDevices: DeviceState[] = stored.map((d) => ({
-      ...d,
-      isOnline: false,
-      lastUpdated: null,
-    }));
-    setDevices(initialDevices);
-    setIsLoading(false);
+    loadDevicesFromStorage().then((stored) => {
+      const initialDevices: DeviceState[] = stored.map((d) => ({
+        ...d,
+        isOnline: false,
+        lastUpdated: null,
+      }));
+      setDevices(initialDevices);
+      setIsLoading(false);
 
-    // Bootstrap signing keys on the server for all existing devices
-    if (stored.length > 0) {
-      stored.forEach((d) => {
-        api.checkPassword(d.deviceId, d.password).catch(() => {});
-      });
-    }
+      // Bootstrap signing keys on the server for all existing devices
+      if (stored.length > 0) {
+        stored.forEach((d) => {
+          api.checkPassword(d.deviceId, d.password).catch(() => {});
+        });
+      }
+    });
   }, []);
 
   // Save devices to storage when they change
@@ -87,6 +102,8 @@ export function DevicesProvider({ children }: { children: React.ReactNode }) {
     } else if (!isLoading && devices.length === 0) {
       localStorage.removeItem(STORAGE_KEY);
     }
+    // saveDevicesToStorage is async but we don't need to await here —
+    // it's a fire-and-forget background save
   }, [devices, isLoading]);
 
   const devicesRef = useRef<DeviceState[]>([]);

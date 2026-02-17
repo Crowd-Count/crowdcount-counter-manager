@@ -11,7 +11,6 @@ const PRODUCTION_TOKEN =
 function getMapKitToken(): string {
   const hostname = window.location.hostname;
   if (hostname === "counter.crowdcount.tech") return PRODUCTION_TOKEN;
-  // staging + localhost + any other hostname → staging token
   return STAGING_TOKEN;
 }
 
@@ -28,22 +27,25 @@ function loadMapKit() {
   loadState = "loading";
 
   const script = document.createElement("script");
-  script.src = "https://cdn.apple-mapkit.com/mk/5.x.x/mapkit.js";
-  script.crossOrigin = "anonymous";
+  script.src = "https://cdn.apple-mapkit.com/mk/5.x.x/mapkit.core.js";
 
   script.onload = () => {
     try {
       mapkit.init({
-        authorizationCallback: (done) => done(getMapKitToken()),
+        authorizationCallback: (done) => {
+          done(getMapKitToken());
+        },
       });
       loadState = "ready";
-    } catch {
+    } catch (e) {
+      console.warn("[MapKit] init failed:", e);
       loadState = "error";
     }
     notifyListeners();
   };
 
-  script.onerror = () => {
+  script.onerror = (e) => {
+    console.warn("[MapKit] Script failed to load:", e);
     loadState = "error";
     notifyListeners();
   };
@@ -58,7 +60,6 @@ export function useMapKit(): { isReady: boolean } {
     const listener = () => forceUpdate((n) => n + 1);
     listeners.add(listener);
 
-    // Kick off loading if not already started
     loadMapKit();
 
     return () => {

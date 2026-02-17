@@ -150,6 +150,10 @@ export function LocationCard({ location }: LocationCardProps) {
     location.latitude != null &&
     location.longitude != null;
 
+  if (location.isOnMap) {
+    console.log(`[LocationCard] ${location.name}: isOnMap=${location.isOnMap}, lat=${location.latitude}, lng=${location.longitude}, showMap=${showMapBackground}`);
+  }
+
   return (
     <Card className={`mb-6 relative overflow-hidden ${location.isOverLimit ? "border-destructive" : ""}`}>
       {showMapBackground && (
