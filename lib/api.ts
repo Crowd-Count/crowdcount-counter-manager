@@ -717,7 +717,7 @@ export async function getLocationWeekData(
     "/get_location_week_data",
     {
       method: "POST",
-      body: JSON.stringify({ location_id: locationId, credentials, date }),
+      body: JSON.stringify({ location_id: locationId, credentials, date, tz_offset_minutes: new Date().getTimezoneOffset() * -1 }),
       sign: signingDevice,
     }
   );
@@ -734,7 +734,7 @@ export async function getLocationAverageWeekData(
     "/get_location_average_week_data",
     {
       method: "POST",
-      body: JSON.stringify({ location_id: locationId, credentials, date }),
+      body: JSON.stringify({ location_id: locationId, credentials, date, tz_offset_minutes: new Date().getTimezoneOffset() * -1 }),
       sign: signingDevice,
     }
   );
@@ -821,7 +821,7 @@ export async function getLocationEntryWeekData(
     "/get_location_entry_week_data",
     {
       method: "POST",
-      body: JSON.stringify({ location_id: locationId, credentials, date }),
+      body: JSON.stringify({ location_id: locationId, credentials, date, tz_offset_minutes: new Date().getTimezoneOffset() * -1 }),
       sign: signingDevice,
     }
   );
@@ -838,7 +838,7 @@ export async function getLocationAverageEntryWeekData(
     "/get_location_average_entry_week_data",
     {
       method: "POST",
-      body: JSON.stringify({ location_id: locationId, credentials, date }),
+      body: JSON.stringify({ location_id: locationId, credentials, date, tz_offset_minutes: new Date().getTimezoneOffset() * -1 }),
       sign: signingDevice,
     }
   );
