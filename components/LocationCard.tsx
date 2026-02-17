@@ -150,15 +150,8 @@ export function LocationCard({ location }: LocationCardProps) {
     location.latitude != null &&
     location.longitude != null;
 
-  return (
-    <Card className={`mb-6 relative overflow-hidden ${location.isOverLimit ? "border-destructive" : ""}`}>
-      {showMapBackground && (
-        <>
-          <MapBackground latitude={location.latitude!} longitude={location.longitude!} />
-          <div className="absolute inset-0 z-[1] bg-card/40 dark:bg-card/75" />
-        </>
-      )}
-      <div className="relative z-[2]">
+  const cardContent = (
+    <>
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -332,7 +325,20 @@ export function LocationCard({ location }: LocationCardProps) {
           </Dialog>
         </div>
       </CardContent>
-      </div>
+    </>
+  );
+
+  return (
+    <Card className={`mb-6 ${showMapBackground ? "relative overflow-hidden" : ""} ${location.isOverLimit ? "border-destructive" : ""}`}>
+      {showMapBackground ? (
+        <>
+          <MapBackground latitude={location.latitude!} longitude={location.longitude!} />
+          <div className="absolute inset-0 z-[1] bg-card/20 dark:bg-card/70" />
+          <div className="relative z-[2]">{cardContent}</div>
+        </>
+      ) : (
+        cardContent
+      )}
     </Card>
   );
 }
