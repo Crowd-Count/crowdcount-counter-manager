@@ -48,7 +48,11 @@ function CompactDeviceRow({ device, hasMap }: { device: DeviceState; hasMap?: bo
       {/* Status dot */}
       <div
         className={`h-2 w-2 rounded-full shrink-0 ${
-          device.isOnline ? "bg-green-500" : "bg-red-500"
+          device.lastUpdated === null
+            ? "bg-gray-400"
+            : device.isOnline
+              ? "bg-green-500"
+              : "bg-red-500"
         }`}
       />
 
