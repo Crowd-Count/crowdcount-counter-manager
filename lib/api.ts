@@ -87,6 +87,19 @@ async function apiRequest<T>(
   return response.json();
 }
 
+// Health check — lightweight ping to verify server availability
+export async function pingServer(): Promise<boolean> {
+  try {
+    const response = await fetch(`${getApiBaseUrl()}/ping`, {
+      method: "GET",
+      signal: AbortSignal.timeout(5000),
+    });
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
 // Authentication
 export async function checkPassword(
   deviceId: string,

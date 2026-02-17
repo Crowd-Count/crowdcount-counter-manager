@@ -276,7 +276,7 @@ export function LocationCard({ location }: LocationCardProps) {
             }}
           >
             <DialogTrigger asChild>
-              <button className={`flex items-center gap-2 px-3 py-2 rounded-md transition-colors w-full text-sm text-muted-foreground ${showMapBackground ? "bg-muted/50 hover:bg-muted/70" : "bg-muted/30 hover:bg-muted/60"}`}>
+              <button className={`flex items-center gap-2 px-3 py-2 rounded-md transition-opacity duration-200 ease-in-out w-full text-sm text-muted-foreground opacity-60 hover:opacity-100 ${showMapBackground ? "bg-muted/50" : "bg-muted/30"}`}>
                 <Plus className="h-3.5 w-3.5" />
                 Add Counter
               </button>

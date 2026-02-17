@@ -102,6 +102,7 @@ export function LocationsProvider({ children }: { children: React.ReactNode }) {
   // Location counts from server polling: locationServerId → current_count
   const [locationCounts, setLocationCounts] = useState<Record<string, number>>({});
   const [hasConnectionError, setHasConnectionError] = useState(false);
+  const consecutiveFailuresRef = useRef(0);
 
   // Load locations from storage on mount
   useEffect(() => {
@@ -205,7 +206,18 @@ export function LocationsProvider({ children }: { children: React.ReactNode }) {
     if (locs.length === 0) return;
     const results = await Promise.all(locs.map((loc) => fetchLocationData(loc)));
     const anySucceeded = results.some((ok) => ok === true);
-    setHasConnectionError(!anySucceeded);
+
+    if (anySucceeded) {
+      consecutiveFailuresRef.current = 0;
+      setHasConnectionError(false);
+    } else {
+      consecutiveFailuresRef.current += 1;
+      // Only show error after 2 consecutive failures (~5s) AND a healthcheck confirms server is down
+      if (consecutiveFailuresRef.current >= 2) {
+        const serverUp = await api.pingServer();
+        setHasConnectionError(!serverUp);
+      }
+    }
   }, [fetchLocationData]);
 
   // Polling interval
