@@ -271,8 +271,8 @@ export function LocationCard({ location }: LocationCardProps) {
 
           {/* Incomplete on-map location warning */}
           {location.isOnMap &&
-            location.serverDeviceCount !== null &&
-            location.serverDeviceCount > location.deviceIds.length && (() => {
+            location.serverDeviceCount != null &&
+            location.serverDeviceCount > location.deviceIds.length ? (() => {
               const missing = location.serverDeviceCount - location.deviceIds.length;
               return (
                 <div className="flex items-start gap-2 px-3 py-2.5 rounded-lg bg-orange-500/10 border border-orange-500/20">
@@ -283,7 +283,7 @@ export function LocationCard({ location }: LocationCardProps) {
                   </p>
                 </div>
               );
-            })()}
+            })() : null}
 
           {/* Add counter to location */}
           <Dialog
@@ -298,7 +298,7 @@ export function LocationCard({ location }: LocationCardProps) {
             }}
           >
             <DialogTrigger asChild>
-              <button style={{ opacity: 0.7, transition: "opacity 200ms ease-in-out" }} onMouseEnter={(e) => { e.currentTarget.style.opacity = "1"; }} onMouseLeave={(e) => { e.currentTarget.style.opacity = "0.7"; }} className={`flex items-center gap-2 px-3 py-2 rounded-md w-full text-sm text-muted-foreground ${showMapBackground ? "bg-muted/30" : "bg-muted/20"}`}>
+              <button style={{ opacity: 0.5, transition: "opacity 200ms ease-in-out" }} onMouseEnter={(e) => { e.currentTarget.style.opacity = "1"; }} onMouseLeave={(e) => { e.currentTarget.style.opacity = "0.5"; }} className={`flex items-center gap-2 px-3 py-2 rounded-md w-full text-sm text-foreground bg-muted`}>
                 <Plus className="h-3.5 w-3.5" />
                 Add Counter
               </button>
