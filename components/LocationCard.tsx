@@ -155,7 +155,7 @@ export function LocationCard({ location }: LocationCardProps) {
       {showMapBackground && (
         <>
           <MapBackground latitude={location.latitude!} longitude={location.longitude!} />
-          <div className="absolute inset-0 z-[1] bg-card/60 dark:bg-card/80" />
+          <div className="absolute inset-0 z-[1] bg-card/40 dark:bg-card/75" />
         </>
       )}
       <div className="relative z-[2]">
@@ -283,7 +283,7 @@ export function LocationCard({ location }: LocationCardProps) {
             }}
           >
             <DialogTrigger asChild>
-              <button className={`flex items-center gap-2 px-3 py-2 rounded-md transition-colors w-full text-sm text-muted-foreground ${showMapBackground ? "bg-muted hover:bg-muted/80" : "bg-muted/30 hover:bg-muted/60"}`}>
+              <button className={`flex items-center gap-2 px-3 py-2 rounded-md transition-colors w-full text-sm text-muted-foreground ${showMapBackground ? "bg-muted/50 hover:bg-muted/70" : "bg-muted/30 hover:bg-muted/60"}`}>
                 <Plus className="h-3.5 w-3.5" />
                 Add Counter
               </button>

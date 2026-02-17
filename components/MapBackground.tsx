@@ -67,8 +67,8 @@ export const MapBackground = memo(function MapBackground({
   return (
     <div
       ref={containerRef}
-      className="absolute inset-0 z-0"
-      style={{ pointerEvents: "none" }}
+      className="absolute left-0 right-0 z-0"
+      style={{ pointerEvents: "none", top: "-40%", height: "180%" }}
       aria-hidden="true"
     />
   );

@@ -105,8 +105,8 @@ export function HistoryContent({
       {/* Population / Entries tabs */}
       <Tabs value={dataType} onValueChange={(v) => setDataType(v as "population" | "entries")}>
         <TabsList className="grid w-full grid-cols-2">
-          <TabsTrigger value="population">Population</TabsTrigger>
           <TabsTrigger value="entries">Entries</TabsTrigger>
+          <TabsTrigger value="population">Population</TabsTrigger>
         </TabsList>
 
         <p className="text-xs text-muted-foreground text-center px-4 mt-3">

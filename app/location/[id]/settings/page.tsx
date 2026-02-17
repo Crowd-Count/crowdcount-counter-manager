@@ -294,7 +294,7 @@ export default function LocationSettingsPage() {
             <CardTitle>Location Name</CardTitle>
             <CardDescription>
               {location.isOnMap
-                ? "Name is synced from the public map. Email info@crowdcount.tech to request changes."
+                ? <>Name is synced from the public map. Email <a href="mailto:info@crowdcount.tech" className="underline hover:text-foreground">info@crowdcount.tech</a> to request changes.</>
                 : "A friendly name for this group of counters"}
             </CardDescription>
           </CardHeader>

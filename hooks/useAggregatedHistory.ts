@@ -81,7 +81,7 @@ export function useAggregatedHistory(
   const filteredCachedDates = rawCachedDates ? filterFutureDates(rawCachedDates) : null;
   const initialDates = filteredCachedDates && filteredCachedDates.length > 0 ? filteredCachedDates : null;
 
-  const [dataType, setDataType] = useState<DataType>("population");
+  const [dataType, setDataType] = useState<DataType>("entries");
   const [availableDates, setAvailableDates] = useState<string[]>(initialDates ?? []);
   const [isLoadingDates, setIsLoadingDates] = useState(!initialDates && hasData);
 
