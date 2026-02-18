@@ -17,7 +17,7 @@ import { encrypt } from "@/lib/secureStorage";
 interface LocationsContextType {
   locations: LocationState[];
   isLoading: boolean;
-  addLocation: (name: string, colorName: LocationColorName, serverDeviceIds?: string[], passwordOverride?: string) => Promise<string | null>;
+  addLocation: (name: string, colorName: LocationColorName, serverDeviceIds?: string[], passwordOverrides?: Record<string, string>) => Promise<string | null>;
   removeLocation: (id: string) => Promise<void>;
   updateLocationName: (id: string, name: string) => void;
   updateLocationColor: (id: string, colorName: LocationColorName) => void;
@@ -349,7 +349,7 @@ export function LocationsProvider({ children }: { children: React.ReactNode }) {
   }, [storedLocations, devices, locationCounts, serverDeviceCounts]);
 
   const addLocation = useCallback(
-    async (name: string, colorName: LocationColorName, serverDeviceIds: string[] = [], passwordOverride?: string): Promise<string | null> => {
+    async (name: string, colorName: LocationColorName, serverDeviceIds: string[] = [], passwordOverrides?: Record<string, string>): Promise<string | null> => {
       // Build credentials from the devices matching these server device IDs
       const currentDevices = devicesRef.current;
       const creds: Array<{ device_id: string; password: string }> = [];
@@ -357,9 +357,9 @@ export function LocationsProvider({ children }: { children: React.ReactNode }) {
         const device = currentDevices.find((d) => d.deviceId === sid);
         if (device) {
           creds.push({ device_id: device.deviceId, password: device.password });
-        } else if (passwordOverride) {
+        } else if (passwordOverrides?.[sid]) {
           // Device was just added and state hasn't flushed yet — use the provided password
-          creds.push({ device_id: sid, password: passwordOverride });
+          creds.push({ device_id: sid, password: passwordOverrides[sid] });
         }
       }
 

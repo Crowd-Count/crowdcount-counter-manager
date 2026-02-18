@@ -104,6 +104,7 @@ export default function LoginPage() {
                 disabled={isSubmitting}
                 autoCapitalize="characters"
               />
+              <p className="text-xs text-muted-foreground">Case sensitive</p>
             </div>
             <div className="space-y-2">
               <Label htmlFor="password">Password</Label>
@@ -115,6 +116,7 @@ export default function LoginPage() {
                 onChange={(e) => setPassword(e.target.value)}
                 disabled={isSubmitting}
               />
+              <p className="text-xs text-muted-foreground">Case sensitive</p>
             </div>
             {error && (
               <p className="text-sm text-destructive text-center">{error}</p>

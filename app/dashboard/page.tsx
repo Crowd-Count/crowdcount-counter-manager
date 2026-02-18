@@ -22,7 +22,6 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 import { LocationCard } from "@/components/LocationCard";
 import { ThemeToggle } from "@/components/ThemeToggle";
@@ -33,6 +32,8 @@ import {
   MapPin,
   ExternalLink,
   WifiOff,
+  Plus,
+  X,
 } from "lucide-react";
 
 // Migration screen for existing users who have devices but no locations
@@ -136,8 +137,7 @@ export default function DashboardPage() {
   const [isLocationDialogOpen, setIsLocationDialogOpen] = useState(false);
   const [newLocationName, setNewLocationName] = useState("");
   const [newLocationColor, setNewLocationColor] = useState<LocationColorName>("blue");
-  const [newLocDeviceId, setNewLocDeviceId] = useState("");
-  const [newLocPassword, setNewLocPassword] = useState("");
+  const [newLocCounters, setNewLocCounters] = useState<Array<{ deviceId: string; password: string }>>([{ deviceId: "", password: "" }]);
   const [isCreatingLocation, setIsCreatingLocation] = useState(false);
   const [createLocationError, setCreateLocationError] = useState("");
 
@@ -157,11 +157,13 @@ export default function DashboardPage() {
   const handleCreateLocation = async () => {
     if (!newLocationName.trim()) return;
 
-    const trimmedDeviceId = newLocDeviceId.trim();
-    const trimmedPassword = newLocPassword.trim();
+    // Filter to entries with both fields filled
+    const validCounters = newLocCounters
+      .map((c) => ({ deviceId: c.deviceId.trim(), password: c.password.trim() }))
+      .filter((c) => c.deviceId && c.password);
 
-    if (!trimmedDeviceId || !trimmedPassword) {
-      setCreateLocationError("Please enter counter credentials");
+    if (validCounters.length === 0) {
+      setCreateLocationError("Please enter at least one counter's credentials");
       return;
     }
 
@@ -169,31 +171,34 @@ export default function DashboardPage() {
     setCreateLocationError("");
 
     try {
-      // Check if device already exists in the app
-      const existing = devices.find((d) => d.deviceId === trimmedDeviceId);
-      if (!existing) {
-        // Add the device first
-        const success = await addDevice(trimmedDeviceId, trimmedPassword);
-        if (!success) {
-          setCreateLocationError("Invalid counter credentials");
-          setIsCreatingLocation(false);
-          return;
+      // Register each counter that isn't already in DevicesContext
+      const passwordOverrides: Record<string, string> = {};
+      for (const counter of validCounters) {
+        const existing = devices.find((d) => d.deviceId === counter.deviceId);
+        if (!existing) {
+          const success = await addDevice(counter.deviceId, counter.password);
+          if (!success) {
+            setCreateLocationError(`Invalid credentials for ${counter.deviceId}`);
+            setIsCreatingLocation(false);
+            return;
+          }
         }
+        passwordOverrides[counter.deviceId] = counter.password;
       }
 
-      // Create a new location with this device
+      const allDeviceIds = validCounters.map((c) => c.deviceId);
+
       const result = await addLocation(
         newLocationName.trim(),
         newLocationColor,
-        [trimmedDeviceId],
-        trimmedPassword
+        allDeviceIds,
+        passwordOverrides
       );
       if (result) {
         setIsLocationDialogOpen(false);
         setNewLocationName("");
         setNewLocationColor("blue");
-        setNewLocDeviceId("");
-        setNewLocPassword("");
+        setNewLocCounters([{ deviceId: "", password: "" }]);
       } else {
         setCreateLocationError("Failed to create location on server");
       }
@@ -264,106 +269,15 @@ export default function DashboardPage() {
                 />
               </Button>
 
-              {/* Create Location Dialog */}
-              <Dialog
-                open={isLocationDialogOpen}
-                onOpenChange={(open) => {
-                  setIsLocationDialogOpen(open);
-                  if (!open) {
-                    setNewLocationName("");
-                    setNewLocationColor("blue");
-                    setNewLocDeviceId("");
-                    setNewLocPassword("");
-                    setCreateLocationError("");
-                  }
-                }}
+              <Button
+                variant="outline"
+                size="icon"
+                className="sm:w-auto sm:px-4 sm:h-10"
+                onClick={() => setIsLocationDialogOpen(true)}
               >
-                <DialogTrigger asChild>
-                  <Button variant="outline" size="icon" className="sm:w-auto sm:px-4 sm:h-10">
-                    <MapPin className="h-4 w-4 sm:mr-1" />
-                    <span className="hidden sm:inline">Create Location</span>
-                  </Button>
-                </DialogTrigger>
-                <DialogContent>
-                  <DialogHeader>
-                    <DialogTitle>Create Location</DialogTitle>
-                    <DialogDescription>
-                      Create a new location with a counter
-                    </DialogDescription>
-                  </DialogHeader>
-                  <div className="space-y-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="newLocName">Location Name</Label>
-                      <Input
-                        id="newLocName"
-                        type="text"
-                        placeholder="e.g., Main Entrance"
-                        value={newLocationName}
-                        onChange={(e) => setNewLocationName(e.target.value)}
-                        disabled={isCreatingLocation}
-                      />
-                    </div>
-
-                    {/* Color picker */}
-                    <div className="space-y-2">
-                      <Label>Color</Label>
-                      <div className="flex gap-2">
-                        {LOCATION_COLORS.map((color) => (
-                          <button
-                            key={color.name}
-                            type="button"
-                            className={`h-8 w-8 rounded-full border-2 transition-all ${
-                              newLocationColor === color.name
-                                ? "border-foreground scale-110"
-                                : "border-transparent"
-                            }`}
-                            style={{ backgroundColor: color.value }}
-                            onClick={() => setNewLocationColor(color.name as LocationColorName)}
-                            disabled={isCreatingLocation}
-                          />
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Counter credentials */}
-                    <div className="space-y-2">
-                      <Label htmlFor="newLocDeviceId">Counter ID</Label>
-                      <Input
-                        id="newLocDeviceId"
-                        type="text"
-                        placeholder="e.g., T1234"
-                        value={newLocDeviceId}
-                        onChange={(e) => setNewLocDeviceId(e.target.value)}
-                        disabled={isCreatingLocation}
-                        autoCapitalize="characters"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="newLocPassword">Password</Label>
-                      <Input
-                        id="newLocPassword"
-                        type="password"
-                        placeholder="Enter password"
-                        value={newLocPassword}
-                        onChange={(e) => setNewLocPassword(e.target.value)}
-                        disabled={isCreatingLocation}
-                      />
-                    </div>
-
-                    {createLocationError && (
-                      <p className="text-sm text-destructive">{createLocationError}</p>
-                    )}
-                  </div>
-                  <DialogFooter>
-                    <Button
-                      onClick={handleCreateLocation}
-                      disabled={!newLocationName.trim() || !newLocDeviceId.trim() || !newLocPassword.trim() || isCreatingLocation}
-                    >
-                      {isCreatingLocation ? "Creating..." : "Create Location"}
-                    </Button>
-                  </DialogFooter>
-                </DialogContent>
-              </Dialog>
+                <MapPin className="h-4 w-4 sm:mr-1" />
+                <span className="hidden sm:inline">Create Location</span>
+              </Button>
             </div>
           </div>
         </div>
@@ -405,8 +319,148 @@ export default function DashboardPage() {
         {locations.map((location) => (
           <LocationCard key={location.localId} location={location} />
         ))}
+
+        {/* Bottom create location button */}
+        <button
+          onClick={() => setIsLocationDialogOpen(true)}
+          className="w-full py-4 rounded-2xl border-2 border-dashed border-muted-foreground/25 text-muted-foreground hover:border-muted-foreground/50 hover:text-foreground transition-colors flex items-center justify-center gap-2"
+        >
+          <Plus className="h-5 w-5" />
+          <span className="text-sm font-medium">Create Location</span>
+        </button>
       </main>
 
+      {/* Create Location Dialog */}
+      <Dialog
+        open={isLocationDialogOpen}
+        onOpenChange={(open) => {
+          setIsLocationDialogOpen(open);
+          if (!open) {
+            setNewLocationName("");
+            setNewLocationColor("blue");
+            setNewLocCounters([{ deviceId: "", password: "" }]);
+            setCreateLocationError("");
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Create Location</DialogTitle>
+            <DialogDescription>
+              Create a new location with one or more counters
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="newLocName">Location Name</Label>
+              <Input
+                id="newLocName"
+                type="text"
+                placeholder="e.g., Main Entrance"
+                value={newLocationName}
+                onChange={(e) => setNewLocationName(e.target.value)}
+                disabled={isCreatingLocation}
+              />
+            </div>
+
+            {/* Color picker */}
+            <div className="space-y-2">
+              <Label>Color</Label>
+              <div className="flex gap-2">
+                {LOCATION_COLORS.map((color) => (
+                  <button
+                    key={color.name}
+                    type="button"
+                    className={`h-8 w-8 rounded-full border-2 transition-all ${
+                      newLocationColor === color.name
+                        ? "border-foreground scale-110"
+                        : "border-transparent"
+                    }`}
+                    style={{ backgroundColor: color.value }}
+                    onClick={() => setNewLocationColor(color.name as LocationColorName)}
+                    disabled={isCreatingLocation}
+                  />
+                ))}
+              </div>
+            </div>
+
+            {/* Counter credentials */}
+            <div className="space-y-3">
+              <Label>Counters</Label>
+              {newLocCounters.map((counter, idx) => (
+                <div key={idx} className="space-y-2 relative">
+                  {newLocCounters.length > 1 && (
+                    <button
+                      type="button"
+                      className="absolute -right-1 -top-1 p-0.5 rounded-full text-muted-foreground hover:text-foreground transition-colors"
+                      onClick={() => setNewLocCounters((prev) => prev.filter((_, i) => i !== idx))}
+                      disabled={isCreatingLocation}
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  )}
+                  <div className="space-y-2">
+                    <Input
+                      type="text"
+                      placeholder="e.g., T1234"
+                      value={counter.deviceId}
+                      onChange={(e) =>
+                        setNewLocCounters((prev) =>
+                          prev.map((c, i) => (i === idx ? { ...c, deviceId: e.target.value } : c))
+                        )
+                      }
+                      disabled={isCreatingLocation}
+                      autoCapitalize="characters"
+                    />
+                    <p className="text-xs text-muted-foreground">Case sensitive</p>
+                  </div>
+                  <div className="space-y-2">
+                    <Input
+                      type="password"
+                      placeholder="Enter password"
+                      value={counter.password}
+                      onChange={(e) =>
+                        setNewLocCounters((prev) =>
+                          prev.map((c, i) => (i === idx ? { ...c, password: e.target.value } : c))
+                        )
+                      }
+                      disabled={isCreatingLocation}
+                    />
+                    <p className="text-xs text-muted-foreground">Case sensitive</p>
+                  </div>
+                  {idx < newLocCounters.length - 1 && (
+                    <div className="border-b border-border" />
+                  )}
+                </div>
+              ))}
+              <button
+                type="button"
+                className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+                onClick={() => setNewLocCounters((prev) => [...prev, { deviceId: "", password: "" }])}
+                disabled={isCreatingLocation}
+              >
+                + Add another counter
+              </button>
+            </div>
+
+            {createLocationError && (
+              <p className="text-sm text-destructive">{createLocationError}</p>
+            )}
+          </div>
+          <DialogFooter>
+            <Button
+              onClick={handleCreateLocation}
+              disabled={
+                !newLocationName.trim() ||
+                !newLocCounters.some((c) => c.deviceId.trim() && c.password.trim()) ||
+                isCreatingLocation
+              }
+            >
+              {isCreatingLocation ? "Creating..." : "Create Location"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

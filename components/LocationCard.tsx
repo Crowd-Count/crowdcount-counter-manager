@@ -326,6 +326,7 @@ export function LocationCard({ location }: LocationCardProps) {
                     disabled={isAdding}
                     autoCapitalize="characters"
                   />
+                  <p className="text-xs text-muted-foreground">Case sensitive</p>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor={`loc-pw-${location.id}`}>Password</Label>
@@ -337,6 +338,7 @@ export function LocationCard({ location }: LocationCardProps) {
                     onChange={(e) => setNewPassword(e.target.value)}
                     disabled={isAdding}
                   />
+                  <p className="text-xs text-muted-foreground">Case sensitive</p>
                 </div>
                 {addError && (
                   <p className="text-sm text-destructive">{addError}</p>
