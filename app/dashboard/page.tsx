@@ -157,10 +157,15 @@ export default function DashboardPage() {
   const handleCreateLocation = async () => {
     if (!newLocationName.trim()) return;
 
-    // Filter to entries with both fields filled
+    // Filter to entries with both fields filled, dedup by device ID
+    const seen = new Set<string>();
     const validCounters = newLocCounters
       .map((c) => ({ deviceId: c.deviceId.trim(), password: c.password.trim() }))
-      .filter((c) => c.deviceId && c.password);
+      .filter((c) => {
+        if (!c.deviceId || !c.password || seen.has(c.deviceId)) return false;
+        seen.add(c.deviceId);
+        return true;
+      });
 
     if (validCounters.length === 0) {
       setCreateLocationError("Please enter at least one counter's credentials");
@@ -171,18 +176,28 @@ export default function DashboardPage() {
     setCreateLocationError("");
 
     try {
-      // Register each counter that isn't already in DevicesContext
-      const passwordOverrides: Record<string, string> = {};
+      // Validate all credentials upfront before modifying any state
+      const needsRegistration: Array<{ deviceId: string; password: string }> = [];
       for (const counter of validCounters) {
         const existing = devices.find((d) => d.deviceId === counter.deviceId);
         if (!existing) {
-          const success = await addDevice(counter.deviceId, counter.password);
-          if (!success) {
-            setCreateLocationError(`Invalid credentials for ${counter.deviceId}`);
-            setIsCreatingLocation(false);
-            return;
-          }
+          needsRegistration.push(counter);
         }
+      }
+
+      // Register new counters — addDevice validates password with server
+      for (const counter of needsRegistration) {
+        const success = await addDevice(counter.deviceId, counter.password);
+        if (!success) {
+          setCreateLocationError(`Invalid credentials for ${counter.deviceId}`);
+          return;
+        }
+      }
+
+      // Build password overrides so addLocation can build credentials
+      // even if devicesRef hasn't flushed yet
+      const passwordOverrides: Record<string, string> = {};
+      for (const counter of validCounters) {
         passwordOverrides[counter.deviceId] = counter.password;
       }
 
@@ -203,7 +218,7 @@ export default function DashboardPage() {
         setCreateLocationError("Failed to create location on server");
       }
     } catch {
-      setCreateLocationError("Failed to create location");
+      setCreateLocationError("Failed to connect. Please try again.");
     } finally {
       setIsCreatingLocation(false);
     }
