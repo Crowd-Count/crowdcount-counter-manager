@@ -3,6 +3,7 @@
 import {
   BarChart,
   Bar,
+  Cell,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -76,17 +77,23 @@ export function HistoryChart({ data, dataType }: HistoryChartProps) {
             dataKey="value"
             name={dataType === "entries" ? "Entries" : "Count"}
             fill="#3b82f6"
-            fillOpacity={0.9}
             radius={[4, 4, 0, 0]}
-          />
+          >
+            {data.map((_, i) => (
+              <Cell key={i} fillOpacity={i % 2 === 0 ? 1.0 : 0.85} />
+            ))}
+          </Bar>
           {hasAverage && (
             <Bar
               dataKey="average"
               name="Average"
               fill="#f97316"
-              fillOpacity={0.8}
               radius={[4, 4, 0, 0]}
-            />
+            >
+              {data.map((_, i) => (
+                <Cell key={i} fillOpacity={i % 2 === 0 ? 0.85 : 0.70} />
+              ))}
+            </Bar>
           )}
         </BarChart>
       </ResponsiveContainer>
