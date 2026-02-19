@@ -86,7 +86,13 @@ export function buildDayChart(
       totalValue += data[hourStr] || 0;
       totalAverage += avgData[hourStr] || 0;
     });
-    chartData.push({ label: `${hour}:00`, value: totalValue, average: totalAverage });
+    const roundedValue = Math.round(totalValue);
+    const roundedAverage = Math.round(totalAverage);
+    chartData.push({
+      label: `${hour}:00`,
+      value: roundedValue < 1 ? 0 : roundedValue,
+      average: roundedAverage < 1 ? 0 : roundedAverage,
+    });
   }
   return chartData;
 }
@@ -110,7 +116,13 @@ export function buildWeekChart(
     if (maxDayIndex !== undefined && index > maxDayIndex) {
       totalValue = 0;
     }
-    return { label: day.substring(0, 3), value: totalValue, average: totalAverage };
+    const roundedValue = Math.round(totalValue);
+    const roundedAverage = Math.round(totalAverage);
+    return {
+      label: day.substring(0, 3),
+      value: roundedValue < 1 ? 0 : roundedValue,
+      average: roundedAverage < 1 ? 0 : roundedAverage,
+    };
   });
 }
 
@@ -129,7 +141,13 @@ export function buildYearChart(
       totalValue += data[month] || 0;
       if (avgData) totalAverage += avgData[month] || 0;
     });
-    return { label: month.substring(0, 3), value: totalValue, average: totalAverage };
+    const roundedValue = Math.round(totalValue);
+    const roundedAverage = Math.round(totalAverage);
+    return {
+      label: month.substring(0, 3),
+      value: roundedValue < 1 ? 0 : roundedValue,
+      average: roundedAverage < 1 ? 0 : roundedAverage,
+    };
   });
 }
 

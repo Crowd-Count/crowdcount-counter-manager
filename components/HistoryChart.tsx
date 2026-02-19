@@ -53,6 +53,7 @@ export function HistoryChart({ data, dataType }: HistoryChartProps) {
             tick={{ fontSize: 12 }}
             className="fill-muted-foreground"
             domain={[0, Math.ceil(maxValue * 1.1)]}
+            allowDecimals={false}
           />
           <Tooltip
             contentStyle={{
@@ -61,6 +62,7 @@ export function HistoryChart({ data, dataType }: HistoryChartProps) {
               borderRadius: "0.5rem",
             }}
             labelStyle={{ color: "hsl(var(--foreground))" }}
+            formatter={(value: number) => Math.round(value)}
           />
           {hasAverage && (
             <Legend
