@@ -34,6 +34,7 @@ export default function LoginPage() {
   const [counters, setCounters] = useState<CounterEntry[]>(() => [createCounterEntry()]);
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [agreedToTerms, setAgreedToTerms] = useState(false);
 
   // Redirect to dashboard if already has devices (but not during form submission)
   useEffect(() => {
@@ -213,13 +214,43 @@ export default function LoginPage() {
               Add Another Counter
             </Button>
 
+            <label className="flex items-start gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={agreedToTerms}
+                onChange={(e) => setAgreedToTerms(e.target.checked)}
+                disabled={isSubmitting}
+                className="mt-1 accent-primary"
+              />
+              <span className="text-xs text-muted-foreground">
+                I agree to the{" "}
+                <a
+                  href="https://crowdcount.tech/legal/terms-of-use.html"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="underline hover:text-foreground"
+                >
+                  Terms of Use
+                </a>{" "}
+                and{" "}
+                <a
+                  href="https://crowdcount.tech/legal/privacy-policy.html"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="underline hover:text-foreground"
+                >
+                  Privacy Policy
+                </a>
+              </span>
+            </label>
+
             {error && (
               <p className="text-sm text-destructive text-center">{error}</p>
             )}
             <Button
               type="submit"
               className="w-full"
-              disabled={isSubmitting}
+              disabled={isSubmitting || !agreedToTerms}
             >
               {isSubmitting ? "Connecting..." : "Get Started"}
             </Button>
