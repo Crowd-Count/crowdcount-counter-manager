@@ -25,6 +25,7 @@ export interface InsightsData {
   avgYearData: Record<string, number> | null;
   entryYearData: Record<string, number>;
   avgEntryYearData: Record<string, number> | null;
+  dwellTimeMinutes: number | null;
 }
 
 function applyInsightsCache(entry: InsightsCacheEntry): Omit<InsightsData, "isLoading"> {
@@ -41,6 +42,7 @@ function applyInsightsCache(entry: InsightsCacheEntry): Omit<InsightsData, "isLo
     avgYearData: entry.avgYearData,
     entryYearData: entry.entryYearData,
     avgEntryYearData: entry.avgEntryYearData,
+    dwellTimeMinutes: entry.dwellTimeMinutes,
   };
 }
 
@@ -57,6 +59,7 @@ const EMPTY_DATA: Omit<InsightsData, "isLoading"> = {
   avgYearData: null,
   entryYearData: {},
   avgEntryYearData: null,
+  dwellTimeMinutes: null,
 };
 
 export function useInsightsData(

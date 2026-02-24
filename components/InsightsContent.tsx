@@ -17,6 +17,7 @@ import {
   ArrowDown,
   Minus,
   Loader2,
+  Timer,
 } from "lucide-react";
 
 interface InsightsContentProps {
@@ -198,6 +199,17 @@ function TodayInsights({ data }: { data: InsightsData }) {
           <StatRow label="Peak Entry Hour" value={calc.formatHour(peakEntry.hour)} sub={`${roundDisplay(peakEntry.count)} entries`} />
           <StatRow label="Avg Hourly Entries" value={roundDisplay(avgEntries)} />
           <StatRow label="Busiest Window" value={calc.formatHourRange(busiestEntry.startHour, busiestEntry.endHour)} sub={`${roundDisplay(busiestEntry.total)} entries`} />
+        </InsightCard>
+      )}
+
+      {/* Dwell Time */}
+      {data.dwellTimeMinutes != null && data.dwellTimeMinutes > 0 && (
+        <InsightCard icon={Timer} title="Avg Time of Stay">
+          <StatRow
+            label="Avg Visit Duration"
+            value={calc.formatDwellTime(data.dwellTimeMinutes)}
+          />
+          <p className="text-xs text-muted-foreground">Estimated from occupancy and entry data</p>
         </InsightCard>
       )}
 

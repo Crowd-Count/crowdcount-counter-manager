@@ -38,6 +38,7 @@ export interface InsightsCacheEntry {
   avgYearData: Record<string, number> | null;
   entryYearData: Record<string, number>;
   avgEntryYearData: Record<string, number> | null;
+  dwellTimeMinutes: number | null;
 }
 
 export interface ChartData {
@@ -239,6 +240,7 @@ export async function fetchInsightsForCredentials(
     avgYearData: aggregateNullableRecords(allResults.map((r) => r.avgYear)),
     entryYearData: aggregateRecords(allResults.map((r) => r.entryYear)),
     avgEntryYearData: aggregateNullableRecords(allResults.map((r) => r.avgEntryYear)),
+    dwellTimeMinutes: null,
   };
 }
 
@@ -392,6 +394,10 @@ export async function fetchLocationInsights(
       return out;
     }
 
+    // Parse dwell time (number or empty dict from _safe_view)
+    const rawDwell = bundle.dwell_time_view;
+    const dwellMinutes = typeof rawDwell === "number" ? rawDwell : null;
+
     return {
       dayData: shiftDayDataToLocal(bundle.day_view, day2Data, utcMinutesAtMidnight),
       avgDayData: shiftDayDataToLocal(bundle.average_day_view, avgDay2Data, utcMinutesAtMidnight),
@@ -405,6 +411,7 @@ export async function fetchLocationInsights(
       avgYearData: bundle.average_year_view,
       entryYearData: bundle.entry_year_view,
       avgEntryYearData: bundle.average_entry_year_view,
+      dwellTimeMinutes: dwellMinutes,
     };
   } catch {
     // Fallback to individual calls if bundle endpoint not available (404)
@@ -459,6 +466,7 @@ export async function fetchLocationInsights(
     avgYearData: avgYear,
     entryYearData: entryYear,
     avgEntryYearData: avgEntryYear,
+    dwellTimeMinutes: null,
   };
 }
 

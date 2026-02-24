@@ -899,6 +899,7 @@ export interface InsightsBundleResponse {
   average_year_view: Record<string, number> | null;
   entry_year_view: Record<string, number>;
   average_entry_year_view: Record<string, number> | null;
+  dwell_time_view?: number | Record<string, never>;
 }
 
 export interface HistoryBundleResponse {

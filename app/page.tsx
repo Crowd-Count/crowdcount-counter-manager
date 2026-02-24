@@ -220,7 +220,7 @@ export default function LoginPage() {
                 checked={agreedToTerms}
                 onChange={(e) => setAgreedToTerms(e.target.checked)}
                 disabled={isSubmitting}
-                className="mt-1 accent-primary"
+                className="mt-1 accent-blue-500"
               />
               <span className="text-xs text-muted-foreground">
                 I agree to the{" "}
@@ -256,7 +256,7 @@ export default function LoginPage() {
             </Button>
           </form>
           <p className="text-xs text-muted-foreground text-center mt-4 px-2">
-            Note: Most features are currently only available in the iOS app. Download it on the App Store{" "}
+            Note: Some features are currently only available in the iOS app. Download it on the App Store{" "}
             <a href="https://crowdcount.tech/app" className="underline hover:text-foreground" target="_blank" rel="noopener noreferrer">
               here
             </a>.

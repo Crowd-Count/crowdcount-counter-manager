@@ -73,6 +73,17 @@ function avgNonZero(data: Record<string, number>): number {
   return vals.reduce((s, v) => s + v, 0) / vals.length;
 }
 
+// --- Dwell Time ---
+
+export function formatDwellTime(minutes: number): string {
+  if (minutes < 1) return "<1 min";
+  if (minutes < 60) return `${Math.round(minutes)} min`;
+  const hours = Math.floor(minutes / 60);
+  const remaining = Math.round(minutes % 60);
+  if (remaining === 0) return `${hours}h`;
+  return `${hours}h ${remaining}m`;
+}
+
 // --- Today (hourly keys "0"-"23") ---
 
 export function averageDayOccupancy(dayData: Record<string, number>): number {
