@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import Link from "next/link";
-import type { LocationState, DeviceState } from "@/lib/types";
+import type { LocationState, DeviceState, ClosingTime } from "@/lib/types";
 import { LOCATION_COLORS, getAppleColorHex } from "@/lib/types";
 import { useDevices } from "@/contexts/DevicesContext";
 import { useLocations } from "@/contexts/LocationsContext";
@@ -36,6 +36,7 @@ import {
   Minus,
   Plus,
   Loader2,
+  DoorClosed,
 } from "lucide-react";
 import { MapBackground } from "@/components/MapBackground";
 
@@ -122,6 +123,67 @@ export function LocationCard({ location }: LocationCardProps) {
   );
 
   const locCreds = api.getLocationCredentials(location, devices);
+
+  // Closing time: fetch once on mount, then compute if currently closed
+  const [closingTime, setClosingTime] = useState<ClosingTime | null>(null);
+  const [now, setNow] = useState(() => new Date());
+  const closingTimeFetchedRef = useRef(false);
+
+  useEffect(() => {
+    if (closingTimeFetchedRef.current) return;
+    const creds = api.getLocationCredentials(location, devices);
+    if (!creds) return;
+    closingTimeFetchedRef.current = true;
+    api.getClosingTime(location.id, creds.credentials, creds.signingDevice)
+      .then((ct) => { if (ct) setClosingTime(ct); })
+      .catch(() => {});
+  }, [location, devices]);
+
+  useEffect(() => {
+    const interval = setInterval(() => setNow(new Date()), 60_000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const isClosed = useMemo(() => {
+    if (!closingTime?.days?.length) return false;
+    const tz = closingTime.timezone;
+
+    // Get current day-of-week and time in the location's timezone
+    const dayStr = now.toLocaleDateString("en-US", { timeZone: tz, weekday: "short" });
+    const dayMap: Record<string, number> = { Mon: 0, Tue: 1, Wed: 2, Thu: 3, Fri: 4, Sat: 5, Sun: 6 };
+    const todayIndex = dayMap[dayStr];
+    if (todayIndex === undefined) return false;
+
+    const timeStr = now.toLocaleTimeString("en-GB", { timeZone: tz, hour: "2-digit", minute: "2-digit", hour12: false });
+    const [h, m] = timeStr.split(":").map(Number);
+    const currentMin = h * 60 + m;
+
+    const yesterdayIndex = (todayIndex + 6) % 7;
+
+    // Check today's schedule
+    const today = closingTime.days.find((d) => d.day_of_week === todayIndex);
+    if (today) {
+      const closeMin = today.close_hour * 60 + today.close_minute;
+      const openMin = today.open_hour * 60 + today.open_minute;
+      if (closeMin > openMin) {
+        // Overnight: closed from closeMin today until openMin tomorrow
+        if (currentMin >= closeMin) return true;
+      } else if (closeMin < openMin) {
+        // Same day: closed from closeMin to openMin
+        if (currentMin >= closeMin && currentMin < openMin) return true;
+      }
+    }
+
+    // Check yesterday's schedule for overnight carry-over
+    const yesterday = closingTime.days.find((d) => d.day_of_week === yesterdayIndex);
+    if (yesterday) {
+      const closeMin = yesterday.close_hour * 60 + yesterday.close_minute;
+      const openMin = yesterday.open_hour * 60 + yesterday.open_minute;
+      if (closeMin > openMin && currentMin < openMin) return true;
+    }
+
+    return false;
+  }, [closingTime, now]);
 
   const handleLocationIncrement = async () => {
     if (!locCreds) return;
@@ -213,13 +275,15 @@ export function LocationCard({ location }: LocationCardProps) {
             <Button
               variant="outline"
               size="icon"
-              className="h-12 w-12 rounded-full"
+              className={`h-12 w-12 rounded-full ${isClosed ? "opacity-40" : ""}`}
               onClick={handleLocationDecrement}
-              disabled={isModifyingCount || !locCreds || location.totalCount === null || location.totalCount === 0}
+              disabled={isClosed || isModifyingCount || !locCreds || location.totalCount === null || location.totalCount === 0}
             >
               <Minus className="h-5 w-5" />
             </Button>
-            {location.totalCount === null ? (
+            {isClosed ? (
+              <p className="text-5xl font-bold text-muted-foreground">Closed</p>
+            ) : location.totalCount === null ? (
               <Loader2 className="h-12 w-12 animate-spin text-muted-foreground" />
             ) : (
               <p
@@ -233,14 +297,22 @@ export function LocationCard({ location }: LocationCardProps) {
             <Button
               variant="outline"
               size="icon"
-              className="h-12 w-12 rounded-full"
+              className={`h-12 w-12 rounded-full ${isClosed ? "opacity-40" : ""}`}
               onClick={handleLocationIncrement}
-              disabled={isModifyingCount || !locCreds || location.totalCount === null}
+              disabled={isClosed || isModifyingCount || !locCreds || location.totalCount === null}
             >
               <Plus className="h-5 w-5" />
             </Button>
           </div>
-          {location.overcrowdingLimit !== null && location.overcrowdingLimit > 0 && (
+          {isClosed && (
+            <Button variant="link" size="sm" className="mt-1 text-muted-foreground" asChild>
+              <Link href={`/location/${location.id}/settings`}>
+                <DoorClosed className="h-3.5 w-3.5 mr-1" />
+                Edit Closing Times
+              </Link>
+            </Button>
+          )}
+          {!isClosed && location.overcrowdingLimit !== null && location.overcrowdingLimit > 0 && (
             <p
               className={`text-sm mt-1 ${
                 location.isOverLimit ? "text-destructive" : "text-muted-foreground"
