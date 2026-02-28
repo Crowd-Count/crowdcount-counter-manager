@@ -134,6 +134,11 @@ export default function LocationSettingsPage() {
     return init;
   });
 
+  // Danger zone state — must be before early returns to satisfy Rules of Hooks
+  const [isErasing, setIsErasing] = useState(false);
+  const [eraseDialogOpen, setEraseDialogOpen] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+
   // Fetch reset schedule on mount
   useEffect(() => {
     if (!location) return;
@@ -256,10 +261,6 @@ export default function LocationSettingsPage() {
       await setLocationOvercrowdingLimit(currentId, limit);
     }
   };
-
-  const [isErasing, setIsErasing] = useState(false);
-  const [eraseDialogOpen, setEraseDialogOpen] = useState(false);
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
   const handleEraseData = async () => {
     const locCreds = api.getLocationCredentials(location, devices);
