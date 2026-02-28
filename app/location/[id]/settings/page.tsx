@@ -5,7 +5,7 @@ import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
 import { useDevices } from "@/contexts/DevicesContext";
 import { useLocations } from "@/contexts/LocationsContext";
-import { LOCATION_COLORS, getAppleColorHex, type LocationColorName, type ResetSchedule } from "@/lib/types";
+import { LOCATION_COLORS, getAppleColorHex, type LocationColorName, type ResetSchedule, type ClosingTime, type ClosingTimeDay } from "@/lib/types";
 import { useTheme } from "@/contexts/ThemeContext";
 import * as api from "@/lib/api";
 import { Button } from "@/components/ui/button";
@@ -34,8 +34,9 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { Switch } from "@/components/ui/switch";
 import { ThemeToggle } from "@/components/ThemeToggle";
-import { ArrowLeft, Save, Trash2, X, Clock, RotateCcw } from "lucide-react";
+import { ArrowLeft, Save, Trash2, X, Clock, RotateCcw, DoorClosed } from "lucide-react";
 
 const COMMON_TIMEZONES = [
   "America/New_York",
@@ -114,6 +115,25 @@ export default function LocationSettingsPage() {
   const [isSavingSchedule, setIsSavingSchedule] = useState(false);
   const [isEditingSchedule, setIsEditingSchedule] = useState(false);
 
+  // Closing time state
+  const [closingTime, setClosingTime] = useState<ClosingTime | null>(null);
+  const [closeHour, setCloseHour] = useState(22);
+  const [closeMinute, setCloseMinute] = useState(0);
+  const [openHour, setOpenHour] = useState(6);
+  const [openMinute, setOpenMinute] = useState(0);
+  const [closingTimezone, setClosingTimezone] = useState(getBrowserTimezone());
+  const [isLoadingClosing, setIsLoadingClosing] = useState(true);
+  const [isSavingClosing, setIsSavingClosing] = useState(false);
+  const [isEditingClosing, setIsEditingClosing] = useState(false);
+  const [perDayMode, setPerDayMode] = useState(false);
+  const [perDayTimes, setPerDayTimes] = useState<Record<number, { closeHour: number; closeMinute: number; openHour: number; openMinute: number; enabled: boolean }>>(() => {
+    const init: Record<number, { closeHour: number; closeMinute: number; openHour: number; openMinute: number; enabled: boolean }> = {};
+    for (let i = 0; i < 7; i++) {
+      init[i] = { closeHour: 22, closeMinute: 0, openHour: 6, openMinute: 0, enabled: true };
+    }
+    return init;
+  });
+
   // Fetch reset schedule on mount
   useEffect(() => {
     if (!location) return;
@@ -137,6 +157,57 @@ export default function LocationSettingsPage() {
       })
       .catch(() => {})
       .finally(() => setIsLoadingSchedule(false));
+  }, [location, devices]);
+
+  // Fetch closing time on mount
+  useEffect(() => {
+    if (!location) return;
+    const locCreds = api.getLocationCredentials(location, devices);
+    if (!locCreds) {
+      setIsLoadingClosing(false);
+      return;
+    }
+
+    api.getClosingTime(location.id, locCreds.credentials, locCreds.signingDevice)
+      .then((ct) => {
+        if (ct && ct.days && ct.days.length > 0) {
+          setClosingTime(ct);
+          if (ct.timezone) setClosingTimezone(ct.timezone);
+
+          // Populate uniform fields from first day
+          setCloseHour(ct.days[0].close_hour);
+          setCloseMinute(ct.days[0].close_minute);
+          setOpenHour(ct.days[0].open_hour);
+          setOpenMinute(ct.days[0].open_minute);
+
+          // Populate per-day times from server data
+          const newPerDay: Record<number, { closeHour: number; closeMinute: number; openHour: number; openMinute: number; enabled: boolean }> = {};
+          const serverDays = new Set(ct.days.map((d) => d.day_of_week));
+          for (let i = 0; i < 7; i++) {
+            const serverDay = ct.days.find((d) => d.day_of_week === i);
+            if (serverDay) {
+              newPerDay[i] = { closeHour: serverDay.close_hour, closeMinute: serverDay.close_minute, openHour: serverDay.open_hour, openMinute: serverDay.open_minute, enabled: true };
+            } else {
+              newPerDay[i] = { closeHour: ct.days[0].close_hour, closeMinute: ct.days[0].close_minute, openHour: ct.days[0].open_hour, openMinute: ct.days[0].open_minute, enabled: false };
+            }
+          }
+          setPerDayTimes(newPerDay);
+
+          // Detect if per-day mode is needed: any day has different times or not all 7 days present
+          const allSame = ct.days.every((d) =>
+            d.close_hour === ct.days[0].close_hour &&
+            d.close_minute === ct.days[0].close_minute &&
+            d.open_hour === ct.days[0].open_hour &&
+            d.open_minute === ct.days[0].open_minute
+          );
+          const allSevenDays = ct.days.length === 7;
+          setPerDayMode(!allSame || !allSevenDays);
+        } else {
+          setClosingTime(null);
+        }
+      })
+      .catch(() => {})
+      .finally(() => setIsLoadingClosing(false));
   }, [location, devices]);
 
   if (devicesLoading || locationsLoading) {
@@ -250,6 +321,84 @@ export default function LocationSettingsPage() {
     } finally {
       setIsSavingSchedule(false);
     }
+  };
+
+  const handleSaveClosingTime = async () => {
+    const locCreds = api.getLocationCredentials(location, devices);
+    if (!locCreds) return;
+
+    let days: ClosingTimeDay[];
+    if (perDayMode) {
+      days = Object.entries(perDayTimes)
+        .filter(([, v]) => v.enabled)
+        .map(([k, v]) => ({
+          day_of_week: parseInt(k, 10),
+          close_hour: v.closeHour,
+          close_minute: v.closeMinute,
+          open_hour: v.openHour,
+          open_minute: v.openMinute,
+        }));
+    } else {
+      days = Array.from({ length: 7 }, (_, i) => ({
+        day_of_week: i,
+        close_hour: closeHour,
+        close_minute: closeMinute,
+        open_hour: openHour,
+        open_minute: openMinute,
+      }));
+    }
+
+    if (days.length === 0) return;
+
+    setIsSavingClosing(true);
+    try {
+      const ct = await api.setClosingTime(
+        currentId,
+        locCreds.credentials,
+        locCreds.signingDevice,
+        closingTimezone,
+        days
+      );
+      setClosingTime(ct);
+    } catch (err) {
+      console.error("Failed to save closing time:", err);
+    } finally {
+      setIsSavingClosing(false);
+    }
+  };
+
+  const handleDeleteClosingTime = async () => {
+    const locCreds = api.getLocationCredentials(location, devices);
+    if (!locCreds) return;
+
+    setIsSavingClosing(true);
+    try {
+      await api.deleteClosingTime(currentId, locCreds.credentials, locCreds.signingDevice);
+      setClosingTime(null);
+      setIsEditingClosing(false);
+      setPerDayMode(false);
+      setCloseHour(22);
+      setCloseMinute(0);
+      setOpenHour(6);
+      setOpenMinute(0);
+      setClosingTimezone(getBrowserTimezone());
+      const init: Record<number, { closeHour: number; closeMinute: number; openHour: number; openMinute: number; enabled: boolean }> = {};
+      for (let i = 0; i < 7; i++) {
+        init[i] = { closeHour: 22, closeMinute: 0, openHour: 6, openMinute: 0, enabled: true };
+      }
+      setPerDayTimes(init);
+    } catch (err) {
+      console.error("Failed to delete closing time:", err);
+    } finally {
+      setIsSavingClosing(false);
+    }
+  };
+
+  const updatePerDayTime = (day: number, field: string, value: number | boolean) => {
+    setPerDayTimes((prev) => ({
+      ...prev,
+      [day]: { ...prev[day], [field]: value },
+    }));
   };
 
   const colorValue =
@@ -532,6 +681,286 @@ export default function LocationSettingsPage() {
                     ({(resetSchedule.timezone ?? "").replace(/_/g, " ")})
                   </p>
                 )}
+              </>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Closing Time */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <DoorClosed className="h-5 w-5" />
+              Closing Time
+            </CardTitle>
+            <CardDescription>
+              Set when this location closes and opens each day. While closed, counts are suppressed and reset to zero at open/close transitions.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {isLoadingClosing ? (
+              <p className="text-sm text-muted-foreground">Loading...</p>
+            ) : !closingTime && !isEditingClosing ? (
+              <Button
+                variant="outline"
+                onClick={() => setIsEditingClosing(true)}
+              >
+                <DoorClosed className="h-4 w-4 mr-1" />
+                Set Closing Time
+              </Button>
+            ) : (
+              <>
+                {!perDayMode ? (
+                  <>
+                    {/* Uniform mode — single close/open time for all days */}
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label>Close Hour</Label>
+                        <Select
+                          value={closeHour.toString()}
+                          onValueChange={(v) => setCloseHour(parseInt(v, 10))}
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {Array.from({ length: 24 }, (_, i) => (
+                              <SelectItem key={i} value={i.toString()}>
+                                {i.toString().padStart(2, "0")}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Close Minute</Label>
+                        <Select
+                          value={closeMinute.toString()}
+                          onValueChange={(v) => setCloseMinute(parseInt(v, 10))}
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {[0, 15, 30, 45].map((m) => (
+                              <SelectItem key={m} value={m.toString()}>
+                                {m.toString().padStart(2, "0")}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label>Open Hour</Label>
+                        <Select
+                          value={openHour.toString()}
+                          onValueChange={(v) => setOpenHour(parseInt(v, 10))}
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {Array.from({ length: 24 }, (_, i) => (
+                              <SelectItem key={i} value={i.toString()}>
+                                {i.toString().padStart(2, "0")}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Open Minute</Label>
+                        <Select
+                          value={openMinute.toString()}
+                          onValueChange={(v) => setOpenMinute(parseInt(v, 10))}
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {[0, 15, 30, 45].map((m) => (
+                              <SelectItem key={m} value={m.toString()}>
+                                {m.toString().padStart(2, "0")}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      className="text-sm text-muted-foreground hover:text-foreground underline"
+                      onClick={() => {
+                        // Sync uniform times into all per-day entries before switching
+                        const synced: Record<number, { closeHour: number; closeMinute: number; openHour: number; openMinute: number; enabled: boolean }> = {};
+                        for (let i = 0; i < 7; i++) {
+                          synced[i] = { closeHour, closeMinute, openHour, openMinute, enabled: perDayTimes[i]?.enabled ?? true };
+                        }
+                        setPerDayTimes(synced);
+                        setPerDayMode(true);
+                      }}
+                    >
+                      Customize per day
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    {/* Per-day mode — each day has its own times */}
+                    <div className="space-y-3">
+                      {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((label, i) => {
+                        const day = perDayTimes[i];
+                        return (
+                          <div key={i} className={`flex items-center gap-3 ${!day.enabled ? "opacity-40" : ""}`}>
+                            <Switch
+                              checked={day.enabled}
+                              onCheckedChange={(checked) => updatePerDayTime(i, "enabled", checked)}
+                            />
+                            <span className="text-sm font-medium w-8">{label}</span>
+                            {day.enabled ? (
+                              <div className="flex items-center gap-2 flex-1">
+                                <Select value={day.closeHour.toString()} onValueChange={(v) => updatePerDayTime(i, "closeHour", parseInt(v, 10))}>
+                                  <SelectTrigger className="w-[70px]"><SelectValue /></SelectTrigger>
+                                  <SelectContent>
+                                    {Array.from({ length: 24 }, (_, h) => (
+                                      <SelectItem key={h} value={h.toString()}>{h.toString().padStart(2, "0")}</SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                                <span className="text-muted-foreground">:</span>
+                                <Select value={day.closeMinute.toString()} onValueChange={(v) => updatePerDayTime(i, "closeMinute", parseInt(v, 10))}>
+                                  <SelectTrigger className="w-[70px]"><SelectValue /></SelectTrigger>
+                                  <SelectContent>
+                                    {[0, 15, 30, 45].map((m) => (
+                                      <SelectItem key={m} value={m.toString()}>{m.toString().padStart(2, "0")}</SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                                <span className="text-xs text-muted-foreground">to</span>
+                                <Select value={day.openHour.toString()} onValueChange={(v) => updatePerDayTime(i, "openHour", parseInt(v, 10))}>
+                                  <SelectTrigger className="w-[70px]"><SelectValue /></SelectTrigger>
+                                  <SelectContent>
+                                    {Array.from({ length: 24 }, (_, h) => (
+                                      <SelectItem key={h} value={h.toString()}>{h.toString().padStart(2, "0")}</SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                                <span className="text-muted-foreground">:</span>
+                                <Select value={day.openMinute.toString()} onValueChange={(v) => updatePerDayTime(i, "openMinute", parseInt(v, 10))}>
+                                  <SelectTrigger className="w-[70px]"><SelectValue /></SelectTrigger>
+                                  <SelectContent>
+                                    {[0, 15, 30, 45].map((m) => (
+                                      <SelectItem key={m} value={m.toString()}>{m.toString().padStart(2, "0")}</SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                            ) : (
+                              <span className="text-sm text-muted-foreground">Off</span>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <button
+                      type="button"
+                      className="text-sm text-muted-foreground hover:text-foreground underline"
+                      onClick={() => {
+                        // Take times from first enabled day
+                        const firstEnabled = Object.values(perDayTimes).find((d) => d.enabled);
+                        if (firstEnabled) {
+                          setCloseHour(firstEnabled.closeHour);
+                          setCloseMinute(firstEnabled.closeMinute);
+                          setOpenHour(firstEnabled.openHour);
+                          setOpenMinute(firstEnabled.openMinute);
+                        }
+                        setPerDayMode(false);
+                      }}
+                    >
+                      Same every day
+                    </button>
+                  </>
+                )}
+
+                {/* Timezone */}
+                <div className="space-y-2">
+                  <Label>Timezone</Label>
+                  <Select
+                    value={closingTimezone}
+                    onValueChange={setClosingTimezone}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {COMMON_TIMEZONES.map((tz) => (
+                        <SelectItem key={tz} value={tz}>
+                          {tz.replace(/_/g, " ")}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Actions */}
+                <div className="flex gap-2">
+                  <Button
+                    onClick={handleSaveClosingTime}
+                    disabled={isSavingClosing || (perDayMode && !Object.values(perDayTimes).some((d) => d.enabled))}
+                  >
+                    <Save className="h-4 w-4 mr-1" />
+                    {closingTime ? "Update" : "Save"}
+                  </Button>
+                  {closingTime ? (
+                    <Button
+                      variant="outline"
+                      onClick={handleDeleteClosingTime}
+                      disabled={isSavingClosing}
+                    >
+                      <Trash2 className="h-4 w-4 mr-1" />
+                      Remove
+                    </Button>
+                  ) : (
+                    <Button
+                      variant="outline"
+                      onClick={() => setIsEditingClosing(false)}
+                    >
+                      Cancel
+                    </Button>
+                  )}
+                </div>
+
+                {/* Summary */}
+                {closingTime && closingTime.days.length > 0 && (() => {
+                  const dayNames = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+                  const allSame = closingTime.days.every((d) =>
+                    d.close_hour === closingTime.days[0].close_hour &&
+                    d.close_minute === closingTime.days[0].close_minute &&
+                    d.open_hour === closingTime.days[0].open_hour &&
+                    d.open_minute === closingTime.days[0].open_minute
+                  );
+                  const tz = (closingTime.timezone ?? "").replace(/_/g, " ");
+
+                  if (allSame && closingTime.days.length === 7) {
+                    return (
+                      <p className="text-xs text-muted-foreground">
+                        Closes at {closingTime.days[0].close_hour.toString().padStart(2, "0")}:{closingTime.days[0].close_minute.toString().padStart(2, "0")}, opens at {closingTime.days[0].open_hour.toString().padStart(2, "0")}:{closingTime.days[0].open_minute.toString().padStart(2, "0")} every day ({tz})
+                      </p>
+                    );
+                  }
+
+                  return (
+                    <div className="text-xs text-muted-foreground space-y-0.5">
+                      {closingTime.days.map((d) => (
+                        <p key={d.day_of_week}>
+                          {dayNames[d.day_of_week]}: {d.close_hour.toString().padStart(2, "0")}:{d.close_minute.toString().padStart(2, "0")} – {d.open_hour.toString().padStart(2, "0")}:{d.open_minute.toString().padStart(2, "0")}
+                        </p>
+                      ))}
+                      <p>({tz})</p>
+                    </div>
+                  );
+                })()}
               </>
             )}
           </CardContent>

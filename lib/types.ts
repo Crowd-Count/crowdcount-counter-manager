@@ -121,6 +121,22 @@ export interface ResetSchedule {
   timezone: string;
 }
 
+// Closing time schedule
+export interface ClosingTimeDay {
+  day_of_week: number;
+  close_hour: number;
+  close_minute: number;
+  open_hour: number;
+  open_minute: number;
+}
+
+export interface ClosingTime {
+  id: string;
+  location_id: string;
+  timezone: string;
+  days: ClosingTimeDay[];
+}
+
 // Credentials for a location's devices
 export interface LocationCredentials {
   credentials: Array<{ device_id: string; password: string }>;

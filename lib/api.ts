@@ -23,6 +23,8 @@ import type {
   CreateLocationResponse,
   LocationsForDeviceResponse,
   ResetSchedule,
+  ClosingTime,
+  ClosingTimeDay,
   SigningCredentials,
   StoredLocation,
   DeviceState,
@@ -1054,6 +1056,59 @@ export async function deleteResetSchedule(
   signingDevice: SigningCredentials
 ): Promise<void> {
   await apiRequest("/delete_reset_schedule", {
+    method: "POST",
+    body: JSON.stringify({ location_id: locationId, credentials }),
+    sign: signingDevice,
+    idempotent: true,
+  });
+}
+
+// ── Closing Time ──
+
+export async function getClosingTime(
+  locationId: string,
+  credentials: Array<{ device_id: string; password: string }>,
+  signingDevice: SigningCredentials
+): Promise<ClosingTime | null> {
+  try {
+    const response = await apiRequest<ClosingTime | { closing_time: null }>("/get_closing_time", {
+      method: "POST",
+      body: JSON.stringify({ location_id: locationId, credentials }),
+      sign: signingDevice,
+    });
+    if ("closing_time" in response) return null;
+    return response;
+  } catch {
+    return null;
+  }
+}
+
+export async function setClosingTime(
+  locationId: string,
+  credentials: Array<{ device_id: string; password: string }>,
+  signingDevice: SigningCredentials,
+  timezone: string,
+  days: ClosingTimeDay[]
+): Promise<ClosingTime> {
+  return apiRequest<ClosingTime>("/set_closing_time", {
+    method: "POST",
+    body: JSON.stringify({
+      location_id: locationId,
+      credentials,
+      timezone,
+      days,
+    }),
+    sign: signingDevice,
+    idempotent: true,
+  });
+}
+
+export async function deleteClosingTime(
+  locationId: string,
+  credentials: Array<{ device_id: string; password: string }>,
+  signingDevice: SigningCredentials
+): Promise<void> {
+  await apiRequest("/delete_closing_time", {
     method: "POST",
     body: JSON.stringify({ location_id: locationId, credentials }),
     sign: signingDevice,
