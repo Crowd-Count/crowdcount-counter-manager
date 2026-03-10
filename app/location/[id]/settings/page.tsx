@@ -36,7 +36,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Switch } from "@/components/ui/switch";
 import { ThemeToggle } from "@/components/ThemeToggle";
-import { ArrowLeft, Save, Trash2, X, Clock, RotateCcw, DoorClosed } from "lucide-react";
+import { ArrowLeft, Save, Trash2, X, Clock, RotateCcw } from "lucide-react";
 
 const COMMON_TIMEZONES = [
   "America/New_York",
@@ -691,11 +691,11 @@ export default function LocationSettingsPage() {
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <DoorClosed className="h-5 w-5" />
-              Closing Time
+              <Clock className="h-5 w-5" />
+              Operating Hours
             </CardTitle>
             <CardDescription>
-              Set when this location closes and opens each day. While closed, counts are suppressed and reset to zero at open/close transitions.
+              Set when this location opens and closes each day. Outside operating hours, counts are suppressed and reset to zero at transitions.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -706,52 +706,14 @@ export default function LocationSettingsPage() {
                 variant="outline"
                 onClick={() => setIsEditingClosing(true)}
               >
-                <DoorClosed className="h-4 w-4 mr-1" />
-                Set Closing Time
+                <Clock className="h-4 w-4 mr-1" />
+                Set Operating Hours
               </Button>
             ) : (
               <>
                 {!perDayMode ? (
                   <>
-                    {/* Uniform mode — single close/open time for all days */}
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label>Close Hour</Label>
-                        <Select
-                          value={closeHour.toString()}
-                          onValueChange={(v) => setCloseHour(parseInt(v, 10))}
-                        >
-                          <SelectTrigger>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {Array.from({ length: 24 }, (_, i) => (
-                              <SelectItem key={i} value={i.toString()}>
-                                {i.toString().padStart(2, "0")}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="space-y-2">
-                        <Label>Close Minute</Label>
-                        <Select
-                          value={closeMinute.toString()}
-                          onValueChange={(v) => setCloseMinute(parseInt(v, 10))}
-                        >
-                          <SelectTrigger>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {[0, 15, 30, 45].map((m) => (
-                              <SelectItem key={m} value={m.toString()}>
-                                {m.toString().padStart(2, "0")}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    </div>
+                    {/* Uniform mode — single open/close time for all days */}
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2">
                         <Label>Open Hour</Label>
@@ -776,6 +738,44 @@ export default function LocationSettingsPage() {
                         <Select
                           value={openMinute.toString()}
                           onValueChange={(v) => setOpenMinute(parseInt(v, 10))}
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {[0, 15, 30, 45].map((m) => (
+                              <SelectItem key={m} value={m.toString()}>
+                                {m.toString().padStart(2, "0")}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label>Close Hour</Label>
+                        <Select
+                          value={closeHour.toString()}
+                          onValueChange={(v) => setCloseHour(parseInt(v, 10))}
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {Array.from({ length: 24 }, (_, i) => (
+                              <SelectItem key={i} value={i.toString()}>
+                                {i.toString().padStart(2, "0")}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Close Minute</Label>
+                        <Select
+                          value={closeMinute.toString()}
+                          onValueChange={(v) => setCloseMinute(parseInt(v, 10))}
                         >
                           <SelectTrigger>
                             <SelectValue />
@@ -821,24 +821,6 @@ export default function LocationSettingsPage() {
                             <span className="text-sm font-medium w-8">{label}</span>
                             {day.enabled ? (
                               <div className="flex items-center gap-2 flex-1">
-                                <Select value={day.closeHour.toString()} onValueChange={(v) => updatePerDayTime(i, "closeHour", parseInt(v, 10))}>
-                                  <SelectTrigger className="w-[70px]"><SelectValue /></SelectTrigger>
-                                  <SelectContent>
-                                    {Array.from({ length: 24 }, (_, h) => (
-                                      <SelectItem key={h} value={h.toString()}>{h.toString().padStart(2, "0")}</SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
-                                <span className="text-muted-foreground">:</span>
-                                <Select value={day.closeMinute.toString()} onValueChange={(v) => updatePerDayTime(i, "closeMinute", parseInt(v, 10))}>
-                                  <SelectTrigger className="w-[70px]"><SelectValue /></SelectTrigger>
-                                  <SelectContent>
-                                    {[0, 15, 30, 45].map((m) => (
-                                      <SelectItem key={m} value={m.toString()}>{m.toString().padStart(2, "0")}</SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
-                                <span className="text-xs text-muted-foreground">to</span>
                                 <Select value={day.openHour.toString()} onValueChange={(v) => updatePerDayTime(i, "openHour", parseInt(v, 10))}>
                                   <SelectTrigger className="w-[70px]"><SelectValue /></SelectTrigger>
                                   <SelectContent>
@@ -849,6 +831,24 @@ export default function LocationSettingsPage() {
                                 </Select>
                                 <span className="text-muted-foreground">:</span>
                                 <Select value={day.openMinute.toString()} onValueChange={(v) => updatePerDayTime(i, "openMinute", parseInt(v, 10))}>
+                                  <SelectTrigger className="w-[70px]"><SelectValue /></SelectTrigger>
+                                  <SelectContent>
+                                    {[0, 15, 30, 45].map((m) => (
+                                      <SelectItem key={m} value={m.toString()}>{m.toString().padStart(2, "0")}</SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                                <span className="text-xs text-muted-foreground">to</span>
+                                <Select value={day.closeHour.toString()} onValueChange={(v) => updatePerDayTime(i, "closeHour", parseInt(v, 10))}>
+                                  <SelectTrigger className="w-[70px]"><SelectValue /></SelectTrigger>
+                                  <SelectContent>
+                                    {Array.from({ length: 24 }, (_, h) => (
+                                      <SelectItem key={h} value={h.toString()}>{h.toString().padStart(2, "0")}</SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                                <span className="text-muted-foreground">:</span>
+                                <Select value={day.closeMinute.toString()} onValueChange={(v) => updatePerDayTime(i, "closeMinute", parseInt(v, 10))}>
                                   <SelectTrigger className="w-[70px]"><SelectValue /></SelectTrigger>
                                   <SelectContent>
                                     {[0, 15, 30, 45].map((m) => (
@@ -946,7 +946,7 @@ export default function LocationSettingsPage() {
                   if (allSame && closingTime.days.length === 7) {
                     return (
                       <p className="text-xs text-muted-foreground">
-                        Closes at {closingTime.days[0].close_hour.toString().padStart(2, "0")}:{closingTime.days[0].close_minute.toString().padStart(2, "0")}, opens at {closingTime.days[0].open_hour.toString().padStart(2, "0")}:{closingTime.days[0].open_minute.toString().padStart(2, "0")} every day ({tz})
+                        Opens at {closingTime.days[0].open_hour.toString().padStart(2, "0")}:{closingTime.days[0].open_minute.toString().padStart(2, "0")}, closes at {closingTime.days[0].close_hour.toString().padStart(2, "0")}:{closingTime.days[0].close_minute.toString().padStart(2, "0")} every day ({tz})
                       </p>
                     );
                   }
@@ -955,7 +955,7 @@ export default function LocationSettingsPage() {
                     <div className="text-xs text-muted-foreground space-y-0.5">
                       {closingTime.days.map((d) => (
                         <p key={d.day_of_week}>
-                          {dayNames[d.day_of_week]}: {d.close_hour.toString().padStart(2, "0")}:{d.close_minute.toString().padStart(2, "0")} – {d.open_hour.toString().padStart(2, "0")}:{d.open_minute.toString().padStart(2, "0")}
+                          {dayNames[d.day_of_week]}: {d.open_hour.toString().padStart(2, "0")}:{d.open_minute.toString().padStart(2, "0")} – {d.close_hour.toString().padStart(2, "0")}:{d.close_minute.toString().padStart(2, "0")}
                         </p>
                       ))}
                       <p>({tz})</p>

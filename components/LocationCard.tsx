@@ -145,6 +145,8 @@ export function LocationCard({ location }: LocationCardProps) {
   }, []);
 
   const isClosed = useMemo(() => {
+    // Operating-hours model: open_hour/open_minute = when business opens,
+    // close_hour/close_minute = when business closes.
     if (!closingTime?.days?.length) return false;
     const tz = closingTime.timezone;
 
@@ -163,25 +165,29 @@ export function LocationCard({ location }: LocationCardProps) {
     // Check today's schedule
     const today = closingTime.days.find((d) => d.day_of_week === todayIndex);
     if (today) {
-      const closeMin = today.close_hour * 60 + today.close_minute;
       const openMin = today.open_hour * 60 + today.open_minute;
-      if (closeMin > openMin) {
-        // Overnight: closed from closeMin today until openMin tomorrow
-        if (currentMin >= closeMin) return true;
-      } else if (closeMin < openMin) {
-        // Same day: closed from closeMin to openMin
-        if (currentMin >= closeMin && currentMin < openMin) return true;
+      const closeMin = today.close_hour * 60 + today.close_minute;
+      if (openMin < closeMin) {
+        // Same-day hours (e.g., open 9am–5pm)
+        if (currentMin >= openMin && currentMin < closeMin) return false;
+      } else if (openMin > closeMin) {
+        // Overnight hours (e.g., open 8pm–2am)
+        if (currentMin >= openMin) return false;
       }
     }
 
     // Check yesterday's schedule for overnight carry-over
     const yesterday = closingTime.days.find((d) => d.day_of_week === yesterdayIndex);
     if (yesterday) {
-      const closeMin = yesterday.close_hour * 60 + yesterday.close_minute;
       const openMin = yesterday.open_hour * 60 + yesterday.open_minute;
-      if (closeMin > openMin && currentMin < openMin) return true;
+      const closeMin = yesterday.close_hour * 60 + yesterday.close_minute;
+      if (openMin > closeMin && currentMin < closeMin) return false;
     }
 
+    // Has schedule for today but not in operating window → closed
+    if (today) return true;
+
+    // No schedule for today → open 24h
     return false;
   }, [closingTime, now]);
 
@@ -308,7 +314,7 @@ export function LocationCard({ location }: LocationCardProps) {
             <Button variant="link" size="sm" className="mt-1 text-muted-foreground" asChild>
               <Link href={`/location/${location.id}/settings`}>
                 <DoorClosed className="h-3.5 w-3.5 mr-1" />
-                Edit Closing Times
+                Edit Operating Hours
               </Link>
             </Button>
           )}
