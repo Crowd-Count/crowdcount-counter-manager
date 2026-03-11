@@ -37,6 +37,56 @@ declare namespace mapkit {
     Adaptive: string;
   };
 
+  class PointOfInterestFilter {
+    static including(categories: PointOfInterestCategory[]): PointOfInterestFilter;
+    static excluding(categories: PointOfInterestCategory[]): PointOfInterestFilter;
+  }
+
+  type PointOfInterestCategory = string;
+
+  const PointOfInterestCategory: {
+    Airport: PointOfInterestCategory;
+    AmusementPark: PointOfInterestCategory;
+    Aquarium: PointOfInterestCategory;
+    ATM: PointOfInterestCategory;
+    Bakery: PointOfInterestCategory;
+    Bank: PointOfInterestCategory;
+    Beach: PointOfInterestCategory;
+    Brewery: PointOfInterestCategory;
+    Cafe: PointOfInterestCategory;
+    Campground: PointOfInterestCategory;
+    CarRental: PointOfInterestCategory;
+    EVCharger: PointOfInterestCategory;
+    FireStation: PointOfInterestCategory;
+    FitnessCenter: PointOfInterestCategory;
+    FoodMarket: PointOfInterestCategory;
+    GasStation: PointOfInterestCategory;
+    Hospital: PointOfInterestCategory;
+    Hotel: PointOfInterestCategory;
+    Laundry: PointOfInterestCategory;
+    Library: PointOfInterestCategory;
+    Marina: PointOfInterestCategory;
+    MovieTheater: PointOfInterestCategory;
+    Museum: PointOfInterestCategory;
+    NationalPark: PointOfInterestCategory;
+    Nightlife: PointOfInterestCategory;
+    Park: PointOfInterestCategory;
+    Parking: PointOfInterestCategory;
+    Pharmacy: PointOfInterestCategory;
+    Police: PointOfInterestCategory;
+    PostOffice: PointOfInterestCategory;
+    PublicTransport: PointOfInterestCategory;
+    Restaurant: PointOfInterestCategory;
+    Restroom: PointOfInterestCategory;
+    School: PointOfInterestCategory;
+    Stadium: PointOfInterestCategory;
+    Store: PointOfInterestCategory;
+    Theater: PointOfInterestCategory;
+    University: PointOfInterestCategory;
+    Winery: PointOfInterestCategory;
+    Zoo: PointOfInterestCategory;
+  };
+
   interface MapConstructorOptions {
     center?: Coordinate;
     region?: CoordinateRegion;
@@ -49,5 +99,7 @@ declare namespace mapkit {
     showsMapTypeControl?: boolean;
     showsZoomControl?: boolean;
     showsScale?: string;
+    showsPointsOfInterest?: boolean;
+    pointOfInterestFilter?: PointOfInterestFilter;
   }
 }

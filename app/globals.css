@@ -73,6 +73,15 @@
   }
 }
 
+/* Hide all text labels on MapKit maps (road names, neighborhoods, POIs) */
+.mk-map-view .mk-annotation-container,
+.mk-map-view .mk-label,
+.mk-map-view .mk-place-label,
+.mk-map-view .mk-road-label,
+.mk-map-view .mk-transit-label {
+  display: none !important;
+}
+
 /* Move Apple Maps attribution to bottom-right */
 .mk-map-view .mk-controls-container {
   right: 8px !important;
