@@ -43,10 +43,21 @@ export const MapBackground = memo(function MapBackground({
         showsPointsOfInterest: false,
       });
 
+      // Hide all text labels rendered by MapKit
+      const container = containerRef.current;
+      const style = document.createElement("style");
+      style.textContent = `
+        #${container.id || (container.id = "mapbg-" + Math.random().toString(36).slice(2))} canvas + div {
+          display: none !important;
+        }
+      `;
+      container.appendChild(style);
+
       mapRef.current = map;
 
       return () => {
         map.destroy();
+        style.remove();
         mapRef.current = null;
       };
     } catch (e) {
@@ -56,7 +67,7 @@ export const MapBackground = memo(function MapBackground({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isReady, latitude, longitude]);
 
-  // Update color scheme in-place when theme changes (no map recreation)
+  // Update color scheme in-place when theme changes
   useEffect(() => {
     if (mapRef.current) {
       mapRef.current.colorScheme =
