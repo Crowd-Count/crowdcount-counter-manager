@@ -41,7 +41,6 @@ export const MapBackground = memo(function MapBackground({
         showsZoomControl: false,
         showsScale: mapkit.FeatureVisibility.Hidden,
         showsPointsOfInterest: false,
-        pointOfInterestFilter: mapkit.PointOfInterestFilter.excluding([]),
       });
 
       mapRef.current = map;
