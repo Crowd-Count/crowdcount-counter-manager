@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/select";
 import { HistoryChart } from "@/components/HistoryChart";
 import { Download, RefreshCw } from "lucide-react";
+import type { POSTransactionData } from "@/lib/types";
 
 function formatDateForDisplay(dateStr: string): string {
   const [year, month, day] = dateStr.split("-");
@@ -52,6 +53,10 @@ interface HistoryContentProps {
   yearDescription?: string;
   /** If provided, fetches 15-min interval data for daily CSV download instead of using hourly chart data */
   onDownloadDay?: (date: string, dataType: string, filename: string) => Promise<void>;
+  /** POS sales data keyed by date (YYYY-MM-DD) with hourly breakdown */
+  posSalesData?: Record<string, POSTransactionData>;
+  /** Whether the location has a POS connection */
+  hasPOS?: boolean;
 }
 
 export function HistoryContent({
@@ -61,6 +66,8 @@ export function HistoryContent({
   weekDescription = "Daily count breakdown",
   yearDescription = "Monthly count breakdown",
   onDownloadDay,
+  posSalesData,
+  hasPOS,
 }: HistoryContentProps) {
   const {
     availableDates,
@@ -83,8 +90,24 @@ export function HistoryContent({
   } = history;
 
   const [isDayDownloading, setIsDayDownloading] = useState(false);
+  const [showSales, setShowSales] = useState(true);
 
   const dataLabel = dataType === "entries" ? "Entries" : "Count";
+
+  // Merge POS sales data into chart data for the selected day
+  const mergeSalesIntoDay = (chartData: ChartData[]): ChartData[] => {
+    const sales = posSalesData?.[selectedDate];
+    if (!sales || !showSales) return chartData;
+    return chartData.map((d) => {
+      // label is "0:00", "1:00", etc. — extract hour
+      const hour = d.label.split(":")[0];
+      const hourData = sales.hourlyBreakdown[hour];
+      return {
+        ...d,
+        salesRevenue: hourData ? hourData.revenue / 100 : 0,
+      };
+    });
+  };
 
   if (isLoadingDates) {
     return (
@@ -120,6 +143,21 @@ export function HistoryContent({
             ? "Population shows the number of people present at each point in time."
             : "Entries shows the total number of people who entered during each period."}
         </p>
+
+        {hasPOS && (
+          <label className="flex items-center justify-center gap-2 mt-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={showSales}
+              onChange={(e) => setShowSales(e.target.checked)}
+              className="rounded border-input"
+            />
+            <span className="text-sm text-muted-foreground">
+              Show Sales Data
+            </span>
+            <span className="inline-block w-3 h-0.5 rounded bg-green-500" />
+          </label>
+        )}
 
         {/* Both tabs share the same stacked layout */}
         {["population", "entries"].map((tab) => (
@@ -178,7 +216,7 @@ export function HistoryContent({
                     <RefreshCw className="h-6 w-6 animate-spin text-muted-foreground" />
                   </div>
                 ) : (
-                  <HistoryChart data={dayData} dataType={dataType} />
+                  <HistoryChart data={mergeSalesIntoDay(dayData)} dataType={dataType} showSales={showSales && hasPOS} />
                 )}
               </CardContent>
             </Card>

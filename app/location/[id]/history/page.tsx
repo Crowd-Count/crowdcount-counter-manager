@@ -1,12 +1,14 @@
 "use client";
 
-import { useCallback, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { useDevices } from "@/contexts/DevicesContext";
 import { useLocations } from "@/contexts/LocationsContext";
-import { LOCATION_COLORS } from "@/lib/types";
+import { usePOS } from "@/contexts/POSContext";
+import { LOCATION_COLORS, type POSTransactionData } from "@/lib/types";
 import * as api from "@/lib/api";
+import { fetchPOSTransactions } from "@/lib/posApi";
 import {
   useAggregatedHistory,
   type DeviceCredentials,
@@ -45,6 +47,31 @@ export default function LocationHistoryPage() {
   }, [location, devices]);
 
   const history = useAggregatedHistory(credentials, locationParams);
+  const { getStatus: getPOSStatus, statusVersion } = usePOS();
+
+  // POS sales data cache: date → transaction data
+  const [posSalesData, setPosSalesData] = useState<Record<string, POSTransactionData>>({});
+  const posStatus = location ? getPOSStatus(location.id) : undefined;
+  const hasPOS = !!posStatus?.connected;
+
+  // Fetch POS sales data when the selected date changes
+  useEffect(() => {
+    if (!hasPOS || !locationParams || !history.selectedDate) return;
+    const date = history.selectedDate;
+    if (posSalesData[date]) return; // already cached
+
+    fetchPOSTransactions(
+      locationParams.locationId,
+      date,
+      date,
+      locationParams.credentials,
+      locationParams.signingDevice
+    )
+      .then((data) => {
+        setPosSalesData((prev) => ({ ...prev, [date]: data }));
+      })
+      .catch(() => {}); // silently skip if POS fetch fails
+  }, [hasPOS, locationParams, history.selectedDate, posSalesData]);
 
   const handleDownloadDay = useCallback(async (date: string, dataType: string, filename: string) => {
     if (!locationParams) return;
@@ -152,6 +179,8 @@ export default function LocationHistoryPage() {
           weekDescription="Combined daily count from location counters"
           yearDescription="Combined monthly count from location counters"
           onDownloadDay={handleDownloadDay}
+          posSalesData={posSalesData}
+          hasPOS={hasPOS}
         />
       </main>
     </div>

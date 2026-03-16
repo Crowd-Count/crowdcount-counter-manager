@@ -40,6 +40,9 @@ import {
 } from "lucide-react";
 import { MapBackground } from "@/components/MapBackground";
 import { logError } from "@/lib/logger";
+import { usePOS } from "@/contexts/POSContext";
+import POSConnectDialog from "@/components/POSConnectDialog";
+import { CreditCard } from "lucide-react";
 
 interface LocationCardProps {
   location: LocationState;
