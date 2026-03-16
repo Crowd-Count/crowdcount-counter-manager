@@ -214,3 +214,29 @@ export interface EntryYearDataResponse {
 export interface AverageEntryYearDataResponse {
   average_entry_year_data: Record<string, number> | string;
 }
+
+// POS integration types
+export type POSProvider = "square" | "toast";
+
+export interface POSConnectionInfo {
+  connected: boolean;
+  provider?: POSProvider;
+  posLocationName?: string;
+  posLocationId?: string;
+  merchantId?: string;
+  posAccountId?: string;
+  connectedAt?: string;
+}
+
+export interface POSStoreLocation {
+  id: string;
+  name: string;
+  address?: string;
+}
+
+export interface POSTransactionData {
+  totalTransactions: number;
+  totalRevenue: number; // cents
+  hourlyBreakdown: Record<string, { transactions: number; revenue: number }>;
+  currency: string;
+}

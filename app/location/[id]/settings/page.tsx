@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useRouter, useParams } from "next/navigation";
+import { useRouter, useParams, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useDevices } from "@/contexts/DevicesContext";
 import { useLocations } from "@/contexts/LocationsContext";
@@ -36,8 +36,11 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Switch } from "@/components/ui/switch";
 import { ThemeToggle } from "@/components/ThemeToggle";
-import { ArrowLeft, Save, Trash2, X, Clock, RotateCcw } from "lucide-react";
+import { ArrowLeft, Save, Trash2, X, Clock, RotateCcw, CreditCard } from "lucide-react";
 import { logError } from "@/lib/logger";
+import { usePOS } from "@/contexts/POSContext";
+import POSConnectDialog from "@/components/POSConnectDialog";
+import { disconnectPOS, fetchPOSTransactions } from "@/lib/posApi";
 
 const COMMON_TIMEZONES = [
   "America/New_York",
@@ -92,6 +95,8 @@ export default function LocationSettingsPage() {
     isLoading: locationsLoading,
   } = useLocations();
   const { theme } = useTheme();
+  const searchParams = useSearchParams();
+  const { getStatus: getPOSStatus, statusVersion: posVersion } = usePOS();
 
   const location = getLocation(locationId);
 
@@ -134,6 +139,13 @@ export default function LocationSettingsPage() {
     }
     return init;
   });
+
+  // POS state
+  const [posDialogOpen, setPosDialogOpen] = useState(false);
+  const [posDisconnecting, setPosDisconnecting] = useState(false);
+  const [posSyncing, setPosSyncing] = useState(false);
+  const [posSyncResult, setPosSyncResult] = useState<string | null>(null);
+  const posAccountIdParam = searchParams.get("pos_account_id");
 
   // Danger zone state — must be before early returns to satisfy Rules of Hooks
   const [isErasing, setIsErasing] = useState(false);
@@ -215,6 +227,18 @@ export default function LocationSettingsPage() {
       .catch(() => {})
       .finally(() => setIsLoadingClosing(false));
   }, [location, devices]);
+
+  // Handle OAuth callback: open POS dialog with account ID from URL params
+  useEffect(() => {
+    if (posAccountIdParam) {
+      setPosDialogOpen(true);
+      // Clear URL params
+      const url = new URL(window.location.href);
+      url.searchParams.delete("pos_account_id");
+      url.searchParams.delete("pos_merchant_id");
+      router.replace(url.pathname);
+    }
+  }, [posAccountIdParam, router]);
 
   if (devicesLoading || locationsLoading) {
     return (
@@ -969,6 +993,128 @@ export default function LocationSettingsPage() {
             )}
           </CardContent>
         </Card>
+
+        {/* Point of Sale */}
+        {(() => {
+          const locCreds = api.getLocationCredentials(location, devices);
+          const posStatus = getPOSStatus(currentId);
+
+          const handleDisconnect = async () => {
+            if (!locCreds) return;
+            setPosDisconnecting(true);
+            try {
+              await disconnectPOS(currentId, locCreds.credentials, locCreds.signingDevice);
+              window.location.reload();
+            } catch {
+              setPosDisconnecting(false);
+            }
+          };
+
+          const handleSyncNow = async () => {
+            if (!locCreds) return;
+            setPosSyncing(true);
+            setPosSyncResult(null);
+            try {
+              const today = new Date().toISOString().split("T")[0];
+              const data = await fetchPOSTransactions(
+                currentId,
+                today,
+                today,
+                locCreds.credentials,
+                locCreds.signingDevice
+              );
+              const revenue = (data.totalRevenue / 100).toFixed(2);
+              setPosSyncResult(
+                `${data.totalTransactions} transactions, $${revenue} ${data.currency}`
+              );
+            } catch (err) {
+              setPosSyncResult(
+                `Error: ${err instanceof Error ? err.message : "Sync failed"}`
+              );
+            } finally {
+              setPosSyncing(false);
+            }
+          };
+
+          return (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <CreditCard className="h-5 w-5" />
+                  Point of Sale
+                </CardTitle>
+                <CardDescription>
+                  {posStatus?.connected
+                    ? "Connected POS system"
+                    : "Connect a POS to see sales data alongside foot traffic"}
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {posStatus?.connected ? (
+                  <div className="space-y-3">
+                    <div>
+                      <p className="font-medium capitalize">
+                        {posStatus.provider} — &quot;{posStatus.posLocationName}&quot;
+                      </p>
+                      {posStatus.connectedAt && (
+                        <p className="text-sm text-muted-foreground">
+                          Connected {new Date(posStatus.connectedAt).toLocaleDateString()}
+                        </p>
+                      )}
+                    </div>
+                    {posSyncResult && (
+                      <p className={`text-sm ${posSyncResult.startsWith("Error") ? "text-destructive" : "text-muted-foreground"}`}>
+                        {posSyncResult}
+                      </p>
+                    )}
+                    <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleSyncNow}
+                        disabled={posSyncing}
+                      >
+                        {posSyncing ? "Syncing..." : "Sync Now"}
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="text-destructive hover:text-destructive"
+                        onClick={handleDisconnect}
+                        disabled={posDisconnecting}
+                      >
+                        {posDisconnecting ? "Disconnecting..." : "Disconnect"}
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <Button
+                    variant="outline"
+                    onClick={() => setPosDialogOpen(true)}
+                    disabled={!locCreds}
+                  >
+                    Connect POS
+                  </Button>
+                )}
+              </CardContent>
+            </Card>
+          );
+        })()}
+
+        {(() => {
+          const locCreds = api.getLocationCredentials(location, devices);
+          if (!locCreds) return null;
+          return (
+            <POSConnectDialog
+              locationId={currentId}
+              locationName={location.name}
+              credentials={locCreds}
+              open={posDialogOpen}
+              onOpenChange={setPosDialogOpen}
+              initialPosAccountId={posAccountIdParam || undefined}
+            />
+          );
+        })()}
 
         {/* Danger Zone */}
         <Card className="border-destructive">

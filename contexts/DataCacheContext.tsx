@@ -18,6 +18,7 @@ import {
   type HistoryCacheEntry,
   type LocationFetchParams,
 } from "@/lib/dataFetchers";
+import type { POSTransactionData } from "@/lib/types";
 import * as api from "@/lib/api";
 import { logError } from "@/lib/logger";
 
@@ -29,6 +30,8 @@ interface DataCacheContextType {
   setCachedDates(credKey: string, dates: string[]): void;
   getCachedHistory(cacheKey: string): HistoryCacheEntry | null;
   setCachedHistory(cacheKey: string, data: HistoryCacheEntry): void;
+  getCachedPOSTransactions(cacheKey: string): POSTransactionData | null;
+  setCachedPOSTransactions(cacheKey: string, data: POSTransactionData): void;
 }
 
 const DataCacheContext = createContext<DataCacheContextType | undefined>(undefined);
@@ -45,6 +48,7 @@ export function DataCacheProvider({ children }: { children: React.ReactNode }) {
   const insightsCache = useRef<Map<string, InsightsCacheEntry>>(new Map());
   const datesCache = useRef<Map<string, string[]>>(new Map());
   const historyCache = useRef<Map<string, HistoryCacheEntry>>(new Map());
+  const posTransactionCache = useRef<Map<string, POSTransactionData>>(new Map());
 
   const getCachedInsights = useCallback((credKey: string) => {
     return insightsCache.current.get(credKey) ?? null;
@@ -68,6 +72,14 @@ export function DataCacheProvider({ children }: { children: React.ReactNode }) {
 
   const setCachedHistory = useCallback((cacheKey: string, data: HistoryCacheEntry) => {
     historyCache.current.set(cacheKey, data);
+  }, []);
+
+  const getCachedPOSTransactions = useCallback((cacheKey: string) => {
+    return posTransactionCache.current.get(cacheKey) ?? null;
+  }, []);
+
+  const setCachedPOSTransactions = useCallback((cacheKey: string, data: POSTransactionData) => {
+    posTransactionCache.current.set(cacheKey, data);
   }, []);
 
   // Build credential sets for locations that need pre-fetching
@@ -221,6 +233,8 @@ export function DataCacheProvider({ children }: { children: React.ReactNode }) {
         setCachedDates,
         getCachedHistory,
         setCachedHistory,
+        getCachedPOSTransactions,
+        setCachedPOSTransactions,
       }}
     >
       {children}
