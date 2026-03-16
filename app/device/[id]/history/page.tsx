@@ -13,6 +13,7 @@ import { HistoryContent } from "@/components/HistoryContent";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { ArrowLeft, Download, RefreshCw } from "lucide-react";
+import { logError } from "@/lib/logger";
 
 export default function HistoryPage() {
   const params = useParams();
@@ -48,7 +49,7 @@ export default function HistoryPage() {
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
     } catch (error) {
-      console.error("Failed to export:", error);
+      logError("Failed to export:", error);
     }
   };
 

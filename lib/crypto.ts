@@ -91,3 +91,15 @@ export async function signRequest(
 export function generateIdempotencyKey(): string {
   return crypto.randomUUID();
 }
+
+export function clearSigningKey(deviceId: string): void {
+  for (const key of signingKeyCache.keys()) {
+    if (key.startsWith(`${deviceId}:`)) {
+      signingKeyCache.delete(key);
+    }
+  }
+}
+
+export function clearAllSigningKeys(): void {
+  signingKeyCache.clear();
+}

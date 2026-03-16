@@ -10,6 +10,7 @@ import {
   type InsightsCacheEntry,
   type LocationFetchParams,
 } from "@/lib/dataFetchers";
+import { logError } from "@/lib/logger";
 
 export interface InsightsData {
   isLoading: boolean;
@@ -122,7 +123,7 @@ export function useInsightsData(
       })
       .catch((error) => {
         if (cancelled) return;
-        console.error("Failed to load insights data:", error);
+        logError("Failed to load insights data:", error);
       })
       .finally(() => {
         if (!cancelled) setIsLoading(false);

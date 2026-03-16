@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { logWarn } from "@/lib/logger";
 
 const STAGING_TOKEN =
   "eyJraWQiOiI3RlRSM1gzS1JKIiwidHlwIjoiSldUIiwiYWxnIjoiRVMyNTYifQ.eyJpc3MiOiI0NVQ1NlFCMlBZIiwiaWF0IjoxNzcxMjgzMjU3LCJvcmlnaW4iOiJjb3VudGVyLXN0YWdpbmcuY3Jvd2Rjb3VudC50ZWNoIn0.BcBjf_kgq-zkRgrNhN9ZvJQ1zyVawWLiVHkDZJEHr8rehzV8SGiPl4BgZoe3v-5hbHCWFvBCuPJr5l5o4yXuZA";
@@ -27,7 +28,9 @@ function loadMapKit() {
   loadState = "loading";
 
   const script = document.createElement("script");
-  script.src = "https://cdn.apple-mapkit.com/mk/5.x.x/mapkit.js";
+  script.src = "https://cdn.apple-mapkit.com/mk/5.81.48/mapkit.js";
+  script.integrity = "sha384-QZ+GFMeAuqDQZMwmBOrunYXSXKXJ14mhsZ/92WkRqjGzKzyJZCE9O23zqph5j0uT";
+  script.crossOrigin = "anonymous";
 
   script.onload = () => {
     try {
@@ -38,14 +41,14 @@ function loadMapKit() {
       });
       loadState = "ready";
     } catch (e) {
-      console.warn("[MapKit] init failed:", e);
+      logWarn("[MapKit] init failed:", e);
       loadState = "error";
     }
     notifyListeners();
   };
 
   script.onerror = (e) => {
-    console.warn("[MapKit] Script failed to load:", e);
+    logWarn("[MapKit] Script failed to load:", e);
     loadState = "error";
     notifyListeners();
   };

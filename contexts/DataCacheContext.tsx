@@ -19,6 +19,7 @@ import {
   type LocationFetchParams,
 } from "@/lib/dataFetchers";
 import * as api from "@/lib/api";
+import { logError } from "@/lib/logger";
 
 interface DataCacheContextType {
   cacheVersion: number;
@@ -136,7 +137,7 @@ export function DataCacheProvider({ children }: { children: React.ReactNode }) {
         historyCache.current.set(histKey, popHistory);
       }
     } catch (error) {
-      console.error(`Failed to prefetch data for ${credKey}:`, error);
+      logError(`Failed to prefetch data for ${credKey}:`, error);
     }
   }, []);
 

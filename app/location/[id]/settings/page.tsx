@@ -37,6 +37,7 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { ArrowLeft, Save, Trash2, X, Clock, RotateCcw } from "lucide-react";
+import { logError } from "@/lib/logger";
 
 const COMMON_TIMEZONES = [
   "America/New_York",
@@ -271,7 +272,7 @@ export default function LocationSettingsPage() {
     try {
       await api.resetLocationData(currentId, locCreds.credentials, locCreds.signingDevice);
     } catch (err) {
-      console.error("Failed to erase location data:", err);
+      logError("Failed to erase location data:", err);
     } finally {
       setIsErasing(false);
     }
@@ -299,7 +300,7 @@ export default function LocationSettingsPage() {
       );
       setResetSchedule(schedule);
     } catch (err) {
-      console.error("Failed to save reset schedule:", err);
+      logError("Failed to save reset schedule:", err);
     } finally {
       setIsSavingSchedule(false);
     }
@@ -318,7 +319,7 @@ export default function LocationSettingsPage() {
       setResetMinute(0);
       setResetTimezone(getBrowserTimezone());
     } catch (err) {
-      console.error("Failed to delete reset schedule:", err);
+      logError("Failed to delete reset schedule:", err);
     } finally {
       setIsSavingSchedule(false);
     }
@@ -362,7 +363,7 @@ export default function LocationSettingsPage() {
       );
       setClosingTime(ct);
     } catch (err) {
-      console.error("Failed to save closing time:", err);
+      logError("Failed to save closing time:", err);
     } finally {
       setIsSavingClosing(false);
     }
@@ -389,7 +390,7 @@ export default function LocationSettingsPage() {
       }
       setPerDayTimes(init);
     } catch (err) {
-      console.error("Failed to delete closing time:", err);
+      logError("Failed to delete closing time:", err);
     } finally {
       setIsSavingClosing(false);
     }

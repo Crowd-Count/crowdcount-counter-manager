@@ -39,6 +39,7 @@ import {
   DoorClosed,
 } from "lucide-react";
 import { MapBackground } from "@/components/MapBackground";
+import { logError } from "@/lib/logger";
 
 interface LocationCardProps {
   location: LocationState;
@@ -198,7 +199,7 @@ export function LocationCard({ location }: LocationCardProps) {
       await api.locationAddToCount(location.id, locCreds.credentials, locCreds.signingDevice, 1);
       await refreshLocation(location.id);
     } catch (error) {
-      console.error("Failed to increment:", error);
+      logError("Failed to increment:", error);
     } finally {
       setIsModifyingCount(false);
     }
@@ -211,7 +212,7 @@ export function LocationCard({ location }: LocationCardProps) {
       await api.locationSubFromCount(location.id, locCreds.credentials, locCreds.signingDevice, 1);
       await refreshLocation(location.id);
     } catch (error) {
-      console.error("Failed to decrement:", error);
+      logError("Failed to decrement:", error);
     } finally {
       setIsModifyingCount(false);
     }

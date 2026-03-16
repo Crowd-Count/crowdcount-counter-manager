@@ -14,6 +14,7 @@ import {
   type LocationFetchParams,
 } from "@/lib/dataFetchers";
 import { formatLocalDate } from "@/lib/timezone";
+import { logError } from "@/lib/logger";
 
 /** Strip any dates after today's local date (belt-and-suspenders for timezone edge cases) */
 function filterFutureDates(dates: string[]): string[] {
@@ -135,7 +136,7 @@ export function useAggregatedHistory(
         setSelectedYear(year);
       }
     } catch (error) {
-      console.error("Failed to load dates:", error);
+      logError("Failed to load dates:", error);
     } finally {
       setIsLoadingDates(false);
     }
@@ -186,7 +187,7 @@ export function useAggregatedHistory(
       })
       .catch((error) => {
         if (cancelled) return;
-        console.error("Failed to load chart data:", error);
+        logError("Failed to load chart data:", error);
         setDayData([]);
         setWeekData([]);
         setYearData([]);

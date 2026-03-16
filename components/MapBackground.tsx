@@ -3,6 +3,7 @@
 import { memo, useRef, useEffect } from "react";
 import { useMapKit } from "@/hooks/useMapKit";
 import { useTheme } from "@/contexts/ThemeContext";
+import { logWarn } from "@/lib/logger";
 
 interface MapBackgroundProps {
   latitude: number;
@@ -50,7 +51,7 @@ export const MapBackground = memo(function MapBackground({
         mapRef.current = null;
       };
     } catch (e) {
-      console.warn("[MapBackground] Failed to create map:", e);
+      logWarn("[MapBackground] Failed to create map:", e);
     }
     // Only recreate if coordinates change or MapKit becomes ready
     // eslint-disable-next-line react-hooks/exhaustive-deps

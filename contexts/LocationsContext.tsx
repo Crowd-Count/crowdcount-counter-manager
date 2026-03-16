@@ -12,7 +12,8 @@ import React, {
 import type { StoredLocation, LocationState, LocationColorName } from "@/lib/types";
 import { useDevices } from "@/contexts/DevicesContext";
 import * as api from "@/lib/api";
-import { encrypt } from "@/lib/secureStorage";
+import { encrypt, decrypt, isEncrypted } from "@/lib/secureStorage";
+import { logError, logWarn } from "@/lib/logger";
 
 interface LocationsContextType {
   locations: LocationState[];
@@ -41,49 +42,54 @@ function generateLocalId(): string {
   return crypto.randomUUID();
 }
 
-function loadLocationsFromStorage(): StoredLocation[] {
+async function loadLocationsFromStorage(): Promise<StoredLocation[]> {
   if (typeof window === "undefined") return [];
   const stored = localStorage.getItem(STORAGE_KEY);
   if (!stored) return [];
   try {
-    const parsed = JSON.parse(stored) as StoredLocation[];
+    let json: string;
+    if (isEncrypted(stored)) {
+      json = await decrypt(stored);
+    } else {
+      // Migration: plain JSON from before encryption was added
+      json = stored;
+    }
+    const parsed = JSON.parse(json) as StoredLocation[];
     // Migration check: if any location lacks isAuto field, it's old format — discard
     if (parsed.length > 0 && parsed[0].isAuto === undefined) {
       localStorage.removeItem(STORAGE_KEY);
       return [];
     }
     // Backfill missing fields for locations from older versions
-    let needsSave = false;
     for (const loc of parsed) {
       if (!loc.localId) {
         loc.localId = generateLocalId();
-        needsSave = true;
       }
       if (loc.serverColor === undefined) {
         loc.serverColor = null;
-        needsSave = true;
       }
       if (loc.latitude === undefined) {
         loc.latitude = null;
-        needsSave = true;
       }
       if (loc.longitude === undefined) {
         loc.longitude = null;
-        needsSave = true;
       }
     }
-    if (needsSave) {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed));
-    }
+    // Don't write back here — next regular save will encrypt automatically
     return parsed;
   } catch {
     return [];
   }
 }
 
-function saveLocationsToStorage(locations: StoredLocation[]): void {
+async function saveLocationsToStorage(locations: StoredLocation[]): Promise<void> {
   if (typeof window === "undefined") return;
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(locations));
+  try {
+    const encrypted = await encrypt(JSON.stringify(locations));
+    localStorage.setItem(STORAGE_KEY, encrypted);
+  } catch {
+    logWarn("Failed to encrypt location data — keeping in memory only");
+  }
 }
 
 // Extract device IDs from server response — handles both tuple format ["id", "label"]
@@ -116,9 +122,10 @@ export function LocationsProvider({ children }: { children: React.ReactNode }) {
 
   // Load locations from storage on mount
   useEffect(() => {
-    const stored = loadLocationsFromStorage();
-    setStoredLocations(stored);
-    setIsLoading(false);
+    loadLocationsFromStorage().then((stored) => {
+      setStoredLocations(stored);
+      setIsLoading(false);
+    });
   }, []);
 
   // Save locations to storage when they change
@@ -201,7 +208,7 @@ export function LocationsProvider({ children }: { children: React.ReactNode }) {
         });
       })
       .catch((err) => {
-        console.error(`Failed to poll location ${loc.id}:`, err);
+        logError(`Failed to poll location ${loc.id}:`, err);
       });
 
     await Promise.all([locationPromise, ...connectionPromises]);
@@ -394,7 +401,7 @@ export function LocationsProvider({ children }: { children: React.ReactNode }) {
         });
         return locationId;
       } catch (error) {
-        console.error("Failed to create location on server:", error);
+        logError("Failed to create location on server:", error);
         return null;
       }
     },
@@ -409,16 +416,16 @@ export function LocationsProvider({ children }: { children: React.ReactNode }) {
       const loc = currentLocs.find((l) => l.id === id || l.localId === id);
       if (!loc) return;
 
-      // 1. Synchronously update localStorage BEFORE React state updates
+      // 1. Update localStorage BEFORE React state updates
       //    (React state may not flush before navigation)
       const remainingLocs = currentLocs.filter((l) => l.localId !== loc.localId);
       if (remainingLocs.length === 0) {
         localStorage.removeItem(STORAGE_KEY);
       } else {
-        saveLocationsToStorage(remainingLocs);
+        await saveLocationsToStorage(remainingLocs);
       }
 
-      // 2. Remove devices from localStorage synchronously too
+      // 2. Remove devices from localStorage too
       const currentDevices = devicesRef.current;
       const deviceIdsToRemove = new Set<string>();
       for (const serverDeviceId of loc.deviceIds) {
@@ -435,7 +442,7 @@ export function LocationsProvider({ children }: { children: React.ReactNode }) {
         );
         encrypt(devicesJson).then(
           (enc) => localStorage.setItem("crowdcount_devices", enc),
-          () => localStorage.setItem("crowdcount_devices", devicesJson) // fallback
+          () => {} // On encryption failure, skip write — data stays in memory only
         );
       }
 
@@ -464,7 +471,7 @@ export function LocationsProvider({ children }: { children: React.ReactNode }) {
       const locCreds = api.getLocationCredentials(loc, devicesRef.current);
       if (locCreds) {
         api.updateLocation(id, locCreds.credentials, locCreds.signingDevice, { name })
-          .catch((err) => console.error("Failed to update location name on server:", err));
+          .catch((err) => logError("Failed to update location name on server:", err));
       }
     }
   }, []);
@@ -581,7 +588,7 @@ export function LocationsProvider({ children }: { children: React.ReactNode }) {
 
         return { success: true };
       } catch (err) {
-        console.error("addCounterToLocation server sync failed:", err);
+        logError("addCounterToLocation server sync failed:", err);
         return { success: false, error: "Server sync failed" };
       }
     },
@@ -687,7 +694,7 @@ export function LocationsProvider({ children }: { children: React.ReactNode }) {
       if (device) removeDevice(device.id);
       return newServerId;
     } catch (err) {
-      console.error("Failed to sync location change to server:", err);
+      logError("Failed to sync location change to server:", err);
       // Still remove device locally even if server sync failed
       if (device) removeDevice(device.id);
       return loc.id;
@@ -709,7 +716,7 @@ export function LocationsProvider({ children }: { children: React.ReactNode }) {
         const locCreds = api.getLocationCredentials(loc, devicesRef.current);
         if (locCreds) {
           api.updateLocation(id, locCreds.credentials, locCreds.signingDevice, { overcrowdingLimit: normalizedLimit })
-            .catch((err) => console.error("Failed to update overcrowding limit on server:", err));
+            .catch((err) => logError("Failed to update overcrowding limit on server:", err));
         }
       }
     },
@@ -735,7 +742,7 @@ export function LocationsProvider({ children }: { children: React.ReactNode }) {
         const creds = [{ device_id: serverDeviceId, password }];
         // Await the rename so the server has the correct name before the user proceeds
         await api.updateLocation(autoLoc.id, creds, signingDevice, { name: locationName })
-          .catch((err) => console.error("Failed to rename adopted location:", err));
+          .catch((err) => logError("Failed to rename adopted location:", err));
         return autoLoc.id;
       }
 
@@ -778,7 +785,7 @@ export function LocationsProvider({ children }: { children: React.ReactNode }) {
           const signingDevice = { deviceId: serverDeviceId, password };
           const creds = [{ device_id: serverDeviceId, password }];
           await api.updateLocation(serverLocId, creds, signingDevice, { name: locationName })
-            .catch((err) => console.error("Failed to rename adopted location:", err));
+            .catch((err) => logError("Failed to rename adopted location:", err));
           return serverLocId;
         }
 
@@ -806,10 +813,10 @@ export function LocationsProvider({ children }: { children: React.ReactNode }) {
         // Always push name to server (createLocation may have returned an existing location
         // whose name differs from what the user entered)
         await api.updateLocation(locationId, creds, signingDevice, { name: locationName })
-          .catch((err) => console.error("Failed to set location name on server:", err));
+          .catch((err) => logError("Failed to set location name on server:", err));
         return locationId;
       } catch (err) {
-        console.error("Failed to adopt/create location:", err);
+        logError("Failed to adopt/create location:", err);
         return null;
       }
     },

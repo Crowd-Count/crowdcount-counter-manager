@@ -11,6 +11,8 @@ import React, {
 import type { StoredDevice, DeviceState } from "@/lib/types";
 import * as api from "@/lib/api";
 import { encrypt, decrypt, isEncrypted } from "@/lib/secureStorage";
+import { clearSigningKey } from "@/lib/crypto";
+import { logWarn } from "@/lib/logger";
 
 interface DevicesContextType {
   devices: DeviceState[];
@@ -26,6 +28,7 @@ interface DevicesContextType {
   getDevice: (id: string) => DeviceState | undefined;
   updateDevicePassword: (id: string, newPassword: string) => void;
   updateDeviceOnlineStatus: (id: string, isOnline: boolean) => void;
+  storageError: boolean;
 }
 
 const DevicesContext = createContext<DevicesContextType | undefined>(undefined);
@@ -54,20 +57,22 @@ async function loadDevicesFromStorage(): Promise<StoredDevice[]> {
   }
 }
 
-async function saveDevicesToStorage(devices: StoredDevice[]): Promise<void> {
-  if (typeof window === "undefined") return;
+async function saveDevicesToStorage(devices: StoredDevice[]): Promise<boolean> {
+  if (typeof window === "undefined") return true;
   try {
     const encrypted = await encrypt(JSON.stringify(devices));
     localStorage.setItem(STORAGE_KEY, encrypted);
+    return true;
   } catch {
-    // Fallback to plain storage if encryption fails (e.g. IndexedDB blocked)
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(devices));
+    logWarn("Failed to encrypt device data — keeping in memory only");
+    return false;
   }
 }
 
 export function DevicesProvider({ children }: { children: React.ReactNode }) {
   const [devices, setDevices] = useState<DeviceState[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [storageError, setStorageError] = useState(false);
 
   // Load devices from storage on mount
   useEffect(() => {
@@ -98,7 +103,9 @@ export function DevicesProvider({ children }: { children: React.ReactNode }) {
         password: d.password,
         name: d.name,
       }));
-      saveDevicesToStorage(stored);
+      saveDevicesToStorage(stored).then((ok) => {
+        if (!ok) setStorageError(true);
+      });
     } else if (!isLoading && devices.length === 0) {
       localStorage.removeItem(STORAGE_KEY);
     }
@@ -140,6 +147,8 @@ export function DevicesProvider({ children }: { children: React.ReactNode }) {
   );
 
   const removeDevice = useCallback((id: string) => {
+    const device = devicesRef.current.find((d) => d.id === id);
+    if (device) clearSigningKey(device.deviceId);
     setDevices((prev) => prev.filter((d) => d.id !== id));
   }, []);
 
@@ -150,6 +159,8 @@ export function DevicesProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const updateDevicePassword = useCallback((id: string, newPassword: string) => {
+    const device = devicesRef.current.find((d) => d.id === id);
+    if (device) clearSigningKey(device.deviceId);
     setDevices((prev) =>
       prev.map((d) => (d.id === id ? { ...d, password: newPassword } : d))
     );
@@ -205,6 +216,7 @@ export function DevicesProvider({ children }: { children: React.ReactNode }) {
         getDevice,
         updateDevicePassword,
         updateDeviceOnlineStatus,
+        storageError,
       }}
     >
       {children}

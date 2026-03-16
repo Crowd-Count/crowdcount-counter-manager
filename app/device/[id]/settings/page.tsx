@@ -29,6 +29,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { ArrowLeft, Trash2, RefreshCw } from "lucide-react";
+import { logError } from "@/lib/logger";
 
 export default function DeviceSettingsPage() {
   const router = useRouter();
@@ -61,7 +62,7 @@ export default function DeviceSettingsPage() {
       );
       setDirectionFlipped(flipped);
     } catch (error) {
-      console.error("Failed to load direction:", error);
+      logError("Failed to load direction:", error);
     } finally {
       setIsLoadingDirection(false);
     }
@@ -97,7 +98,7 @@ export default function DeviceSettingsPage() {
       );
       setDirectionFlipped(!directionFlipped);
     } catch (error) {
-      console.error("Failed to toggle direction:", error);
+      logError("Failed to toggle direction:", error);
     } finally {
       setIsTogglingDirection(false);
     }
@@ -109,7 +110,7 @@ export default function DeviceSettingsPage() {
       await api.resetDeviceData(device.deviceId, device.password);
       await refreshDevice(device.id);
     } catch (error) {
-      console.error("Failed to reset data:", error);
+      logError("Failed to reset data:", error);
     } finally {
       setIsResetting(false);
     }
