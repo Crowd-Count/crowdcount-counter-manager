@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useRouter, useParams, useSearchParams } from "next/navigation";
+import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
 import { useDevices } from "@/contexts/DevicesContext";
 import { useLocations } from "@/contexts/LocationsContext";
@@ -95,7 +95,6 @@ export default function LocationSettingsPage() {
     isLoading: locationsLoading,
   } = useLocations();
   const { theme } = useTheme();
-  const searchParams = useSearchParams();
   const { getStatus: getPOSStatus, statusVersion: posVersion } = usePOS();
 
   const location = getLocation(locationId);
@@ -145,7 +144,7 @@ export default function LocationSettingsPage() {
   const [posDisconnecting, setPosDisconnecting] = useState(false);
   const [posSyncing, setPosSyncing] = useState(false);
   const [posSyncResult, setPosSyncResult] = useState<string | null>(null);
-  const posAccountIdParam = searchParams.get("pos_account_id");
+  const [posAccountIdParam, setPosAccountIdParam] = useState<string | null>(null);
 
   // Danger zone state — must be before early returns to satisfy Rules of Hooks
   const [isErasing, setIsErasing] = useState(false);
@@ -228,17 +227,20 @@ export default function LocationSettingsPage() {
       .finally(() => setIsLoadingClosing(false));
   }, [location, devices]);
 
-  // Handle OAuth callback: open POS dialog with account ID from URL params
+  // Handle OAuth callback: read pos_account_id from URL params on mount
   useEffect(() => {
-    if (posAccountIdParam) {
+    if (typeof window === "undefined") return;
+    const url = new URL(window.location.href);
+    const accountId = url.searchParams.get("pos_account_id");
+    if (accountId) {
+      setPosAccountIdParam(accountId);
       setPosDialogOpen(true);
       // Clear URL params
-      const url = new URL(window.location.href);
       url.searchParams.delete("pos_account_id");
       url.searchParams.delete("pos_merchant_id");
       router.replace(url.pathname);
     }
-  }, [posAccountIdParam, router]);
+  }, [router]);
 
   if (devicesLoading || locationsLoading) {
     return (

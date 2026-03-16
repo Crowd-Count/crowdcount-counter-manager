@@ -5,20 +5,7 @@ const nextConfig = {
       {
         source: '/(.*)',
         headers: [
-          {
-            key: 'Content-Security-Policy',
-            value: [
-              "default-src 'self'",
-              "script-src 'self' 'unsafe-inline' https://cdn.apple-mapkit.com",
-              "style-src 'self' 'unsafe-inline' https://fonts.cdnfonts.com",
-              "connect-src 'self' https://api.crowdcount.tech https://api-staging.crowdcount.tech https://cdn.apple-mapkit.com https://*.apple-mapkit.com",
-              "worker-src 'self' blob:",
-              "img-src 'self' data: blob: https://cdn.apple-mapkit.com https://*.apple-mapkit.com",
-              "font-src 'self' https://fonts.cdnfonts.com",
-              "frame-ancestors 'none'",
-              "upgrade-insecure-requests",
-            ].join('; '),
-          },
+          // CSP is now set per-request via middleware.ts (nonce-based)
           {
             key: 'Strict-Transport-Security',
             value: 'max-age=31536000; includeSubDomains',
