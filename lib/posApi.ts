@@ -61,10 +61,20 @@ export async function getPOSStatus(
   credentials: Array<{ device_id: string; password: string }>,
   sign: SigningCredentials
 ): Promise<POSConnectionInfo> {
-  return posRequest("/pos/status", {
+  const resp = await posRequest<Record<string, unknown>>("/pos/status", {
     location_id: locationId,
     credentials,
   }, sign);
+
+  return {
+    connected: !!resp.connected,
+    provider: resp.provider as POSConnectionInfo["provider"],
+    posLocationName: (resp.pos_location_name as string) || undefined,
+    posLocationId: (resp.pos_location_id as string) || undefined,
+    merchantId: (resp.merchant_id as string) || undefined,
+    posAccountId: (resp.pos_account_id as string) || undefined,
+    connectedAt: (resp.connected_at as string) || undefined,
+  };
 }
 
 export async function listPOSLocations(

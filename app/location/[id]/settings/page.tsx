@@ -144,7 +144,6 @@ export default function LocationSettingsPage() {
   const [posDisconnecting, setPosDisconnecting] = useState(false);
   const [posSyncing, setPosSyncing] = useState(false);
   const [posSyncResult, setPosSyncResult] = useState<string | null>(null);
-  const [posAccountIdParam, setPosAccountIdParam] = useState<string | null>(null);
 
   // Danger zone state — must be before early returns to satisfy Rules of Hooks
   const [isErasing, setIsErasing] = useState(false);
@@ -226,21 +225,6 @@ export default function LocationSettingsPage() {
       .catch(() => {})
       .finally(() => setIsLoadingClosing(false));
   }, [location, devices]);
-
-  // Handle OAuth callback: read pos_account_id from URL params on mount
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const url = new URL(window.location.href);
-    const accountId = url.searchParams.get("pos_account_id");
-    if (accountId) {
-      setPosAccountIdParam(accountId);
-      setPosDialogOpen(true);
-      // Clear URL params
-      url.searchParams.delete("pos_account_id");
-      url.searchParams.delete("pos_merchant_id");
-      router.replace(url.pathname);
-    }
-  }, [router]);
 
   if (devicesLoading || locationsLoading) {
     return (
@@ -1113,7 +1097,6 @@ export default function LocationSettingsPage() {
               credentials={locCreds}
               open={posDialogOpen}
               onOpenChange={setPosDialogOpen}
-              initialPosAccountId={posAccountIdParam || undefined}
             />
           );
         })()}

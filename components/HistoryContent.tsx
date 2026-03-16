@@ -144,19 +144,33 @@ export function HistoryContent({
             : "Entries shows the total number of people who entered during each period."}
         </p>
 
-        {hasPOS && (
+        {hasPOS ? (
           <label className="flex items-center justify-center gap-2 mt-2 cursor-pointer">
             <input
               type="checkbox"
               checked={showSales}
               onChange={(e) => setShowSales(e.target.checked)}
+              className="rounded border-input accent-green-500"
+            />
+            <span className="text-sm text-muted-foreground">
+              Show Sales Data
+            </span>
+            <span className="inline-block w-4 h-0.5 rounded bg-green-500" />
+          </label>
+        ) : (
+          <div className="flex items-center justify-center gap-2 mt-2 opacity-40">
+            <input
+              type="checkbox"
+              disabled
               className="rounded border-input"
             />
             <span className="text-sm text-muted-foreground">
               Show Sales Data
             </span>
-            <span className="inline-block w-3 h-0.5 rounded bg-green-500" />
-          </label>
+            <span className="text-xs text-muted-foreground italic">
+              — Connect a POS system to overlay sales
+            </span>
+          </div>
         )}
 
         {/* Both tabs share the same stacked layout */}
