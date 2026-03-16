@@ -404,6 +404,7 @@ export function LocationCard({ location }: LocationCardProps) {
                     onChange={(e) => setNewDeviceId(e.target.value)}
                     disabled={isAdding}
                     autoCapitalize="characters"
+                    maxLength={20}
                   />
                   <p className="text-xs text-muted-foreground">Case sensitive</p>
                 </div>
@@ -416,6 +417,7 @@ export function LocationCard({ location }: LocationCardProps) {
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
                     disabled={isAdding}
+                    maxLength={128}
                   />
                   <p className="text-xs text-muted-foreground">Case sensitive</p>
                 </div>

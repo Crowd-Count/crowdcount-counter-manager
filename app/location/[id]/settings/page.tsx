@@ -459,6 +459,7 @@ export default function LocationSettingsPage() {
                 placeholder="Location name"
                 disabled={!!location.isOnMap}
                 className={location.isOnMap ? "opacity-50" : ""}
+                maxLength={100}
               />
               {!location.isOnMap && (
                 <Button
@@ -563,6 +564,7 @@ export default function LocationSettingsPage() {
                 placeholder="No limit"
                 value={overcrowdingInput}
                 onChange={(e) => setOvercrowdingInput(e.target.value)}
+                maxLength={7}
               />
               <Button onClick={handleSaveOvercrowding}>
                 <Save className="h-4 w-4 mr-1" />

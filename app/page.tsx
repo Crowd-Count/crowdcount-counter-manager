@@ -148,6 +148,7 @@ export default function LoginPage() {
                 value={locationName}
                 onChange={(e) => setLocationName(e.target.value)}
                 disabled={isSubmitting}
+                maxLength={100}
               />
             </div>
 
@@ -184,6 +185,7 @@ export default function LoginPage() {
                       onChange={(e) => updateCounter(counter.id, "deviceId", e.target.value)}
                       disabled={isSubmitting}
                       autoCapitalize="characters"
+                      maxLength={20}
                     />
                     <p className="text-xs text-muted-foreground">Case sensitive</p>
                   </div>
@@ -196,6 +198,7 @@ export default function LoginPage() {
                       value={counter.password}
                       onChange={(e) => updateCounter(counter.id, "password", e.target.value)}
                       disabled={isSubmitting}
+                      maxLength={128}
                     />
                     <p className="text-xs text-muted-foreground">Case sensitive</p>
                   </div>

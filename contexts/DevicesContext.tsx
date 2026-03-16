@@ -13,6 +13,7 @@ import * as api from "@/lib/api";
 import { encrypt, decrypt, isEncrypted } from "@/lib/secureStorage";
 import { clearSigningKey } from "@/lib/crypto";
 import { logWarn } from "@/lib/logger";
+import { logSecurityEvent } from "@/lib/securityAudit";
 
 interface DevicesContextType {
   devices: DeviceState[];
@@ -128,8 +129,11 @@ export function DevicesProvider({ children }: { children: React.ReactNode }) {
 
       const isValid = await api.checkPassword(deviceId, password);
       if (!isValid) {
+        logSecurityEvent("AUTH_FAILURE", { deviceId });
         return false;
       }
+
+      logSecurityEvent("AUTH_SUCCESS", { deviceId });
 
       const newDevice: DeviceState = {
         id: generateId(),
@@ -141,6 +145,7 @@ export function DevicesProvider({ children }: { children: React.ReactNode }) {
       };
 
       setDevices((prev) => [...prev, newDevice]);
+      logSecurityEvent("DEVICE_ADDED", { deviceId });
       return true;
     },
     []
@@ -148,7 +153,11 @@ export function DevicesProvider({ children }: { children: React.ReactNode }) {
 
   const removeDevice = useCallback((id: string) => {
     const device = devicesRef.current.find((d) => d.id === id);
-    if (device) clearSigningKey(device.deviceId);
+    if (device) {
+      clearSigningKey(device.deviceId);
+      logSecurityEvent("DEVICE_REMOVED", { deviceId: device.deviceId });
+      logSecurityEvent("SIGNING_KEY_CLEARED", { deviceId: device.deviceId });
+    }
     setDevices((prev) => prev.filter((d) => d.id !== id));
   }, []);
 

@@ -103,6 +103,7 @@ function MigrationScreen({
                   }))
                 }
                 disabled={isMigrating}
+                maxLength={100}
               />
             </div>
           ))}
@@ -375,6 +376,7 @@ export default function DashboardPage() {
                 value={newLocationName}
                 onChange={(e) => setNewLocationName(e.target.value)}
                 disabled={isCreatingLocation}
+                maxLength={100}
               />
             </div>
 
@@ -426,6 +428,7 @@ export default function DashboardPage() {
                       }
                       disabled={isCreatingLocation}
                       autoCapitalize="characters"
+                      maxLength={20}
                     />
                     <p className="text-xs text-muted-foreground">Case sensitive</p>
                   </div>
@@ -440,6 +443,7 @@ export default function DashboardPage() {
                         )
                       }
                       disabled={isCreatingLocation}
+                      maxLength={128}
                     />
                     <p className="text-xs text-muted-foreground">Case sensitive</p>
                   </div>

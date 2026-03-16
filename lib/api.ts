@@ -31,6 +31,12 @@ import type {
   LocationCredentials,
 } from "./types";
 import { signRequest, generateIdempotencyKey } from "./crypto";
+import {
+  checkRateLimit,
+  recordFailure,
+  recordSuccess,
+} from "./rateLimiter";
+import { logSecurityEvent } from "./securityAudit";
 
 export function getApiBaseUrl(): string {
   return "https://api.crowdcount.tech";
@@ -48,6 +54,18 @@ async function apiRequest<T>(
   endpoint: string,
   options: ApiRequestOptions = {}
 ): Promise<T> {
+  // Enforce client-side rate limit / backoff
+  const rateCheck = checkRateLimit(endpoint);
+  if (!rateCheck.allowed) {
+    logSecurityEvent("RATE_LIMITED", {
+      endpoint,
+      retryAfterMs: rateCheck.retryAfterMs,
+    });
+    throw new Error(
+      `Rate limited. Retry after ${Math.ceil(rateCheck.retryAfterMs / 1000)}s`
+    );
+  }
+
   const { sign, idempotent, headers: extraHeaders, ...fetchOptions } = options;
   const method = fetchOptions.method || "GET";
   const bodyStr = (fetchOptions.body as string) || "";
@@ -83,9 +101,22 @@ async function apiRequest<T>(
   });
 
   if (!response.ok) {
+    // Track auth and rate-limit failures for backoff
+    if (
+      response.status === 401 ||
+      response.status === 403 ||
+      response.status === 429
+    ) {
+      recordFailure(endpoint);
+      logSecurityEvent("AUTH_FAILURE", {
+        endpoint,
+        status: response.status,
+      });
+    }
     throw new Error(`API request failed: ${response.status}`);
   }
 
+  recordSuccess(endpoint);
   return response.json();
 }
 

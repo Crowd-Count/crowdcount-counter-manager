@@ -103,3 +103,13 @@ export function clearSigningKey(deviceId: string): void {
 export function clearAllSigningKeys(): void {
   signingKeyCache.clear();
 }
+
+// Clear cached signing keys when the tab becomes hidden (user switches away)
+// to limit the window during which keys are held in memory.
+if (typeof document !== "undefined") {
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") {
+      signingKeyCache.clear();
+    }
+  });
+}
