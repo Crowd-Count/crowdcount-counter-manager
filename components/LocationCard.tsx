@@ -437,8 +437,13 @@ export function LocationCard({ location }: LocationCardProps) {
               </form>
             </DialogContent>
           </Dialog>
+        </div>
 
-          {/* Connect POS */}
+        {/* Point of Sale */}
+        <div className="space-y-1.5 mt-3">
+          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider px-1">
+            Point of Sale
+          </p>
           {(() => {
             const posStatus = getPOSStatus(location.id);
             const locCreds = api.getLocationCredentials(location, devices);
