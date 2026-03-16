@@ -39,6 +39,14 @@ import {
 import { logSecurityEvent } from "./securityAudit";
 
 export function getApiBaseUrl(): string {
+  if (typeof window !== "undefined") {
+    try {
+      const testing = localStorage.getItem("crowdcount_testing");
+      if (testing === "true") {
+        return "https://api-staging.crowdcount.tech";
+      }
+    } catch {}
+  }
   return "https://api.crowdcount.tech";
 }
 
