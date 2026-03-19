@@ -239,16 +239,6 @@ export default function POSConnectDialog({
                   Coming soon
                 </span>
               </Button>
-              <Button
-                variant="outline"
-                className="w-full justify-start h-14 text-base opacity-50 cursor-not-allowed"
-                disabled
-              >
-                <span className="font-semibold">Shopify</span>
-                <span className="ml-auto text-xs text-muted-foreground">
-                  Coming soon
-                </span>
-              </Button>
             </div>
           </>
         )}

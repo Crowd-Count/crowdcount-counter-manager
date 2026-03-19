@@ -187,17 +187,32 @@ function POSSalesSummary({ pos, periodLabel }: { pos?: POSTransactionData; perio
 
 function POSConversionCard({ pos, totalEntries, periodLabel }: { pos?: POSTransactionData; totalEntries: number; periodLabel: string }) {
   const hasData = pos && totalEntries > 0;
+
+  // Conversion rate: % of visitors who made at least one purchase, capped at 100%
+  const rawRate = hasData ? (pos.totalTransactions / totalEntries) : 0;
   const conversionRate = hasData
-    ? `${((pos.totalTransactions / totalEntries) * 100).toFixed(1)}%`
+    ? `${(Math.min(rawRate, 1) * 100).toFixed(1)}%`
     : "—";
+
+  // Revenue per visitor (not capped — shows actual revenue efficiency)
   const revenuePerVisitor = hasData
     ? formatCurrency(Math.round(pos.totalRevenue / totalEntries))
+    : "—";
+
+  // Transactions per visitor (can exceed 1 — shows repeat purchase behavior)
+  const txPerVisitor = hasData
+    ? rawRate.toFixed(2)
     : "—";
 
   return (
     <InsightCard icon={TrendingUp} title="Conversion">
       <StatRow label="Conversion Rate" value={conversionRate} />
       <StatRow label="Revenue per Visitor" value={revenuePerVisitor} />
+      <StatRow
+        label="Transactions per Visitor"
+        value={txPerVisitor}
+        sub={rawRate > 1 ? "Includes repeat purchases" : undefined}
+      />
       {!hasData && pos && pos.totalTransactions > 0 && (
         <p className="text-xs text-muted-foreground">Entry data required for conversion metrics</p>
       )}
