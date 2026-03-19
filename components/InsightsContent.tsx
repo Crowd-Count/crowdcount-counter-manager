@@ -33,6 +33,7 @@ interface InsightsContentProps {
   data: InsightsData;
   posData?: POSInsightsData;
   hasPOS?: boolean;
+  onConnectPOS?: () => void;
 }
 
 function TrendIndicator({ percentage }: { percentage: number }) {
@@ -154,15 +155,18 @@ function formatCurrency(cents: number): string {
 }
 
 // Wrapper that renders POS cards greyed out when not connected
-function POSCardWrapper({ hasPOS, children }: { hasPOS: boolean; children: React.ReactNode }) {
+function POSCardWrapper({ hasPOS, onConnect, children }: { hasPOS: boolean; onConnect?: () => void; children: React.ReactNode }) {
   if (hasPOS) return <>{children}</>;
   return (
     <div className="relative">
       <div className="opacity-40 pointer-events-none">{children}</div>
       <div className="absolute inset-0 flex items-center justify-center">
-        <span className="text-xs font-medium text-muted-foreground bg-background/90 px-3 py-1.5 rounded-full border border-dashed">
+        <button
+          onClick={onConnect}
+          className="text-xs font-medium text-primary bg-background/90 px-4 py-2 rounded-full border border-dashed border-primary/50 hover:bg-primary/10 hover:border-primary transition-colors cursor-pointer"
+        >
           Connect a POS system to unlock
-        </span>
+        </button>
       </div>
     </div>
   );
@@ -252,7 +256,7 @@ function POSSalesVsTraffic({ pos, trafficData }: { pos?: POSTransactionData; tra
 
 // --- Today Tab ---
 
-function TodayInsights({ data, posData, hasPOS }: { data: InsightsData; posData?: POSTransactionData; hasPOS: boolean }) {
+function TodayInsights({ data, posData, hasPOS, onConnectPOS }: { data: InsightsData; posData?: POSTransactionData; hasPOS: boolean; onConnectPOS?: () => void }) {
   const peak = calc.peakOccupancy(data.dayData);
   const avgOcc = calc.averageDayOccupancy(data.dayData);
   const fairAvg = calc.fairHistoricalAvg(
@@ -388,7 +392,7 @@ function TodayInsights({ data, posData, hasPOS }: { data: InsightsData; posData?
       {/* POS Cards greyed out at bottom when not connected */}
       {!hasPOS && (
         <div className="lg:col-span-2">
-          <POSCardWrapper hasPOS={false}>
+          <POSCardWrapper hasPOS={false} onConnect={onConnectPOS}>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">{posCards}</div>
           </POSCardWrapper>
         </div>
@@ -399,7 +403,7 @@ function TodayInsights({ data, posData, hasPOS }: { data: InsightsData; posData?
 
 // --- This Week Tab ---
 
-function WeekInsights({ data, posData, hasPOS }: { data: InsightsData; posData?: POSTransactionData; hasPOS: boolean }) {
+function WeekInsights({ data, posData, hasPOS, onConnectPOS }: { data: InsightsData; posData?: POSTransactionData; hasPOS: boolean; onConnectPOS?: () => void }) {
   const busiest = calc.busiestDay(data.weekData);
   const slowest = calc.slowestDay(data.weekData);
   const avgOcc = calc.averageWeekOccupancy(data.weekData);
@@ -511,7 +515,7 @@ function WeekInsights({ data, posData, hasPOS }: { data: InsightsData; posData?:
       {/* POS Cards greyed out at bottom when not connected */}
       {!hasPOS && (
         <div className="lg:col-span-2">
-          <POSCardWrapper hasPOS={false}>
+          <POSCardWrapper hasPOS={false} onConnect={onConnectPOS}>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               <POSConversionCard pos={posData} totalEntries={totalEntries} periodLabel="Week" />
               <POSSalesSummary pos={posData} periodLabel="Weekly" />
@@ -525,7 +529,7 @@ function WeekInsights({ data, posData, hasPOS }: { data: InsightsData; posData?:
 
 // --- This Year Tab ---
 
-function YearInsights({ data, posData, hasPOS }: { data: InsightsData; posData?: POSTransactionData; hasPOS: boolean }) {
+function YearInsights({ data, posData, hasPOS, onConnectPOS }: { data: InsightsData; posData?: POSTransactionData; hasPOS: boolean; onConnectPOS?: () => void }) {
   const busiest = calc.busiestMonth(data.yearData);
   const slowest = calc.slowestMonth(data.yearData);
   const avgOcc = calc.averageYearOccupancy(data.yearData);
@@ -626,7 +630,7 @@ function YearInsights({ data, posData, hasPOS }: { data: InsightsData; posData?:
       {/* POS Cards greyed out at bottom when not connected */}
       {!hasPOS && (
         <div className="lg:col-span-2">
-          <POSCardWrapper hasPOS={false}>
+          <POSCardWrapper hasPOS={false} onConnect={onConnectPOS}>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               <POSSalesSummary pos={posData} periodLabel="Yearly" />
               <POSConversionCard pos={posData} totalEntries={totalEntries} periodLabel="Year" />
@@ -640,7 +644,7 @@ function YearInsights({ data, posData, hasPOS }: { data: InsightsData; posData?:
 
 // --- Main Component ---
 
-export function InsightsContent({ data, posData, hasPOS = false }: InsightsContentProps) {
+export function InsightsContent({ data, posData, hasPOS = false, onConnectPOS }: InsightsContentProps) {
   const [period, setPeriod] = useState("today");
 
   if (data.isLoading) {
@@ -672,13 +676,13 @@ export function InsightsContent({ data, posData, hasPOS = false }: InsightsConte
         </p>
 
         <TabsContent value="today">
-          <TodayInsights data={data} posData={posData?.today} hasPOS={hasPOS} />
+          <TodayInsights data={data} posData={posData?.today} hasPOS={hasPOS} onConnectPOS={onConnectPOS} />
         </TabsContent>
         <TabsContent value="week">
-          <WeekInsights data={data} posData={posData?.week} hasPOS={hasPOS} />
+          <WeekInsights data={data} posData={posData?.week} hasPOS={hasPOS} onConnectPOS={onConnectPOS} />
         </TabsContent>
         <TabsContent value="year">
-          <YearInsights data={data} posData={posData?.year} hasPOS={hasPOS} />
+          <YearInsights data={data} posData={posData?.year} hasPOS={hasPOS} onConnectPOS={onConnectPOS} />
         </TabsContent>
       </Tabs>
     </div>

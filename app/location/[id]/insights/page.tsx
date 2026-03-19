@@ -13,6 +13,7 @@ import { useInsightsData } from "@/hooks/useInsightsData";
 import type { DeviceCredentials } from "@/hooks/useAggregatedHistory";
 import type { LocationFetchParams } from "@/lib/dataFetchers";
 import { InsightsContent } from "@/components/InsightsContent";
+import POSConnectDialog from "@/components/POSConnectDialog";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { ArrowLeft } from "lucide-react";
@@ -49,6 +50,7 @@ export default function LocationInsightsPage() {
   // POS data
   const posStatus = location ? getPOSStatus(location.id) : undefined;
   const hasPOS = !!posStatus?.connected;
+  const [posDialogOpen, setPosDialogOpen] = useState(false);
   const [posToday, setPosToday] = useState<POSTransactionData | undefined>();
   const [posWeek, setPosWeek] = useState<POSTransactionData | undefined>();
   const [posYear, setPosYear] = useState<POSTransactionData | undefined>();
@@ -143,7 +145,22 @@ export default function LocationInsightsPage() {
           data={data}
           posData={{ today: posToday, week: posWeek, year: posYear }}
           hasPOS={hasPOS}
+          onConnectPOS={() => setPosDialogOpen(true)}
         />
+        {(() => {
+          if (!location) return null;
+          const locCreds = api.getLocationCredentials(location, devices);
+          if (!locCreds) return null;
+          return (
+            <POSConnectDialog
+              locationId={location.id}
+              locationName={location.name}
+              credentials={locCreds}
+              open={posDialogOpen}
+              onOpenChange={setPosDialogOpen}
+            />
+          );
+        })()}
       </main>
     </div>
   );
