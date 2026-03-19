@@ -18,10 +18,21 @@ import {
   Minus,
   Loader2,
   Timer,
+  DollarSign,
+  TrendingUp,
 } from "lucide-react";
+import type { POSTransactionData } from "@/lib/types";
+
+interface POSInsightsData {
+  today?: POSTransactionData;
+  week?: POSTransactionData;
+  year?: POSTransactionData;
+}
 
 interface InsightsContentProps {
   data: InsightsData;
+  posData?: POSInsightsData;
+  hasPOS?: boolean;
 }
 
 function TrendIndicator({ percentage }: { percentage: number }) {
@@ -138,9 +149,95 @@ function roundDisplay(n: number): string {
   return Math.round(n).toLocaleString();
 }
 
+function formatCurrency(cents: number): string {
+  return `$${(cents / 100).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+// Wrapper that renders POS cards greyed out when not connected
+function POSCardWrapper({ hasPOS, children }: { hasPOS: boolean; children: React.ReactNode }) {
+  if (hasPOS) return <>{children}</>;
+  return (
+    <div className="relative">
+      <div className="opacity-40 pointer-events-none">{children}</div>
+      <div className="absolute inset-0 flex items-center justify-center">
+        <span className="text-xs font-medium text-muted-foreground bg-background/90 px-3 py-1.5 rounded-full border border-dashed">
+          Connect a POS system to unlock
+        </span>
+      </div>
+    </div>
+  );
+}
+
+// POS insight cards for each period
+function POSSalesSummary({ pos, periodLabel }: { pos?: POSTransactionData; periodLabel: string }) {
+  const revenue = pos ? formatCurrency(pos.totalRevenue) : "—";
+  const transactions = pos ? pos.totalTransactions.toLocaleString() : "—";
+  const avgTransaction = pos && pos.totalTransactions > 0
+    ? formatCurrency(Math.round(pos.totalRevenue / pos.totalTransactions))
+    : "—";
+
+  return (
+    <InsightCard icon={DollarSign} title={`${periodLabel} Sales`}>
+      <StatRow label="Total Revenue" value={revenue} />
+      <StatRow label="Transactions" value={transactions} />
+      <StatRow label="Avg Transaction" value={avgTransaction} />
+    </InsightCard>
+  );
+}
+
+function POSConversionCard({ pos, totalEntries, periodLabel }: { pos?: POSTransactionData; totalEntries: number; periodLabel: string }) {
+  const hasData = pos && totalEntries > 0;
+  const conversionRate = hasData
+    ? `${((pos.totalTransactions / totalEntries) * 100).toFixed(1)}%`
+    : "—";
+  const revenuePerVisitor = hasData
+    ? formatCurrency(Math.round(pos.totalRevenue / totalEntries))
+    : "—";
+
+  return (
+    <InsightCard icon={TrendingUp} title="Conversion">
+      <StatRow label="Conversion Rate" value={conversionRate} />
+      <StatRow label="Revenue per Visitor" value={revenuePerVisitor} />
+      {!hasData && pos && pos.totalTransactions > 0 && (
+        <p className="text-xs text-muted-foreground">Entry data required for conversion metrics</p>
+      )}
+    </InsightCard>
+  );
+}
+
+function POSSalesVsTraffic({ pos, trafficData }: { pos?: POSTransactionData; trafficData: Record<string, number> }) {
+  // Find peak sales hour and peak traffic hour
+  let peakSalesHour = 0;
+  let peakSalesVal = 0;
+  if (pos) {
+    for (const [hour, data] of Object.entries(pos.hourlyBreakdown)) {
+      if (data.revenue > peakSalesVal) {
+        peakSalesVal = data.revenue;
+        peakSalesHour = parseInt(hour);
+      }
+    }
+  }
+
+  const peakTraffic = calc.peakOccupancy(trafficData);
+  const peakSalesStr = pos && peakSalesVal > 0 ? calc.formatHour(peakSalesHour) : "—";
+  const peakTrafficStr = peakTraffic.count > 0 ? calc.formatHour(peakTraffic.hour) : "—";
+
+  return (
+    <InsightCard icon={ArrowLeftRight} title="Sales vs Traffic">
+      <ComparisonRow
+        leftLabel="Peak Sales Hour"
+        leftValue={peakSalesStr}
+        rightLabel="Peak Traffic Hour"
+        rightValue={peakTrafficStr}
+        highlightLeft={peakSalesHour !== peakTraffic.hour ? true : undefined}
+      />
+    </InsightCard>
+  );
+}
+
 // --- Today Tab ---
 
-function TodayInsights({ data }: { data: InsightsData }) {
+function TodayInsights({ data, posData, hasPOS }: { data: InsightsData; posData?: POSTransactionData; hasPOS: boolean }) {
   const peak = calc.peakOccupancy(data.dayData);
   const avgOcc = calc.averageDayOccupancy(data.dayData);
   const fairAvg = calc.fairHistoricalAvg(
@@ -261,13 +358,22 @@ function TodayInsights({ data }: { data: InsightsData }) {
           />
         )}
       </InsightCard>
+
+      {/* POS Cards */}
+      <POSCardWrapper hasPOS={hasPOS}>
+        <div className="space-y-4">
+          <POSSalesSummary pos={posData} periodLabel="Today's" />
+          <POSConversionCard pos={posData} totalEntries={totalEntries} periodLabel="Today" />
+          <POSSalesVsTraffic pos={posData} trafficData={data.dayData} />
+        </div>
+      </POSCardWrapper>
     </div>
   );
 }
 
 // --- This Week Tab ---
 
-function WeekInsights({ data }: { data: InsightsData }) {
+function WeekInsights({ data, posData, hasPOS }: { data: InsightsData; posData?: POSTransactionData; hasPOS: boolean }) {
   const busiest = calc.busiestDay(data.weekData);
   const slowest = calc.slowestDay(data.weekData);
   const avgOcc = calc.averageWeekOccupancy(data.weekData);
@@ -367,13 +473,21 @@ function WeekInsights({ data }: { data: InsightsData }) {
           />
         )}
       </InsightCard>
+
+      {/* POS Cards */}
+      <POSCardWrapper hasPOS={hasPOS}>
+        <div className="space-y-4">
+          <POSSalesSummary pos={posData} periodLabel="Weekly" />
+          <POSConversionCard pos={posData} totalEntries={totalEntries} periodLabel="Week" />
+        </div>
+      </POSCardWrapper>
     </div>
   );
 }
 
 // --- This Year Tab ---
 
-function YearInsights({ data }: { data: InsightsData }) {
+function YearInsights({ data, posData, hasPOS }: { data: InsightsData; posData?: POSTransactionData; hasPOS: boolean }) {
   const busiest = calc.busiestMonth(data.yearData);
   const slowest = calc.slowestMonth(data.yearData);
   const avgOcc = calc.averageYearOccupancy(data.yearData);
@@ -462,13 +576,21 @@ function YearInsights({ data }: { data: InsightsData }) {
           )}
         </InsightCard>
       )}
+
+      {/* POS Cards */}
+      <POSCardWrapper hasPOS={hasPOS}>
+        <div className="space-y-4">
+          <POSSalesSummary pos={posData} periodLabel="Yearly" />
+          <POSConversionCard pos={posData} totalEntries={totalEntries} periodLabel="Year" />
+        </div>
+      </POSCardWrapper>
     </div>
   );
 }
 
 // --- Main Component ---
 
-export function InsightsContent({ data }: InsightsContentProps) {
+export function InsightsContent({ data, posData, hasPOS = false }: InsightsContentProps) {
   const [period, setPeriod] = useState("today");
 
   if (data.isLoading) {
@@ -500,13 +622,13 @@ export function InsightsContent({ data }: InsightsContentProps) {
         </p>
 
         <TabsContent value="today">
-          <TodayInsights data={data} />
+          <TodayInsights data={data} posData={posData?.today} hasPOS={hasPOS} />
         </TabsContent>
         <TabsContent value="week">
-          <WeekInsights data={data} />
+          <WeekInsights data={data} posData={posData?.week} hasPOS={hasPOS} />
         </TabsContent>
         <TabsContent value="year">
-          <YearInsights data={data} />
+          <YearInsights data={data} posData={posData?.year} hasPOS={hasPOS} />
         </TabsContent>
       </Tabs>
     </div>

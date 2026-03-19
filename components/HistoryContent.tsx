@@ -55,6 +55,10 @@ interface HistoryContentProps {
   onDownloadDay?: (date: string, dataType: string, filename: string) => Promise<void>;
   /** POS sales data keyed by date (YYYY-MM-DD) with hourly breakdown */
   posSalesData?: Record<string, POSTransactionData>;
+  /** POS weekly sales: total revenue per day label (e.g. "Mon" → dollars) */
+  posWeekSales?: Record<string, number>;
+  /** POS yearly sales: total revenue per month label (e.g. "Jan" → dollars) */
+  posYearSales?: Record<string, number>;
   /** Whether the location has a POS connection */
   hasPOS?: boolean;
 }
@@ -67,6 +71,8 @@ export function HistoryContent({
   yearDescription = "Monthly count breakdown",
   onDownloadDay,
   posSalesData,
+  posWeekSales,
+  posYearSales,
   hasPOS,
 }: HistoryContentProps) {
   const {
@@ -109,6 +115,24 @@ export function HistoryContent({
     });
   };
 
+  // Merge POS weekly sales into chart data
+  const mergeSalesIntoWeek = (chartData: ChartData[]): ChartData[] => {
+    if (!posWeekSales || !showSales) return chartData;
+    return chartData.map((d) => ({
+      ...d,
+      salesRevenue: posWeekSales[d.label] ?? 0,
+    }));
+  };
+
+  // Merge POS yearly sales into chart data
+  const mergeSalesIntoYear = (chartData: ChartData[]): ChartData[] => {
+    if (!posYearSales || !showSales) return chartData;
+    return chartData.map((d) => ({
+      ...d,
+      salesRevenue: posYearSales[d.label] ?? 0,
+    }));
+  };
+
   if (isLoadingDates) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -144,34 +168,31 @@ export function HistoryContent({
             : "Entries shows the total number of people who entered during each period."}
         </p>
 
-        {hasPOS ? (
-          <label className="flex items-center justify-center gap-2 mt-2 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={showSales}
-              onChange={(e) => setShowSales(e.target.checked)}
-              className="rounded border-input accent-green-500"
-            />
-            <span className="text-sm text-muted-foreground">
-              Show Sales Data
-            </span>
-            <span className="inline-block w-4 h-0.5 rounded bg-green-500" />
-          </label>
-        ) : (
-          <div className="flex items-center justify-center gap-2 mt-2 opacity-40">
-            <input
-              type="checkbox"
-              disabled
-              className="rounded border-input"
-            />
-            <span className="text-sm text-muted-foreground">
-              Show Sales Data
-            </span>
-            <span className="text-xs text-muted-foreground italic">
-              — Connect a POS system to overlay sales
-            </span>
-          </div>
-        )}
+        <div className="flex items-center justify-center mt-3">
+          {hasPOS ? (
+            <label className="flex items-center gap-2.5 cursor-pointer select-none rounded-lg border px-4 py-2 transition-colors hover:bg-muted/50">
+              <input
+                type="checkbox"
+                checked={showSales}
+                onChange={(e) => setShowSales(e.target.checked)}
+                className="h-4 w-4 rounded border-input accent-green-500"
+              />
+              <span className="inline-block w-5 h-[3px] rounded-full bg-green-500" />
+              <span className="text-sm font-medium">Show Sales Data</span>
+            </label>
+          ) : (
+            <div className="flex items-center gap-2.5 rounded-lg border border-dashed px-4 py-2 opacity-50">
+              <input
+                type="checkbox"
+                disabled
+                className="h-4 w-4 rounded border-input"
+              />
+              <span className="text-sm text-muted-foreground">
+                Connect a POS system to overlay sales data
+              </span>
+            </div>
+          )}
+        </div>
 
         {/* Both tabs share the same stacked layout */}
         {["population", "entries"].map((tab) => (
@@ -224,7 +245,7 @@ export function HistoryContent({
                   </div>
                 </div>
               </CardHeader>
-              <CardContent>
+              <CardContent className="px-2 sm:px-4">
                 {isLoadingDay ? (
                   <div className="flex items-center justify-center py-12">
                     <RefreshCw className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -276,13 +297,13 @@ export function HistoryContent({
                   </div>
                 </div>
               </CardHeader>
-              <CardContent>
+              <CardContent className="px-2 sm:px-4">
                 {isLoadingWeek ? (
                   <div className="flex items-center justify-center py-12">
                     <RefreshCw className="h-6 w-6 animate-spin text-muted-foreground" />
                   </div>
                 ) : (
-                  <HistoryChart data={weekData} dataType={dataType} />
+                  <HistoryChart data={mergeSalesIntoWeek(weekData)} dataType={dataType} showSales={showSales && hasPOS} />
                 )}
               </CardContent>
             </Card>
@@ -325,13 +346,13 @@ export function HistoryContent({
                   </div>
                 </div>
               </CardHeader>
-              <CardContent>
+              <CardContent className="px-2 sm:px-4">
                 {isLoadingYear ? (
                   <div className="flex items-center justify-center py-12">
                     <RefreshCw className="h-6 w-6 animate-spin text-muted-foreground" />
                   </div>
                 ) : (
-                  <HistoryChart data={yearData} dataType={dataType} />
+                  <HistoryChart data={mergeSalesIntoYear(yearData)} dataType={dataType} showSales={showSales && hasPOS} />
                 )}
               </CardContent>
             </Card>

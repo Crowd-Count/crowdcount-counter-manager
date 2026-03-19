@@ -49,29 +49,93 @@ export default function LocationHistoryPage() {
   const history = useAggregatedHistory(credentials, locationParams);
   const { getStatus: getPOSStatus, statusVersion } = usePOS();
 
-  // POS sales data cache: date → transaction data
+  // POS sales data
   const [posSalesData, setPosSalesData] = useState<Record<string, POSTransactionData>>({});
+  const [posWeekSales, setPosWeekSales] = useState<Record<string, number>>({});
+  const [posYearSales, setPosYearSales] = useState<Record<string, number>>({});
   const posStatus = location ? getPOSStatus(location.id) : undefined;
   const hasPOS = !!posStatus?.connected;
 
-  // Fetch POS sales data when the selected date changes
+  // Fetch POS daily sales data
   useEffect(() => {
     if (!hasPOS || !locationParams || !history.selectedDate) return;
     const date = history.selectedDate;
-    if (posSalesData[date]) return; // already cached
+    if (posSalesData[date]) return;
 
     fetchPOSTransactions(
-      locationParams.locationId,
-      date,
-      date,
-      locationParams.credentials,
-      locationParams.signingDevice
+      locationParams.locationId, date, date,
+      locationParams.credentials, locationParams.signingDevice
+    )
+      .then((data) => setPosSalesData((prev) => ({ ...prev, [date]: data })))
+      .catch(() => {});
+  }, [hasPOS, locationParams, history.selectedDate, posSalesData]);
+
+  // Fetch POS weekly sales data (7 days from selectedWeekDate)
+  useEffect(() => {
+    if (!hasPOS || !locationParams || !history.selectedWeekDate) return;
+    const startDate = history.selectedWeekDate;
+
+    // Calculate end date (6 days after start)
+    const start = new Date(startDate + "T00:00:00");
+    const end = new Date(start);
+    end.setDate(end.getDate() + 6);
+    const endDate = end.toISOString().split("T")[0];
+
+    fetchPOSTransactions(
+      locationParams.locationId, startDate, endDate,
+      locationParams.credentials, locationParams.signingDevice
     )
       .then((data) => {
-        setPosSalesData((prev) => ({ ...prev, [date]: data }));
+        // We need per-day revenue, but the API returns hourly breakdown for the whole range.
+        // Fetch each day individually to get per-day totals.
+        const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+        const promises = Array.from({ length: 7 }, (_, i) => {
+          const d = new Date(start);
+          d.setDate(d.getDate() + i);
+          const dateStr = d.toISOString().split("T")[0];
+          const label = dayNames[d.getDay()];
+          return fetchPOSTransactions(
+            locationParams.locationId, dateStr, dateStr,
+            locationParams.credentials, locationParams.signingDevice
+          )
+            .then((dayData) => ({ label, revenue: dayData.totalRevenue / 100 }))
+            .catch(() => ({ label, revenue: 0 }));
+        });
+        Promise.all(promises).then((results) => {
+          const weekSales: Record<string, number> = {};
+          for (const r of results) weekSales[r.label] = r.revenue;
+          setPosWeekSales(weekSales);
+        });
       })
-      .catch(() => {}); // silently skip if POS fetch fails
-  }, [hasPOS, locationParams, history.selectedDate, posSalesData]);
+      .catch(() => {});
+  }, [hasPOS, locationParams, history.selectedWeekDate]);
+
+  // Fetch POS yearly sales data (per month)
+  useEffect(() => {
+    if (!hasPOS || !locationParams || !history.selectedYear) return;
+    const year = parseInt(history.selectedYear, 10);
+    if (isNaN(year)) return;
+
+    const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    const promises = monthNames.map((label, i) => {
+      const startDate = `${year}-${String(i + 1).padStart(2, "0")}-01`;
+      // Last day of month
+      const lastDay = new Date(year, i + 1, 0).getDate();
+      const endDate = `${year}-${String(i + 1).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
+      return fetchPOSTransactions(
+        locationParams.locationId, startDate, endDate,
+        locationParams.credentials, locationParams.signingDevice
+      )
+        .then((data) => ({ label, revenue: data.totalRevenue / 100 }))
+        .catch(() => ({ label, revenue: 0 }));
+    });
+
+    Promise.all(promises).then((results) => {
+      const yearSales: Record<string, number> = {};
+      for (const r of results) yearSales[r.label] = r.revenue;
+      setPosYearSales(yearSales);
+    });
+  }, [hasPOS, locationParams, history.selectedYear]);
 
   const handleDownloadDay = useCallback(async (date: string, dataType: string, filename: string) => {
     if (!locationParams) return;
@@ -180,6 +244,8 @@ export default function LocationHistoryPage() {
           yearDescription="Combined monthly count from location counters"
           onDownloadDay={handleDownloadDay}
           posSalesData={posSalesData}
+          posWeekSales={posWeekSales}
+          posYearSales={posYearSales}
           hasPOS={hasPOS}
         />
       </main>
