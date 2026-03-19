@@ -100,14 +100,19 @@ export function HistoryContent({
 
   const dataLabel = dataType === "entries" ? "Entries" : "Count";
 
+  // Shift POS UTC hours to local hours
+  const tzOffsetHours = -(new Date().getTimezoneOffset() / 60);
+
   // Merge POS sales data into chart data for the selected day
   const mergeSalesIntoDay = (chartData: ChartData[]): ChartData[] => {
     const sales = posSalesData?.[selectedDate];
     if (!sales || !showSales) return chartData;
     return chartData.map((d) => {
-      // label is "0:00", "1:00", etc. — extract hour
-      const hour = d.label.split(":")[0];
-      const hourData = sales.hourlyBreakdown[hour];
+      // label is "0:00", "1:00", etc. — extract local hour
+      const localHour = parseInt(d.label.split(":")[0], 10);
+      // Convert local hour back to UTC to look up POS data
+      const utcHour = ((localHour - tzOffsetHours) % 24 + 24) % 24;
+      const hourData = sales.hourlyBreakdown[String(utcHour)];
       return {
         ...d,
         salesRevenue: hourData ? hourData.revenue / 100 : 0,

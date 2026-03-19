@@ -287,8 +287,16 @@ function TodayInsights({ data, posData, hasPOS }: { data: InsightsData; posData?
   );
   const vsTypicalEntries = calc.vsAveragePercentage(totalEntries, fairEntryAvg);
 
+  const posCards = (
+    <>
+      <POSSalesSummary pos={posData} periodLabel="Today's" />
+      <POSConversionCard pos={posData} totalEntries={totalEntries} periodLabel="Today" />
+      <POSSalesVsTraffic pos={posData} trafficData={data.dayData} />
+    </>
+  );
+
   return (
-    <div className="space-y-4">
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
       {/* Summary */}
       <InsightCard icon={BarChart3} title="Summary">
         <StatRow
@@ -313,6 +321,9 @@ function TodayInsights({ data, posData, hasPOS }: { data: InsightsData; posData?
           <StatRow label="Busiest Window" value={calc.formatHourRange(busiestEntry.startHour, busiestEntry.endHour)} sub={`${roundDisplay(busiestEntry.total)} entries`} />
         </InsightCard>
       )}
+
+      {/* POS Sales — interleaved when connected */}
+      {hasPOS && posCards}
 
       {/* Dwell Time */}
       {data.dwellTimeMinutes != null && data.dwellTimeMinutes > 0 && (
@@ -374,14 +385,14 @@ function TodayInsights({ data, posData, hasPOS }: { data: InsightsData; posData?
         )}
       </InsightCard>
 
-      {/* POS Cards */}
-      <POSCardWrapper hasPOS={hasPOS}>
-        <div className="space-y-4">
-          <POSSalesSummary pos={posData} periodLabel="Today's" />
-          <POSConversionCard pos={posData} totalEntries={totalEntries} periodLabel="Today" />
-          <POSSalesVsTraffic pos={posData} trafficData={data.dayData} />
+      {/* POS Cards greyed out at bottom when not connected */}
+      {!hasPOS && (
+        <div className="lg:col-span-2">
+          <POSCardWrapper hasPOS={false}>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">{posCards}</div>
+          </POSCardWrapper>
         </div>
-      </POSCardWrapper>
+      )}
     </div>
   );
 }
@@ -415,7 +426,7 @@ function WeekInsights({ data, posData, hasPOS }: { data: InsightsData; posData?:
   const vsTypicalEntries = calc.vsAveragePercentage(totalEntries, fairEntryAvg);
 
   return (
-    <div className="space-y-4">
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
       {/* Summary */}
       <InsightCard icon={BarChart3} title="Summary">
         <StatRow
@@ -438,6 +449,14 @@ function WeekInsights({ data, posData, hasPOS }: { data: InsightsData; posData?:
           <StatRow label="Most Entries" value={`${roundDisplay(busiestE.avg)} (${busiestE.day})`} />
           <StatRow label="Fewest Entries" value={`${roundDisplay(slowestE.avg)} (${slowestE.day})`} />
         </InsightCard>
+      )}
+
+      {/* POS Sales — interleaved when connected */}
+      {hasPOS && (
+        <>
+          <POSSalesSummary pos={posData} periodLabel="Weekly" />
+          <POSConversionCard pos={posData} totalEntries={totalEntries} periodLabel="Week" />
+        </>
       )}
 
       {/* Day Performance */}
@@ -489,13 +508,17 @@ function WeekInsights({ data, posData, hasPOS }: { data: InsightsData; posData?:
         )}
       </InsightCard>
 
-      {/* POS Cards */}
-      <POSCardWrapper hasPOS={hasPOS}>
-        <div className="space-y-4">
-          <POSSalesSummary pos={posData} periodLabel="Weekly" />
-          <POSConversionCard pos={posData} totalEntries={totalEntries} periodLabel="Week" />
+      {/* POS Cards greyed out at bottom when not connected */}
+      {!hasPOS && (
+        <div className="lg:col-span-2">
+          <POSCardWrapper hasPOS={false}>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              <POSSalesSummary pos={posData} periodLabel="Weekly" />
+              <POSConversionCard pos={posData} totalEntries={totalEntries} periodLabel="Week" />
+            </div>
+          </POSCardWrapper>
         </div>
-      </POSCardWrapper>
+      )}
     </div>
   );
 }
@@ -536,7 +559,7 @@ function YearInsights({ data, posData, hasPOS }: { data: InsightsData; posData?:
     : 0;
 
   return (
-    <div className="space-y-4">
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
       {/* Summary */}
       <InsightCard icon={BarChart3} title="Summary">
         <StatRow
@@ -559,6 +582,14 @@ function YearInsights({ data, posData, hasPOS }: { data: InsightsData; posData?:
           <StatRow label="Most Entries" value={`${roundDisplay(busiestE.avg)} (${busiestE.month})`} />
           <StatRow label="Fewest Entries" value={`${roundDisplay(slowestE.avg)} (${slowestE.month})`} />
         </InsightCard>
+      )}
+
+      {/* POS Sales — interleaved when connected */}
+      {hasPOS && (
+        <>
+          <POSSalesSummary pos={posData} periodLabel="Yearly" />
+          <POSConversionCard pos={posData} totalEntries={totalEntries} periodLabel="Year" />
+        </>
       )}
 
       {/* Month Performance */}
@@ -592,13 +623,17 @@ function YearInsights({ data, posData, hasPOS }: { data: InsightsData; posData?:
         </InsightCard>
       )}
 
-      {/* POS Cards */}
-      <POSCardWrapper hasPOS={hasPOS}>
-        <div className="space-y-4">
-          <POSSalesSummary pos={posData} periodLabel="Yearly" />
-          <POSConversionCard pos={posData} totalEntries={totalEntries} periodLabel="Year" />
+      {/* POS Cards greyed out at bottom when not connected */}
+      {!hasPOS && (
+        <div className="lg:col-span-2">
+          <POSCardWrapper hasPOS={false}>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              <POSSalesSummary pos={posData} periodLabel="Yearly" />
+              <POSConversionCard pos={posData} totalEntries={totalEntries} periodLabel="Year" />
+            </div>
+          </POSCardWrapper>
         </div>
-      </POSCardWrapper>
+      )}
     </div>
   );
 }
