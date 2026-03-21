@@ -98,12 +98,12 @@ export default function LocationHistoryPage() {
             locationParams.locationId, dateStr, dateStr,
             locationParams.credentials, locationParams.signingDevice
           )
-            .then((dayData) => ({ label, revenue: dayData.totalRevenue / 100 }))
-            .catch(() => ({ label, revenue: 0 }));
+            .then((dayData) => ({ label, count: dayData.totalTransactions }))
+            .catch(() => ({ label, count: 0 }));
         });
         Promise.all(promises).then((results) => {
           const weekSales: Record<string, number> = {};
-          for (const r of results) weekSales[r.label] = r.revenue;
+          for (const r of results) weekSales[r.label] = r.count;
           setPosWeekSales(weekSales);
         });
       })
@@ -126,13 +126,13 @@ export default function LocationHistoryPage() {
         locationParams.locationId, startDate, endDate,
         locationParams.credentials, locationParams.signingDevice
       )
-        .then((data) => ({ label, revenue: data.totalRevenue / 100 }))
-        .catch(() => ({ label, revenue: 0 }));
+        .then((data) => ({ label, count: data.totalTransactions }))
+        .catch(() => ({ label, count: 0 }));
     });
 
     Promise.all(promises).then((results) => {
       const yearSales: Record<string, number> = {};
-      for (const r of results) yearSales[r.label] = r.revenue;
+      for (const r of results) yearSales[r.label] = r.count;
       setPosYearSales(yearSales);
     });
   }, [hasPOS, locationParams, history.selectedYear]);

@@ -17,7 +17,7 @@ interface ChartData {
   label: string;
   value: number;
   average?: number;
-  salesRevenue?: number;
+  salesCount?: number;
 }
 
 interface HistoryChartProps {
@@ -36,20 +36,17 @@ export function HistoryChart({ data, dataType, showSales }: HistoryChartProps) {
   }
 
   const hasAverage = data.some((d) => d.average !== undefined && d.average > 0);
-  const hasSales = showSales && data.some((d) => d.salesRevenue !== undefined && d.salesRevenue > 0);
+  const hasSales = showSales && data.some((d) => d.salesCount !== undefined && d.salesCount > 0);
   const maxValue = Math.max(
-    ...data.map((d) => Math.max(d.value, d.average || 0))
+    ...data.map((d) => Math.max(d.value, d.average || 0, hasSales ? (d.salesCount || 0) : 0))
   );
-  const maxSales = hasSales
-    ? Math.max(...data.map((d) => d.salesRevenue || 0))
-    : 0;
 
   return (
     <div className="h-[300px] w-full">
       <ResponsiveContainer width="100%" height="100%">
         <ComposedChart
           data={data}
-          margin={{ top: 10, right: hasSales ? 45 : 5, left: -10, bottom: 0 }}
+          margin={{ top: 10, right: 5, left: -10, bottom: 0 }}
         >
           <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
           <XAxis
@@ -58,22 +55,11 @@ export function HistoryChart({ data, dataType, showSales }: HistoryChartProps) {
             className="fill-muted-foreground"
           />
           <YAxis
-            yAxisId="left"
             tick={{ fontSize: 12 }}
             className="fill-muted-foreground"
             domain={[0, Math.ceil(maxValue * 1.1)]}
             allowDecimals={false}
           />
-          {hasSales && (
-            <YAxis
-              yAxisId="right"
-              orientation="right"
-              tick={{ fontSize: 11, fill: "#22c55e" }}
-              domain={[0, Math.ceil(maxSales * 1.1)]}
-              allowDecimals={false}
-              tickFormatter={(v: number) => `$${v}`}
-            />
-          )}
           <Tooltip
             contentStyle={{
               backgroundColor: "hsl(var(--card))",
@@ -81,10 +67,7 @@ export function HistoryChart({ data, dataType, showSales }: HistoryChartProps) {
               borderRadius: "0.5rem",
             }}
             labelStyle={{ color: "hsl(var(--foreground))" }}
-            formatter={(value: number, name: string) => {
-              if (name === "Sales") return [`$${(value).toFixed(2)}`, name];
-              return [Math.round(value), name];
-            }}
+            formatter={(value: number) => Math.round(value)}
           />
           {(hasAverage || hasSales) && (
             <Legend
@@ -95,7 +78,6 @@ export function HistoryChart({ data, dataType, showSales }: HistoryChartProps) {
             />
           )}
           <Bar
-            yAxisId="left"
             dataKey="value"
             name={dataType === "entries" ? "Entries" : "Count"}
             fill="#3b82f6"
@@ -107,7 +89,6 @@ export function HistoryChart({ data, dataType, showSales }: HistoryChartProps) {
           </Bar>
           {hasAverage && (
             <Bar
-              yAxisId="left"
               dataKey="average"
               name="Average"
               fill="#f97316"
@@ -120,10 +101,9 @@ export function HistoryChart({ data, dataType, showSales }: HistoryChartProps) {
           )}
           {hasSales && (
             <Line
-              yAxisId="right"
               type="monotone"
-              dataKey="salesRevenue"
-              name="Sales"
+              dataKey="salesCount"
+              name="Transactions"
               stroke="#22c55e"
               strokeWidth={2.5}
               dot={false}

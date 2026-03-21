@@ -103,7 +103,7 @@ export function HistoryContent({
   // Shift POS UTC hours to local hours
   const tzOffsetHours = -(new Date().getTimezoneOffset() / 60);
 
-  // Merge POS sales data into chart data for the selected day
+  // Merge POS transaction counts into chart data for the selected day
   const mergeSalesIntoDay = (chartData: ChartData[]): ChartData[] => {
     const sales = posSalesData?.[selectedDate];
     if (!sales || !showSales) return chartData;
@@ -115,26 +115,26 @@ export function HistoryContent({
       const hourData = sales.hourlyBreakdown[String(utcHour)];
       return {
         ...d,
-        salesRevenue: hourData ? hourData.revenue / 100 : 0,
+        salesCount: hourData ? hourData.transactions : 0,
       };
     });
   };
 
-  // Merge POS weekly sales into chart data
+  // Merge POS weekly transaction counts into chart data
   const mergeSalesIntoWeek = (chartData: ChartData[]): ChartData[] => {
     if (!posWeekSales || !showSales) return chartData;
     return chartData.map((d) => ({
       ...d,
-      salesRevenue: posWeekSales[d.label] ?? 0,
+      salesCount: posWeekSales[d.label] ?? 0,
     }));
   };
 
-  // Merge POS yearly sales into chart data
+  // Merge POS yearly transaction counts into chart data
   const mergeSalesIntoYear = (chartData: ChartData[]): ChartData[] => {
     if (!posYearSales || !showSales) return chartData;
     return chartData.map((d) => ({
       ...d,
-      salesRevenue: posYearSales[d.label] ?? 0,
+      salesCount: posYearSales[d.label] ?? 0,
     }));
   };
 
@@ -183,7 +183,7 @@ export function HistoryContent({
                 className="h-4 w-4 rounded border-input accent-green-500"
               />
               <span className="inline-block w-5 h-[3px] rounded-full bg-green-500" />
-              <span className="text-sm font-medium">Show Sales Data</span>
+              <span className="text-sm font-medium">Show Transactions</span>
             </label>
           ) : (
             <div className="flex items-center gap-2.5 rounded-lg border border-dashed px-4 py-2 opacity-50">
@@ -193,7 +193,7 @@ export function HistoryContent({
                 className="h-4 w-4 rounded border-input"
               />
               <span className="text-sm text-muted-foreground">
-                Connect a POS system to overlay sales data
+                Connect a POS system to overlay transactions
               </span>
             </div>
           )}
