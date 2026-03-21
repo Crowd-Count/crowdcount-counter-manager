@@ -49,7 +49,7 @@ export function HistoryChart({ data, dataType, showSales }: HistoryChartProps) {
       <ResponsiveContainer width="100%" height="100%">
         <ComposedChart
           data={data}
-          margin={{ top: 10, right: hasSales ? 40 : 5, left: -10, bottom: 0 }}
+          margin={{ top: 10, right: 5, left: -10, bottom: 0 }}
         >
           <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
           <XAxis
