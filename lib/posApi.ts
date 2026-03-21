@@ -1,5 +1,6 @@
 import type {
   POSConnectionInfo,
+  POSInsightsResponse,
   POSStoreLocation,
   POSTransactionData,
   SigningCredentials,
@@ -132,6 +133,17 @@ export async function checkExistingPOSAccount(
   return posRequest("/pos/check_existing_account", {
     device_id: sign.deviceId,
     password: sign.password,
+  }, sign);
+}
+
+export async function fetchPOSInsights(
+  locationId: string,
+  credentials: Array<{ device_id: string; password: string }>,
+  sign: SigningCredentials
+): Promise<POSInsightsResponse> {
+  return posRequest<POSInsightsResponse>("/pos/insights", {
+    location_id: locationId,
+    credentials,
   }, sign);
 }
 

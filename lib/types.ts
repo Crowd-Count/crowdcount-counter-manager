@@ -240,3 +240,23 @@ export interface POSTransactionData {
   hourlyBreakdown: Record<string, { transactions: number; revenue: number }>;
   currency: string;
 }
+
+export interface POSPeriodStats {
+  transactions: number;
+  revenue: number; // cents
+  currency: string;
+  entries: number;
+  conversion_rate: number; // percentage, capped at 100
+  revenue_per_visitor: number; // cents
+  avg_transaction: number; // cents
+  hourly_data?: Record<string, { transactions: number; revenue: number }>;
+}
+
+export interface POSInsightsResponse {
+  today: POSPeriodStats;
+  prev_day: POSPeriodStats;
+  week: POSPeriodStats;
+  prev_week: POSPeriodStats;
+  year: POSPeriodStats;
+  prev_year: POSPeriodStats;
+}

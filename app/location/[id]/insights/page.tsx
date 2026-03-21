@@ -6,9 +6,9 @@ import Link from "next/link";
 import { useDevices } from "@/contexts/DevicesContext";
 import { useLocations } from "@/contexts/LocationsContext";
 import { usePOS } from "@/contexts/POSContext";
-import { LOCATION_COLORS, type POSTransactionData } from "@/lib/types";
+import { LOCATION_COLORS, type POSInsightsResponse } from "@/lib/types";
 import * as api from "@/lib/api";
-import { fetchPOSTransactions } from "@/lib/posApi";
+import { fetchPOSInsights } from "@/lib/posApi";
 import { useInsightsData } from "@/hooks/useInsightsData";
 import type { DeviceCredentials } from "@/hooks/useAggregatedHistory";
 import type { LocationFetchParams } from "@/lib/dataFetchers";
@@ -51,36 +51,18 @@ export default function LocationInsightsPage() {
   const posStatus = location ? getPOSStatus(location.id) : undefined;
   const hasPOS = !!posStatus?.connected;
   const [posDialogOpen, setPosDialogOpen] = useState(false);
-  const [posToday, setPosToday] = useState<POSTransactionData | undefined>();
-  const [posWeek, setPosWeek] = useState<POSTransactionData | undefined>();
-  const [posYear, setPosYear] = useState<POSTransactionData | undefined>();
+  const [posInsights, setPosInsights] = useState<POSInsightsResponse | undefined>();
 
   useEffect(() => {
     if (!hasPOS || !locationParams) return;
 
-    const today = new Date().toISOString().split("T")[0];
-
-    // Today
-    fetchPOSTransactions(
-      locationParams.locationId, today, today,
-      locationParams.credentials, locationParams.signingDevice
-    ).then(setPosToday).catch(() => {});
-
-    // This week (last 7 days)
-    const weekStart = new Date();
-    weekStart.setDate(weekStart.getDate() - weekStart.getDay()); // Sunday
-    const weekStartStr = weekStart.toISOString().split("T")[0];
-    fetchPOSTransactions(
-      locationParams.locationId, weekStartStr, today,
-      locationParams.credentials, locationParams.signingDevice
-    ).then(setPosWeek).catch(() => {});
-
-    // This year
-    const year = new Date().getFullYear();
-    fetchPOSTransactions(
-      locationParams.locationId, `${year}-01-01`, today,
-      locationParams.credentials, locationParams.signingDevice
-    ).then(setPosYear).catch(() => {});
+    fetchPOSInsights(
+      locationParams.locationId,
+      locationParams.credentials,
+      locationParams.signingDevice,
+    )
+      .then(setPosInsights)
+      .catch(() => {});
   }, [hasPOS, locationParams]);
 
   if (devicesLoading || locationsLoading) {
@@ -143,7 +125,7 @@ export default function LocationInsightsPage() {
       <main className="container mx-auto px-4 py-6 max-w-6xl">
         <InsightsContent
           data={data}
-          posData={{ today: posToday, week: posWeek, year: posYear }}
+          posInsights={posInsights}
           hasPOS={hasPOS}
           onConnectPOS={() => setPosDialogOpen(true)}
         />
