@@ -29,9 +29,10 @@ function formatDateForDisplay(dateStr: string): string {
 }
 
 function downloadCsv(data: ChartData[], filename: string, dataType: string) {
-  const header = `Label,${dataType === "entries" ? "Entries" : "Count"},Average`;
+  const hasSalesData = data.some((d) => d.salesCount !== undefined);
+  const header = `Label,${dataType === "entries" ? "Entries" : "Count"},Average${hasSalesData ? ",Transactions" : ""}`;
   const rows = data.map(
-    (d) => `${d.label},${d.value},${d.average ?? ""}`
+    (d) => `${d.label},${d.value},${d.average ?? ""}${hasSalesData ? `,${d.salesCount ?? ""}` : ""}`
   );
   const csv = [header, ...rows].join("\n");
   const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
@@ -237,7 +238,7 @@ export function HistoryContent({
                             setIsDayDownloading(false);
                           }
                         } else {
-                          downloadCsv(dayData, filename, dataType);
+                          downloadCsv(mergeSalesIntoDay(dayData), filename, dataType);
                         }
                       }}
                     >
@@ -291,7 +292,7 @@ export function HistoryContent({
                       disabled={isLoadingWeek || weekData.length === 0}
                       onClick={() =>
                         downloadCsv(
-                          weekData,
+                          mergeSalesIntoWeek(weekData),
                           `${filenamePrefix}-week-${selectedWeekDate}-${dataType}`,
                           dataType
                         )
@@ -340,7 +341,7 @@ export function HistoryContent({
                       disabled={isLoadingYear || yearData.length === 0}
                       onClick={() =>
                         downloadCsv(
-                          yearData,
+                          mergeSalesIntoYear(yearData),
                           `${filenamePrefix}-year-${selectedYear}-${dataType}`,
                           dataType
                         )
