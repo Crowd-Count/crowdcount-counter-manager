@@ -113,14 +113,6 @@ export interface LocationResponse {
   location_longitude?: number | null;
 }
 
-// Reset schedule
-export interface ResetSchedule {
-  location_id: string;
-  reset_hour: number;
-  reset_minute: number;
-  timezone: string;
-}
-
 // Closing time schedule
 export interface ClosingTimeDay {
   day_of_week: number;

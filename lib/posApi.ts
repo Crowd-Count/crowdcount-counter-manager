@@ -174,15 +174,3 @@ export async function fetchPOSTransactions(
   };
 }
 
-export async function sandboxConnect(
-  accessToken: string,
-  locationId: string,
-  credentials: Array<{ device_id: string; password: string }>,
-  sign: SigningCredentials
-): Promise<{ success: boolean; pos_account_id: string; merchant_id: string }> {
-  return posRequest("/pos/sandbox_connect", {
-    access_token: accessToken,
-    location_id: locationId,
-    credentials,
-  }, sign);
-}

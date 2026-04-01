@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import Image from "next/image";
 import {
   Dialog,
   DialogContent,
@@ -10,7 +11,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -22,18 +22,16 @@ import {
 import type {
   LocationCredentials,
   POSStoreLocation,
-  SigningCredentials,
 } from "@/lib/types";
 import {
   checkExistingPOSAccount,
   connectPOS,
   listPOSLocations,
-  sandboxConnect,
   startPOSOAuth,
 } from "@/lib/posApi";
 import { usePOS } from "@/contexts/POSContext";
 
-type Step = "provider" | "method" | "sandbox" | "locations";
+type Step = "provider" | "oauth" | "locations";
 
 interface POSConnectDialogProps {
   locationId: string;
@@ -59,10 +57,7 @@ export default function POSConnectDialog({
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
 
-  // Sandbox token input
-  const [sandboxToken, setSandboxToken] = useState("");
-
-  // POS account (from OAuth or sandbox or existing)
+  // POS account (from OAuth or existing)
   const [posAccountId, setPosAccountId] = useState("");
 
   // POS location picker
@@ -75,7 +70,6 @@ export default function POSConnectDialog({
       if (!newOpen) {
         setStep("provider");
         setError("");
-        setSandboxToken("");
         setPosAccountId("");
         setPosLocations([]);
         setSelectedPosLocationId("");
@@ -113,7 +107,7 @@ export default function POSConnectDialog({
     }
   };
 
-  // Step: Provider selection → check for existing account
+  // Step: Provider selection → check for existing account, then OAuth
   const handleSelectSquare = async () => {
     setIsLoading(true);
     setError("");
@@ -124,21 +118,13 @@ export default function POSConnectDialog({
         setPosAccountId(result.pos_account_id);
         setStep("locations");
         await loadPosLocations(result.pos_account_id);
-      } else {
-        setStep("method");
+        return;
       }
     } catch {
-      // If check fails, just show method selection
-      setStep("method");
-    } finally {
-      setIsLoading(false);
+      // If check fails, proceed to OAuth
     }
-  };
-
-  // Step: Start OAuth flow
-  const handleOAuth = async () => {
-    setIsLoading(true);
-    setError("");
+    // Start OAuth flow directly
+    setStep("oauth");
     try {
       const { oauth_url } = await startPOSOAuth(
         "square",
@@ -149,29 +135,6 @@ export default function POSConnectDialog({
       window.location.href = oauth_url;
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to start OAuth");
-      setIsLoading(false);
-    }
-  };
-
-  // Step: Sandbox token submission
-  const handleSandboxSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!sandboxToken.trim()) return;
-
-    setIsLoading(true);
-    setError("");
-    try {
-      const result = await sandboxConnect(
-        sandboxToken.trim(),
-        locationId,
-        credentials.credentials,
-        sign
-      );
-      setPosAccountId(result.pos_account_id);
-      setStep("locations");
-      await loadPosLocations(result.pos_account_id);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Invalid token");
       setIsLoading(false);
     }
   };
@@ -218,10 +181,11 @@ export default function POSConnectDialog({
             <div className="space-y-3 py-2">
               <Button
                 variant="outline"
-                className="w-full justify-start h-14 text-base"
+                className="w-full justify-start h-14 text-base gap-3"
                 onClick={handleSelectSquare}
                 disabled={isLoading}
               >
+                <Image src="/square-logo.svg" alt="Square" width={28} height={28} className="rounded" />
                 <span className="font-semibold">Square</span>
                 {isLoading && (
                   <span className="ml-auto text-sm text-muted-foreground">
@@ -231,9 +195,10 @@ export default function POSConnectDialog({
               </Button>
               <Button
                 variant="outline"
-                className="w-full justify-start h-14 text-base opacity-50 cursor-not-allowed"
+                className="w-full justify-start h-14 text-base gap-3 opacity-50 cursor-not-allowed"
                 disabled
               >
+                <Image src="/toast-logo.svg" alt="Toast" width={28} height={28} className="rounded" />
                 <span className="font-semibold">Toast</span>
                 <span className="ml-auto text-xs text-muted-foreground">
                   Coming soon
@@ -243,95 +208,28 @@ export default function POSConnectDialog({
           </>
         )}
 
-        {/* Step 2: Connection Method */}
-        {step === "method" && (
+        {/* Step 2: OAuth redirect in progress */}
+        {step === "oauth" && (
           <>
             <DialogHeader>
               <DialogTitle>Connect Square</DialogTitle>
               <DialogDescription>
-                Choose how to connect your Square account
+                Redirecting to Square...
               </DialogDescription>
             </DialogHeader>
-            <div className="space-y-3 py-2">
-              <Button
-                className="w-full h-12"
-                onClick={handleOAuth}
-                disabled={isLoading}
-              >
-                {isLoading ? "Redirecting..." : "Sign in with Square"}
-              </Button>
-              <div className="relative">
-                <div className="absolute inset-0 flex items-center">
-                  <span className="w-full border-t" />
-                </div>
-                <div className="relative flex justify-center text-xs uppercase">
-                  <span className="bg-background px-2 text-muted-foreground">
-                    or for testing
-                  </span>
-                </div>
-              </div>
-              <Button
-                variant="outline"
-                className="w-full"
-                onClick={() => setStep("sandbox")}
-              >
-                Use Sandbox Token
-              </Button>
+            <div className="py-4">
+              {error ? (
+                <p className="text-sm text-destructive">{error}</p>
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  You&apos;ll be redirected to Square to sign in.
+                </p>
+              )}
             </div>
-            {error && <p className="text-sm text-destructive">{error}</p>}
           </>
         )}
 
-        {/* Step 3: Sandbox Token */}
-        {step === "sandbox" && (
-          <>
-            <DialogHeader>
-              <DialogTitle>Sandbox Token</DialogTitle>
-              <DialogDescription>
-                Paste your Square sandbox access token from the{" "}
-                <a
-                  href="https://developer.squareup.com"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="underline"
-                >
-                  developer console
-                </a>
-              </DialogDescription>
-            </DialogHeader>
-            <form onSubmit={handleSandboxSubmit} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="sandbox-token">Access Token</Label>
-                <Input
-                  id="sandbox-token"
-                  type="password"
-                  placeholder="EAAAl..."
-                  value={sandboxToken}
-                  onChange={(e) => setSandboxToken(e.target.value)}
-                  disabled={isLoading}
-                />
-              </div>
-              {error && <p className="text-sm text-destructive">{error}</p>}
-              <DialogFooter>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  onClick={() => {
-                    setStep("method");
-                    setError("");
-                  }}
-                >
-                  Back
-                </Button>
-                <Button type="submit" disabled={isLoading || !sandboxToken.trim()}>
-                  {isLoading ? "Verifying..." : "Connect"}
-                </Button>
-              </DialogFooter>
-            </form>
-          </>
-        )}
-
-        {/* Step 4: POS Location Picker */}
+        {/* Step 3: POS Location Picker */}
         {step === "locations" && (
           <>
             <DialogHeader>

@@ -15,6 +15,7 @@ import {
   type LocationFetchParams,
 } from "@/hooks/useAggregatedHistory";
 import { HistoryContent } from "@/components/HistoryContent";
+import POSConnectDialog from "@/components/POSConnectDialog";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { ArrowLeft } from "lucide-react";
@@ -55,6 +56,7 @@ export default function LocationHistoryPage() {
   const [posYearSales, setPosYearSales] = useState<Record<string, number>>({});
   const posStatus = location ? getPOSStatus(location.id) : undefined;
   const hasPOS = !!posStatus?.connected;
+  const [posDialogOpen, setPosDialogOpen] = useState(false);
 
   // Fetch POS daily sales data
   useEffect(() => {
@@ -247,7 +249,23 @@ export default function LocationHistoryPage() {
           posWeekSales={posWeekSales}
           posYearSales={posYearSales}
           hasPOS={hasPOS}
+          onConnectPOS={() => setPosDialogOpen(true)}
         />
+        {(() => {
+          const locCreds = locationParams
+            ? { credentials: locationParams.credentials, signingDevice: locationParams.signingDevice }
+            : null;
+          if (!locCreds) return null;
+          return (
+            <POSConnectDialog
+              locationId={location.id}
+              locationName={location.name}
+              credentials={locCreds}
+              open={posDialogOpen}
+              onOpenChange={setPosDialogOpen}
+            />
+          );
+        })()}
       </main>
     </div>
   );

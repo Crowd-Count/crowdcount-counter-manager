@@ -62,6 +62,8 @@ interface HistoryContentProps {
   posYearSales?: Record<string, number>;
   /** Whether the location has a POS connection */
   hasPOS?: boolean;
+  /** Callback to open POS connect dialog */
+  onConnectPOS?: () => void;
 }
 
 export function HistoryContent({
@@ -75,6 +77,7 @@ export function HistoryContent({
   posWeekSales,
   posYearSales,
   hasPOS,
+  onConnectPOS,
 }: HistoryContentProps) {
   const {
     availableDates,
@@ -187,16 +190,20 @@ export function HistoryContent({
               <span className="text-sm font-medium">Show Transactions</span>
             </label>
           ) : (
-            <div className="flex items-center gap-2.5 rounded-lg border border-dashed px-4 py-2 opacity-50">
+            <button
+              type="button"
+              onClick={onConnectPOS}
+              className="flex items-center gap-2.5 rounded-lg border border-dashed px-4 py-2 opacity-60 hover:opacity-100 hover:border-primary/50 transition-opacity cursor-pointer"
+            >
               <input
                 type="checkbox"
                 disabled
-                className="h-4 w-4 rounded border-input"
+                className="h-4 w-4 rounded border-input pointer-events-none"
               />
               <span className="text-sm text-muted-foreground">
                 Connect a POS system to overlay transactions
               </span>
-            </div>
+            </button>
           )}
         </div>
 
