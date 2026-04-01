@@ -9,7 +9,11 @@
 
 # Next.js
 /.next/
+.next */
 /out/
+
+# Data files
+/data/*.db
 
 # Production
 /build
