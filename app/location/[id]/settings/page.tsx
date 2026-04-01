@@ -1,11 +1,11 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { useRouter, useParams } from "next/navigation";
+import { useState, useEffect, useMemo } from "react";
+import { useRouter, useParams, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useDevices } from "@/contexts/DevicesContext";
 import { useLocations } from "@/contexts/LocationsContext";
-import { LOCATION_COLORS, getAppleColorHex, type LocationColorName, type ResetSchedule, type ClosingTime, type ClosingTimeDay } from "@/lib/types";
+import { LOCATION_COLORS, getAppleColorHex, type LocationColorName, type ClosingTime, type ClosingTimeDay } from "@/lib/types";
 import { useTheme } from "@/contexts/ThemeContext";
 import * as api from "@/lib/api";
 import { Button } from "@/components/ui/button";
@@ -36,8 +36,11 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Switch } from "@/components/ui/switch";
 import { ThemeToggle } from "@/components/ThemeToggle";
-import { ArrowLeft, Save, Trash2, X, Clock, RotateCcw } from "lucide-react";
+import { ArrowLeft, Save, Trash2, X, Clock, RotateCcw, CreditCard } from "lucide-react";
 import { logError } from "@/lib/logger";
+import { usePOS } from "@/contexts/POSContext";
+import POSConnectDialog from "@/components/POSConnectDialog";
+import { disconnectPOS, fetchPOSTransactions } from "@/lib/posApi";
 
 const COMMON_TIMEZONES = [
   "America/New_York",
@@ -80,6 +83,7 @@ function getBrowserTimezone(): string {
 export default function LocationSettingsPage() {
   const router = useRouter();
   const params = useParams();
+  const searchParams = useSearchParams();
   const locationId = params.id as string;
   const { devices, isLoading: devicesLoading } = useDevices();
   const {
@@ -92,6 +96,7 @@ export default function LocationSettingsPage() {
     isLoading: locationsLoading,
   } = useLocations();
   const { theme } = useTheme();
+  const { getStatus: getPOSStatus, statusVersion: posVersion } = usePOS();
 
   const location = getLocation(locationId);
 
@@ -107,15 +112,6 @@ export default function LocationSettingsPage() {
   useEffect(() => {
     setOvercrowdingInput(location?.overcrowdingLimit?.toString() ?? "");
   }, [location?.overcrowdingLimit]);
-  // Reset schedule state
-  const [resetSchedule, setResetSchedule] = useState<ResetSchedule | null>(null);
-  const [resetHour, setResetHour] = useState(0);
-  const [resetMinute, setResetMinute] = useState(0);
-  const [resetTimezone, setResetTimezone] = useState(getBrowserTimezone());
-  const [isLoadingSchedule, setIsLoadingSchedule] = useState(true);
-  const [isSavingSchedule, setIsSavingSchedule] = useState(false);
-  const [isEditingSchedule, setIsEditingSchedule] = useState(false);
-
   // Closing time state
   const [closingTime, setClosingTime] = useState<ClosingTime | null>(null);
   const [closeHour, setCloseHour] = useState(22);
@@ -135,35 +131,36 @@ export default function LocationSettingsPage() {
     return init;
   });
 
+  // POS state
+  const oauthPosAccountId = searchParams.get("pos_account_id") || undefined;
+  const oauthPosError = searchParams.get("pos_error") || undefined;
+  const [posDialogOpen, setPosDialogOpen] = useState(false);
+  const [posDisconnecting, setPosDisconnecting] = useState(false);
+  const [posSyncing, setPosSyncing] = useState(false);
+  const [posSyncResult, setPosSyncResult] = useState<string | null>(null);
+
+  // Auto-open POS dialog when returning from OAuth callback
+  useEffect(() => {
+    if (oauthPosAccountId) {
+      setPosDialogOpen(true);
+      // Clean up URL params
+      const url = new URL(window.location.href);
+      url.searchParams.delete("pos_account_id");
+      url.searchParams.delete("pos_merchant_id");
+      window.history.replaceState({}, "", url.toString());
+    }
+    if (oauthPosError) {
+      setPosSyncResult(`Square connection failed: ${oauthPosError}`);
+      const url = new URL(window.location.href);
+      url.searchParams.delete("pos_error");
+      window.history.replaceState({}, "", url.toString());
+    }
+  }, [oauthPosAccountId, oauthPosError]);
+
   // Danger zone state — must be before early returns to satisfy Rules of Hooks
   const [isErasing, setIsErasing] = useState(false);
   const [eraseDialogOpen, setEraseDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-
-  // Fetch reset schedule on mount
-  useEffect(() => {
-    if (!location) return;
-    const locCreds = api.getLocationCredentials(location, devices);
-    if (!locCreds) {
-      setIsLoadingSchedule(false);
-      return;
-    }
-
-    api.getResetSchedule(location.id, locCreds.credentials, locCreds.signingDevice)
-      .then((schedule) => {
-        // Treat as no schedule if reset_hour is missing/invalid
-        if (schedule && typeof schedule.reset_hour === "number") {
-          setResetSchedule(schedule);
-          setResetHour(schedule.reset_hour);
-          if (typeof schedule.reset_minute === "number") setResetMinute(schedule.reset_minute);
-          if (schedule.timezone) setResetTimezone(schedule.timezone);
-        } else {
-          setResetSchedule(null);
-        }
-      })
-      .catch(() => {})
-      .finally(() => setIsLoadingSchedule(false));
-  }, [location, devices]);
 
   // Fetch closing time on mount
   useEffect(() => {
@@ -282,47 +279,6 @@ export default function LocationSettingsPage() {
     setDeleteDialogOpen(false);
     await removeLocation(location.localId);
     router.push("/dashboard");
-  };
-
-  const handleSaveSchedule = async () => {
-    const locCreds = api.getLocationCredentials(location, devices);
-    if (!locCreds) return;
-
-    setIsSavingSchedule(true);
-    try {
-      const schedule = await api.setResetSchedule(
-        currentId,
-        locCreds.credentials,
-        locCreds.signingDevice,
-        resetHour,
-        resetMinute,
-        resetTimezone
-      );
-      setResetSchedule(schedule);
-    } catch (err) {
-      logError("Failed to save reset schedule:", err);
-    } finally {
-      setIsSavingSchedule(false);
-    }
-  };
-
-  const handleDeleteSchedule = async () => {
-    const locCreds = api.getLocationCredentials(location, devices);
-    if (!locCreds) return;
-
-    setIsSavingSchedule(true);
-    try {
-      await api.deleteResetSchedule(currentId, locCreds.credentials, locCreds.signingDevice);
-      setResetSchedule(null);
-      setIsEditingSchedule(false);
-      setResetHour(0);
-      setResetMinute(0);
-      setResetTimezone(getBrowserTimezone());
-    } catch (err) {
-      logError("Failed to delete reset schedule:", err);
-    } finally {
-      setIsSavingSchedule(false);
-    }
   };
 
   const handleSaveClosingTime = async () => {
@@ -571,122 +527,6 @@ export default function LocationSettingsPage() {
                 Save
               </Button>
             </div>
-          </CardContent>
-        </Card>
-
-        {/* Daily Reset */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Clock className="h-5 w-5" />
-              Daily Reset
-            </CardTitle>
-            <CardDescription>
-              All counter counts will reset to 0 at this time every day. We recommend setting this during a time your location is closed or usually empty so that your total count doesn&apos;t shift over time.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {isLoadingSchedule ? (
-              <p className="text-sm text-muted-foreground">Loading...</p>
-            ) : !resetSchedule && !isEditingSchedule ? (
-              <Button
-                variant="outline"
-                onClick={() => setIsEditingSchedule(true)}
-              >
-                <Clock className="h-4 w-4 mr-1" />
-                Set Daily Reset
-              </Button>
-            ) : (
-              <>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label>Hour</Label>
-                    <Select
-                      value={(resetHour ?? 0).toString()}
-                      onValueChange={(v) => setResetHour(parseInt(v, 10))}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {Array.from({ length: 24 }, (_, i) => (
-                          <SelectItem key={i} value={i.toString()}>
-                            {i.toString().padStart(2, "0")}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Minute</Label>
-                    <Select
-                      value={(resetMinute ?? 0).toString()}
-                      onValueChange={(v) => setResetMinute(parseInt(v, 10))}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {[0, 15, 30, 45].map((m) => (
-                          <SelectItem key={m} value={m.toString()}>
-                            {m.toString().padStart(2, "0")}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <Label>Timezone</Label>
-                  <Select
-                    value={resetTimezone}
-                    onValueChange={setResetTimezone}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {COMMON_TIMEZONES.map((tz) => (
-                        <SelectItem key={tz} value={tz}>
-                          {tz.replace(/_/g, " ")}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="flex gap-2">
-                  <Button onClick={handleSaveSchedule} disabled={isSavingSchedule}>
-                    <Save className="h-4 w-4 mr-1" />
-                    {resetSchedule ? "Update" : "Save"}
-                  </Button>
-                  {resetSchedule ? (
-                    <Button
-                      variant="outline"
-                      onClick={handleDeleteSchedule}
-                      disabled={isSavingSchedule}
-                    >
-                      <Trash2 className="h-4 w-4 mr-1" />
-                      Remove
-                    </Button>
-                  ) : (
-                    <Button
-                      variant="outline"
-                      onClick={() => setIsEditingSchedule(false)}
-                    >
-                      Cancel
-                    </Button>
-                  )}
-                </div>
-                {resetSchedule && typeof resetSchedule.reset_hour === "number" && (
-                  <p className="text-xs text-muted-foreground">
-                    Currently resets daily at{" "}
-                    {resetSchedule.reset_hour.toString().padStart(2, "0")}:
-                    {(resetSchedule.reset_minute ?? 0).toString().padStart(2, "0")}{" "}
-                    ({(resetSchedule.timezone ?? "").replace(/_/g, " ")})
-                  </p>
-                )}
-              </>
-            )}
           </CardContent>
         </Card>
 
@@ -969,6 +809,136 @@ export default function LocationSettingsPage() {
             )}
           </CardContent>
         </Card>
+
+        {/* Point of Sale */}
+        {(() => {
+          const locCreds = api.getLocationCredentials(location, devices);
+          const posStatus = getPOSStatus(currentId);
+
+          const handleDisconnect = async () => {
+            if (!locCreds) return;
+            setPosDisconnecting(true);
+            try {
+              await disconnectPOS(currentId, locCreds.credentials, locCreds.signingDevice);
+              window.location.reload();
+            } catch {
+              setPosDisconnecting(false);
+            }
+          };
+
+          const handleSyncNow = async () => {
+            if (!locCreds) return;
+            setPosSyncing(true);
+            setPosSyncResult(null);
+            try {
+              const today = new Date().toISOString().split("T")[0];
+              const data = await fetchPOSTransactions(
+                currentId,
+                today,
+                today,
+                locCreds.credentials,
+                locCreds.signingDevice
+              );
+              const revenue = (data.totalRevenue / 100).toFixed(2);
+              setPosSyncResult(
+                `${data.totalTransactions} transactions, $${revenue} ${data.currency}`
+              );
+            } catch (err) {
+              setPosSyncResult(
+                `Error: ${err instanceof Error ? err.message : "Sync failed"}`
+              );
+            } finally {
+              setPosSyncing(false);
+            }
+          };
+
+          return (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <CreditCard className="h-5 w-5" />
+                  Point of Sale
+                </CardTitle>
+                <CardDescription>
+                  {posStatus?.connected
+                    ? "Connected POS system"
+                    : (
+                      <button
+                        type="button"
+                        onClick={() => setPosDialogOpen(true)}
+                        className="hover:text-foreground transition-colors cursor-pointer"
+                      >
+                        Connect a POS to see sales data alongside foot traffic
+                      </button>
+                    )}
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {posStatus?.connected ? (
+                  <div className="space-y-3">
+                    <div>
+                      <p className="font-medium capitalize">
+                        {posStatus.provider} — &quot;{posStatus.posLocationName}&quot;
+                      </p>
+                      {posStatus.connectedAt && (
+                        <p className="text-sm text-muted-foreground">
+                          Connected {new Date(posStatus.connectedAt).toLocaleDateString()}
+                        </p>
+                      )}
+                    </div>
+                    {posSyncResult && (
+                      <p className={`text-sm ${posSyncResult.startsWith("Error") ? "text-destructive" : "text-muted-foreground"}`}>
+                        {posSyncResult}
+                      </p>
+                    )}
+                    <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleSyncNow}
+                        disabled={posSyncing}
+                      >
+                        {posSyncing ? "Syncing..." : "Sync Now"}
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="text-destructive hover:text-destructive"
+                        onClick={handleDisconnect}
+                        disabled={posDisconnecting}
+                      >
+                        {posDisconnecting ? "Disconnecting..." : "Disconnect"}
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <Button
+                    variant="outline"
+                    onClick={() => setPosDialogOpen(true)}
+                    disabled={!locCreds}
+                  >
+                    Connect POS
+                  </Button>
+                )}
+              </CardContent>
+            </Card>
+          );
+        })()}
+
+        {(() => {
+          const locCreds = api.getLocationCredentials(location, devices);
+          if (!locCreds) return null;
+          return (
+            <POSConnectDialog
+              locationId={currentId}
+              locationName={location.name}
+              credentials={locCreds}
+              open={posDialogOpen}
+              onOpenChange={setPosDialogOpen}
+              initialPosAccountId={oauthPosAccountId}
+            />
+          );
+        })()}
 
         {/* Danger Zone */}
         <Card className="border-destructive">

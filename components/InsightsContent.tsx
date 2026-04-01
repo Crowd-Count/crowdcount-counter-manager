@@ -18,10 +18,16 @@ import {
   Minus,
   Loader2,
   Timer,
+  DollarSign,
+  TrendingUp,
 } from "lucide-react";
+import type { POSInsightsResponse, POSPeriodStats } from "@/lib/types";
 
 interface InsightsContentProps {
   data: InsightsData;
+  posInsights?: POSInsightsResponse;
+  hasPOS?: boolean;
+  onConnectPOS?: () => void;
 }
 
 function TrendIndicator({ percentage }: { percentage: number }) {
@@ -138,9 +144,149 @@ function roundDisplay(n: number): string {
   return Math.round(n).toLocaleString();
 }
 
+function formatCurrency(cents: number): string {
+  return `$${(cents / 100).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+// Wrapper that renders POS cards greyed out when not connected
+function POSCardWrapper({ hasPOS, onConnect, children }: { hasPOS: boolean; onConnect?: () => void; children: React.ReactNode }) {
+  if (hasPOS) return <>{children}</>;
+  return (
+    <div className="relative">
+      <div className="opacity-40 pointer-events-none">{children}</div>
+      <div className="absolute inset-0 flex items-center justify-center">
+        <button
+          onClick={onConnect}
+          className="text-xs font-medium text-primary bg-background/90 px-4 py-2 rounded-full border border-dashed border-primary/50 hover:bg-primary/10 hover:border-primary transition-colors cursor-pointer"
+        >
+          Connect a POS system to unlock
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// POS insight cards — consume pre-computed POSPeriodStats from backend
+function POSSalesSummary({ pos, prev, periodLabel, prevLabel }: {
+  pos?: POSPeriodStats; prev?: POSPeriodStats;
+  periodLabel: string; prevLabel: string;
+}) {
+  const revenue = pos ? formatCurrency(pos.revenue) : "—";
+  const transactions = pos ? pos.transactions.toLocaleString() : "—";
+  const avgTransaction = pos && pos.avg_transaction > 0
+    ? formatCurrency(pos.avg_transaction)
+    : "—";
+
+  const revenueTrend = pos && prev && prev.revenue > 0
+    ? calc.vsAveragePercentage(pos.revenue, prev.revenue)
+    : null;
+  const txTrend = pos && prev && prev.transactions > 0
+    ? calc.vsAveragePercentage(pos.transactions, prev.transactions)
+    : null;
+
+  return (
+    <InsightCard icon={DollarSign} title={`${periodLabel} Sales`}>
+      <StatRow
+        label="Total Revenue"
+        value={revenue}
+        sub={revenueTrend !== null ? <TrendIndicator percentage={revenueTrend} /> : undefined}
+      />
+      <StatRow
+        label="Transactions"
+        value={transactions}
+        sub={txTrend !== null ? <TrendIndicator percentage={txTrend} /> : undefined}
+      />
+      <StatRow label="Avg Transaction" value={avgTransaction} />
+      {(revenueTrend !== null || txTrend !== null) && (
+        <p className="text-xs text-muted-foreground">vs {prevLabel}</p>
+      )}
+    </InsightCard>
+  );
+}
+
+function POSConversionCard({ pos, prev, periodLabel, prevLabel }: {
+  pos?: POSPeriodStats; prev?: POSPeriodStats;
+  periodLabel: string; prevLabel: string;
+}) {
+  const hasData = pos && pos.entries > 0;
+
+  const conversionRate = hasData
+    ? `${pos.conversion_rate.toFixed(1)}%`
+    : "—";
+
+  const conversionTrend = hasData && prev && prev.conversion_rate > 0
+    ? calc.vsAveragePercentage(pos.conversion_rate, prev.conversion_rate)
+    : null;
+
+  const revenuePerVisitor = hasData
+    ? formatCurrency(pos.revenue_per_visitor)
+    : "—";
+  const rpvTrend = hasData && prev && prev.revenue_per_visitor > 0
+    ? calc.vsAveragePercentage(pos.revenue_per_visitor, prev.revenue_per_visitor)
+    : null;
+
+  const rawRate = hasData ? (pos.transactions / pos.entries) : 0;
+  const txPerVisitor = hasData ? rawRate.toFixed(2) : "—";
+
+  return (
+    <InsightCard icon={TrendingUp} title="Conversion">
+      <StatRow
+        label="Conversion Rate"
+        value={conversionRate}
+        sub={conversionTrend !== null ? <TrendIndicator percentage={conversionTrend} /> : undefined}
+      />
+      <StatRow
+        label="Revenue per Visitor"
+        value={revenuePerVisitor}
+        sub={rpvTrend !== null ? <TrendIndicator percentage={rpvTrend} /> : undefined}
+      />
+      <StatRow
+        label="Transactions per Visitor"
+        value={txPerVisitor}
+        sub={rawRate > 1 ? "Includes repeat purchases" : undefined}
+      />
+      {!hasData && pos && pos.transactions > 0 && (
+        <p className="text-xs text-muted-foreground">Entry data required for conversion metrics</p>
+      )}
+      {(conversionTrend !== null || rpvTrend !== null) && (
+        <p className="text-xs text-muted-foreground">vs {prevLabel}</p>
+      )}
+    </InsightCard>
+  );
+}
+
+function POSSalesVsTraffic({ pos, trafficData }: { pos?: POSPeriodStats; trafficData: Record<string, number> }) {
+  let peakSalesHour = 0;
+  let peakSalesVal = 0;
+  if (pos?.hourly_data) {
+    for (const [hour, data] of Object.entries(pos.hourly_data)) {
+      if (data.revenue > peakSalesVal) {
+        peakSalesVal = data.revenue;
+        peakSalesHour = parseInt(hour);
+      }
+    }
+  }
+
+  const peakTraffic = calc.peakOccupancy(trafficData);
+  const peakSalesStr = pos && peakSalesVal > 0 ? calc.formatHour(peakSalesHour) : "—";
+  const peakTrafficStr = peakTraffic.count > 0 ? calc.formatHour(peakTraffic.hour) : "—";
+
+  return (
+    <InsightCard icon={ArrowLeftRight} title="Sales vs Traffic">
+      <ComparisonRow
+        leftLabel="Peak Sales Hour"
+        leftValue={peakSalesStr}
+        rightLabel="Peak Traffic Hour"
+        rightValue={peakTrafficStr}
+        highlightLeft={peakSalesHour !== peakTraffic.hour ? true : undefined}
+      />
+    </InsightCard>
+  );
+}
+
 // --- Today Tab ---
 
-function TodayInsights({ data }: { data: InsightsData }) {
+function TodayInsights({ data, posData, prevPosData, hasPOS, onConnectPOS }: { data: InsightsData; posData?: POSPeriodStats; prevPosData?: POSPeriodStats; hasPOS: boolean; onConnectPOS?: () => void }) {
   const peak = calc.peakOccupancy(data.dayData);
   const avgOcc = calc.averageDayOccupancy(data.dayData);
   const fairAvg = calc.fairHistoricalAvg(
@@ -175,20 +321,17 @@ function TodayInsights({ data }: { data: InsightsData }) {
   );
   const vsTypicalEntries = calc.vsAveragePercentage(totalEntries, fairEntryAvg);
 
-  return (
-    <div className="space-y-4">
-      {/* Summary */}
-      <InsightCard icon={BarChart3} title="Summary">
-        <StatRow
-          label="Peak Occupancy"
-          value={roundDisplay(peak.count)}
-          sub={<TrendIndicator percentage={peakVsTypical} />}
-        />
-        <StatRow label="Peak Hour" value={calc.formatHour(peak.hour)} />
-        <StatRow label="Avg Occupancy" value={roundDisplay(avgOcc)} />
-      </InsightCard>
+  const posCards = (
+    <>
+      <POSConversionCard pos={posData} prev={prevPosData} periodLabel="Today" prevLabel="same day last week" />
+      <POSSalesSummary pos={posData} prev={prevPosData} periodLabel="Today's" prevLabel="same day last week" />
+      <POSSalesVsTraffic pos={posData} trafficData={data.dayData} />
+    </>
+  );
 
-      {/* Entries */}
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      {/* 1. Entries */}
       {totalEntries > 0 && (
         <InsightCard icon={UserPlus} title="Entries">
           <StatRow
@@ -202,7 +345,18 @@ function TodayInsights({ data }: { data: InsightsData }) {
         </InsightCard>
       )}
 
-      {/* Dwell Time */}
+      {/* 2. Occupancy */}
+      <InsightCard icon={BarChart3} title="Occupancy">
+        <StatRow
+          label="Peak Occupancy"
+          value={roundDisplay(peak.count)}
+          sub={<TrendIndicator percentage={peakVsTypical} />}
+        />
+        <StatRow label="Peak Hour" value={calc.formatHour(peak.hour)} />
+        <StatRow label="Avg Occupancy" value={roundDisplay(avgOcc)} />
+      </InsightCard>
+
+      {/* 3. Avg Time of Stay */}
       {data.dwellTimeMinutes != null && data.dwellTimeMinutes > 0 && (
         <InsightCard icon={Timer} title="Avg Time of Stay">
           <StatRow
@@ -213,7 +367,24 @@ function TodayInsights({ data }: { data: InsightsData }) {
         </InsightCard>
       )}
 
-      {/* Peak Times */}
+      {/* 4-6. POS: Conversion, Today's Sales, Sales vs Traffic */}
+      {hasPOS && posCards}
+
+      {/* 7. vs Typical Day */}
+      <InsightCard icon={ArrowLeftRight} title="vs Typical Day">
+        <StatRow
+          label="vs Historical Average"
+          value={<TrendIndicator percentage={vsTypicalOcc} />}
+        />
+        {totalEntries > 0 && (
+          <StatRow
+            label="Entries vs Historical"
+            value={<TrendIndicator percentage={vsTypicalEntries} />}
+          />
+        )}
+      </InsightCard>
+
+      {/* 8. Peak Times */}
       <InsightCard icon={Clock} title="Peak Times">
         <ComparisonRow
           leftLabel="Busiest"
@@ -228,7 +399,7 @@ function TodayInsights({ data }: { data: InsightsData }) {
         </div>
       </InsightCard>
 
-      {/* Time of Day */}
+      {/* 9. Time of Day */}
       <InsightCard icon={Sunrise} title="Time of Day">
         <ComparisonRow
           leftLabel="Morning Avg"
@@ -248,26 +419,21 @@ function TodayInsights({ data }: { data: InsightsData }) {
         )}
       </InsightCard>
 
-      {/* vs Typical Day */}
-      <InsightCard icon={ArrowLeftRight} title="vs Typical Day">
-        <StatRow
-          label="vs Historical Average"
-          value={<TrendIndicator percentage={vsTypicalOcc} />}
-        />
-        {totalEntries > 0 && (
-          <StatRow
-            label="Entries vs Historical"
-            value={<TrendIndicator percentage={vsTypicalEntries} />}
-          />
-        )}
-      </InsightCard>
+      {/* POS Cards greyed out at bottom when not connected */}
+      {!hasPOS && (
+        <div className="lg:col-span-2">
+          <POSCardWrapper hasPOS={false} onConnect={onConnectPOS}>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">{posCards}</div>
+          </POSCardWrapper>
+        </div>
+      )}
     </div>
   );
 }
 
 // --- This Week Tab ---
 
-function WeekInsights({ data }: { data: InsightsData }) {
+function WeekInsights({ data, posData, prevPosData, hasPOS, onConnectPOS }: { data: InsightsData; posData?: POSPeriodStats; prevPosData?: POSPeriodStats; hasPOS: boolean; onConnectPOS?: () => void }) {
   const busiest = calc.busiestDay(data.weekData);
   const slowest = calc.slowestDay(data.weekData);
   const avgOcc = calc.averageWeekOccupancy(data.weekData);
@@ -294,18 +460,8 @@ function WeekInsights({ data }: { data: InsightsData }) {
   const vsTypicalEntries = calc.vsAveragePercentage(totalEntries, fairEntryAvg);
 
   return (
-    <div className="space-y-4">
-      {/* Summary */}
-      <InsightCard icon={BarChart3} title="Summary">
-        <StatRow
-          label="Peak Daily Avg"
-          value={`${roundDisplay(busiest.avg)} (${busiest.day})`}
-          sub={<TrendIndicator percentage={peakVsTypical} />}
-        />
-        <StatRow label="Weekly Avg Occupancy" value={roundDisplay(avgOcc)} />
-      </InsightCard>
-
-      {/* Entries */}
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      {/* 1. Entries */}
       {totalEntries > 0 && (
         <InsightCard icon={UserPlus} title="Entries">
           <StatRow
@@ -319,7 +475,39 @@ function WeekInsights({ data }: { data: InsightsData }) {
         </InsightCard>
       )}
 
-      {/* Day Performance */}
+      {/* 2. Occupancy */}
+      <InsightCard icon={BarChart3} title="Occupancy">
+        <StatRow
+          label="Peak Daily Avg"
+          value={`${roundDisplay(busiest.avg)} (${busiest.day})`}
+          sub={<TrendIndicator percentage={peakVsTypical} />}
+        />
+        <StatRow label="Weekly Avg Occupancy" value={roundDisplay(avgOcc)} />
+      </InsightCard>
+
+      {/* 3-4. POS: Conversion, Weekly Sales */}
+      {hasPOS && (
+        <>
+          <POSConversionCard pos={posData} prev={prevPosData} periodLabel="Week" prevLabel="previous week" />
+          <POSSalesSummary pos={posData} prev={prevPosData} periodLabel="Weekly" prevLabel="previous week" />
+        </>
+      )}
+
+      {/* 5. vs Typical Week */}
+      <InsightCard icon={ArrowLeftRight} title="vs Typical Week">
+        <StatRow
+          label="vs Historical Average"
+          value={<TrendIndicator percentage={vsTypicalOcc} />}
+        />
+        {totalEntries > 0 && (
+          <StatRow
+            label="Entries vs Historical"
+            value={<TrendIndicator percentage={vsTypicalEntries} />}
+          />
+        )}
+      </InsightCard>
+
+      {/* 6. Day Performance */}
       <InsightCard icon={Calendar} title="Day Performance">
         <ComparisonRow
           leftLabel="Busiest"
@@ -334,7 +522,7 @@ function WeekInsights({ data }: { data: InsightsData }) {
         </div>
       </InsightCard>
 
-      {/* Weekend vs Weekday */}
+      {/* 7. Weekend vs Weekday */}
       <InsightCard icon={CalendarClock} title="Weekend vs Weekday">
         <ComparisonRow
           leftLabel="Weekday Avg"
@@ -354,26 +542,24 @@ function WeekInsights({ data }: { data: InsightsData }) {
         )}
       </InsightCard>
 
-      {/* vs Typical Week */}
-      <InsightCard icon={ArrowLeftRight} title="vs Typical Week">
-        <StatRow
-          label="vs Historical Average"
-          value={<TrendIndicator percentage={vsTypicalOcc} />}
-        />
-        {totalEntries > 0 && (
-          <StatRow
-            label="Entries vs Historical"
-            value={<TrendIndicator percentage={vsTypicalEntries} />}
-          />
-        )}
-      </InsightCard>
+      {/* POS Cards greyed out at bottom when not connected */}
+      {!hasPOS && (
+        <div className="lg:col-span-2">
+          <POSCardWrapper hasPOS={false} onConnect={onConnectPOS}>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              <POSConversionCard pos={posData} prev={prevPosData} periodLabel="Week" prevLabel="previous week" />
+              <POSSalesSummary pos={posData} prev={prevPosData} periodLabel="Weekly" prevLabel="previous week" />
+            </div>
+          </POSCardWrapper>
+        </div>
+      )}
     </div>
   );
 }
 
 // --- This Year Tab ---
 
-function YearInsights({ data }: { data: InsightsData }) {
+function YearInsights({ data, posData, prevPosData, hasPOS, onConnectPOS }: { data: InsightsData; posData?: POSPeriodStats; prevPosData?: POSPeriodStats; hasPOS: boolean; onConnectPOS?: () => void }) {
   const busiest = calc.busiestMonth(data.yearData);
   const slowest = calc.slowestMonth(data.yearData);
   const avgOcc = calc.averageYearOccupancy(data.yearData);
@@ -407,18 +593,8 @@ function YearInsights({ data }: { data: InsightsData }) {
     : 0;
 
   return (
-    <div className="space-y-4">
-      {/* Summary */}
-      <InsightCard icon={BarChart3} title="Summary">
-        <StatRow
-          label="Peak Monthly Avg"
-          value={`${roundDisplay(busiest.avg)} (${busiest.month})`}
-          sub={avgYearAvailable ? <TrendIndicator percentage={peakVsTypical} /> : undefined}
-        />
-        <StatRow label="Yearly Avg Occupancy" value={roundDisplay(avgOcc)} />
-      </InsightCard>
-
-      {/* Entries */}
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      {/* 1. Entries */}
       {totalEntries > 0 && (
         <InsightCard icon={UserPlus} title="Entries">
           <StatRow
@@ -432,22 +608,25 @@ function YearInsights({ data }: { data: InsightsData }) {
         </InsightCard>
       )}
 
-      {/* Month Performance */}
-      <InsightCard icon={Calendar} title="Month Performance">
-        <ComparisonRow
-          leftLabel="Busiest"
-          leftValue={busiest.month}
-          rightLabel="Slowest"
-          rightValue={slowest.month}
-          highlightLeft={busiest.avg > slowest.avg}
+      {/* 2. Occupancy */}
+      <InsightCard icon={BarChart3} title="Occupancy">
+        <StatRow
+          label="Peak Monthly Avg"
+          value={`${roundDisplay(busiest.avg)} (${busiest.month})`}
+          sub={avgYearAvailable ? <TrendIndicator percentage={peakVsTypical} /> : undefined}
         />
-        <div className="grid grid-cols-2 gap-3">
-          <p className="text-center text-xs text-muted-foreground">Avg: {roundDisplay(busiest.avg)}</p>
-          <p className="text-center text-xs text-muted-foreground">Avg: {roundDisplay(slowest.avg)}</p>
-        </div>
+        <StatRow label="Yearly Avg Occupancy" value={roundDisplay(avgOcc)} />
       </InsightCard>
 
-      {/* vs Previous Years */}
+      {/* 3-4. POS: Conversion, Yearly Sales */}
+      {hasPOS && (
+        <>
+          <POSConversionCard pos={posData} prev={prevPosData} periodLabel="Year" prevLabel="previous year" />
+          <POSSalesSummary pos={posData} prev={prevPosData} periodLabel="Yearly" prevLabel="previous year" />
+        </>
+      )}
+
+      {/* 5. vs Previous Years */}
       {avgYearAvailable && (
         <InsightCard icon={ArrowLeftRight} title="vs Previous Years">
           <StatRow
@@ -462,13 +641,40 @@ function YearInsights({ data }: { data: InsightsData }) {
           )}
         </InsightCard>
       )}
+
+      {/* 6. Month Performance */}
+      <InsightCard icon={Calendar} title="Month Performance">
+        <ComparisonRow
+          leftLabel="Busiest"
+          leftValue={busiest.month}
+          rightLabel="Slowest"
+          rightValue={slowest.month}
+          highlightLeft={busiest.avg > slowest.avg}
+        />
+        <div className="grid grid-cols-2 gap-3">
+          <p className="text-center text-xs text-muted-foreground">Avg: {roundDisplay(busiest.avg)}</p>
+          <p className="text-center text-xs text-muted-foreground">Avg: {roundDisplay(slowest.avg)}</p>
+        </div>
+      </InsightCard>
+
+      {/* POS Cards greyed out at bottom when not connected */}
+      {!hasPOS && (
+        <div className="lg:col-span-2">
+          <POSCardWrapper hasPOS={false} onConnect={onConnectPOS}>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              <POSSalesSummary pos={posData} prev={prevPosData} periodLabel="Yearly" prevLabel="previous year" />
+              <POSConversionCard pos={posData} prev={prevPosData} periodLabel="Year" prevLabel="previous year" />
+            </div>
+          </POSCardWrapper>
+        </div>
+      )}
     </div>
   );
 }
 
 // --- Main Component ---
 
-export function InsightsContent({ data }: InsightsContentProps) {
+export function InsightsContent({ data, posInsights, hasPOS = false, onConnectPOS }: InsightsContentProps) {
   const [period, setPeriod] = useState("today");
 
   if (data.isLoading) {
@@ -500,13 +706,13 @@ export function InsightsContent({ data }: InsightsContentProps) {
         </p>
 
         <TabsContent value="today">
-          <TodayInsights data={data} />
+          <TodayInsights data={data} posData={posInsights?.today} prevPosData={posInsights?.prev_day} hasPOS={hasPOS} onConnectPOS={onConnectPOS} />
         </TabsContent>
         <TabsContent value="week">
-          <WeekInsights data={data} />
+          <WeekInsights data={data} posData={posInsights?.week} prevPosData={posInsights?.prev_week} hasPOS={hasPOS} onConnectPOS={onConnectPOS} />
         </TabsContent>
         <TabsContent value="year">
-          <YearInsights data={data} />
+          <YearInsights data={data} posData={posInsights?.year} prevPosData={posInsights?.prev_year} hasPOS={hasPOS} onConnectPOS={onConnectPOS} />
         </TabsContent>
       </Tabs>
     </div>

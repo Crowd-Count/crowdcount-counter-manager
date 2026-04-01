@@ -40,6 +40,9 @@ import {
 } from "lucide-react";
 import { MapBackground } from "@/components/MapBackground";
 import { logError } from "@/lib/logger";
+import { usePOS } from "@/contexts/POSContext";
+import POSConnectDialog from "@/components/POSConnectDialog";
+import { CreditCard } from "lucide-react";
 
 interface LocationCardProps {
   location: LocationState;
@@ -81,8 +84,10 @@ export function LocationCard({ location }: LocationCardProps) {
   const { devices } = useDevices();
   const { addCounterToLocation, refreshLocation } = useLocations();
   const { theme } = useTheme();
+  const { getStatus: getPOSStatus, statusVersion: posVersion } = usePOS();
 
   const [isAddOpen, setIsAddOpen] = useState(false);
+  const [posDialogOpen, setPosDialogOpen] = useState(false);
   const [newDeviceId, setNewDeviceId] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [addError, setAddError] = useState("");
@@ -432,6 +437,49 @@ export function LocationCard({ location }: LocationCardProps) {
               </form>
             </DialogContent>
           </Dialog>
+        </div>
+
+        {/* Point of Sale */}
+        <div className="space-y-1.5 mt-3">
+          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider px-1">
+            Point of Sale
+          </p>
+          {(() => {
+            const posStatus = getPOSStatus(location.id);
+            const locCreds = api.getLocationCredentials(location, devices);
+
+            if (posStatus?.connected) {
+              return (
+                <div className="flex items-center gap-2 px-3 py-2 rounded-md w-full text-sm bg-green-500/10 border border-green-500/20">
+                  <CreditCard className="h-3.5 w-3.5 text-green-500" />
+                  <span className="text-green-600 dark:text-green-400 capitalize">
+                    {posStatus.provider} — {posStatus.posLocationName}
+                  </span>
+                </div>
+              );
+            }
+
+            return (
+              <>
+                <button
+                  className="flex items-center gap-2 px-3 py-2 rounded-md w-full text-sm text-foreground bg-green-500/10 border border-green-500/20 opacity-60 hover:opacity-100 transition-opacity duration-200 ease-in-out"
+                  onClick={() => setPosDialogOpen(true)}
+                >
+                  <CreditCard className="h-3.5 w-3.5 text-green-500" />
+                  Connect POS System
+                </button>
+                {locCreds && (
+                  <POSConnectDialog
+                    locationId={location.id}
+                    locationName={location.name}
+                    credentials={locCreds}
+                    open={posDialogOpen}
+                    onOpenChange={setPosDialogOpen}
+                  />
+                )}
+              </>
+            );
+          })()}
         </div>
       </CardContent>
     </>

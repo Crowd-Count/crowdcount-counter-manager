@@ -45,6 +45,7 @@ export interface ChartData {
   label: string;
   value: number;
   average?: number;
+  salesCount?: number;
 }
 
 export interface HistoryCacheEntry {

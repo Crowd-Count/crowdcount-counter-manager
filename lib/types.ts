@@ -113,14 +113,6 @@ export interface LocationResponse {
   location_longitude?: number | null;
 }
 
-// Reset schedule
-export interface ResetSchedule {
-  location_id: string;
-  reset_hour: number;
-  reset_minute: number;
-  timezone: string;
-}
-
 // Closing time schedule
 export interface ClosingTimeDay {
   day_of_week: number;
@@ -213,4 +205,50 @@ export interface EntryYearDataResponse {
 
 export interface AverageEntryYearDataResponse {
   average_entry_year_data: Record<string, number> | string;
+}
+
+// POS integration types
+export type POSProvider = "square" | "toast";
+
+export interface POSConnectionInfo {
+  connected: boolean;
+  provider?: POSProvider;
+  posLocationName?: string;
+  posLocationId?: string;
+  merchantId?: string;
+  posAccountId?: string;
+  connectedAt?: string;
+}
+
+export interface POSStoreLocation {
+  id: string;
+  name: string;
+  address?: string;
+}
+
+export interface POSTransactionData {
+  totalTransactions: number;
+  totalRevenue: number; // cents
+  hourlyBreakdown: Record<string, { transactions: number; revenue: number }>;
+  currency: string;
+}
+
+export interface POSPeriodStats {
+  transactions: number;
+  revenue: number; // cents
+  currency: string;
+  entries: number;
+  conversion_rate: number; // percentage, capped at 100
+  revenue_per_visitor: number; // cents
+  avg_transaction: number; // cents
+  hourly_data?: Record<string, { transactions: number; revenue: number }>;
+}
+
+export interface POSInsightsResponse {
+  today: POSPeriodStats;
+  prev_day: POSPeriodStats;
+  week: POSPeriodStats;
+  prev_week: POSPeriodStats;
+  year: POSPeriodStats;
+  prev_year: POSPeriodStats;
 }

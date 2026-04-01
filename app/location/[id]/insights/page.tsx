@@ -1,16 +1,19 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { useDevices } from "@/contexts/DevicesContext";
 import { useLocations } from "@/contexts/LocationsContext";
-import { LOCATION_COLORS } from "@/lib/types";
+import { usePOS } from "@/contexts/POSContext";
+import { LOCATION_COLORS, type POSInsightsResponse } from "@/lib/types";
 import * as api from "@/lib/api";
+import { fetchPOSInsights } from "@/lib/posApi";
 import { useInsightsData } from "@/hooks/useInsightsData";
 import type { DeviceCredentials } from "@/hooks/useAggregatedHistory";
 import type { LocationFetchParams } from "@/lib/dataFetchers";
 import { InsightsContent } from "@/components/InsightsContent";
+import POSConnectDialog from "@/components/POSConnectDialog";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { ArrowLeft } from "lucide-react";
@@ -42,6 +45,25 @@ export default function LocationInsightsPage() {
   }, [location, devices]);
 
   const data = useInsightsData(credentials, locationParams);
+  const { getStatus: getPOSStatus } = usePOS();
+
+  // POS data
+  const posStatus = location ? getPOSStatus(location.id) : undefined;
+  const hasPOS = !!posStatus?.connected;
+  const [posDialogOpen, setPosDialogOpen] = useState(false);
+  const [posInsights, setPosInsights] = useState<POSInsightsResponse | undefined>();
+
+  useEffect(() => {
+    if (!hasPOS || !locationParams) return;
+
+    fetchPOSInsights(
+      locationParams.locationId,
+      locationParams.credentials,
+      locationParams.signingDevice,
+    )
+      .then(setPosInsights)
+      .catch(() => {});
+  }, [hasPOS, locationParams]);
 
   if (devicesLoading || locationsLoading) {
     return (
@@ -100,8 +122,27 @@ export default function LocationInsightsPage() {
         </div>
       </header>
 
-      <main className="container mx-auto px-4 py-6 max-w-4xl">
-        <InsightsContent data={data} />
+      <main className="container mx-auto px-4 py-6 max-w-6xl">
+        <InsightsContent
+          data={data}
+          posInsights={posInsights}
+          hasPOS={hasPOS}
+          onConnectPOS={() => setPosDialogOpen(true)}
+        />
+        {(() => {
+          if (!location) return null;
+          const locCreds = api.getLocationCredentials(location, devices);
+          if (!locCreds) return null;
+          return (
+            <POSConnectDialog
+              locationId={location.id}
+              locationName={location.name}
+              credentials={locCreds}
+              open={posDialogOpen}
+              onOpenChange={setPosDialogOpen}
+            />
+          );
+        })()}
       </main>
     </div>
   );

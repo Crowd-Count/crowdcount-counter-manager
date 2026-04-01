@@ -22,6 +22,28 @@ function filterFutureDates(dates: string[]): string[] {
   return dates.filter((d) => d <= today);
 }
 
+/** Get the Monday (YYYY-MM-DD) of the week containing a given date string */
+function getMondayOfWeek(dateStr: string): string {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  const date = new Date(y, m - 1, d);
+  const dow = date.getDay(); // 0=Sun, 1=Mon, ..., 6=Sat
+  const mondayOffset = dow === 0 ? -6 : 1 - dow;
+  date.setDate(date.getDate() + mondayOffset);
+  const yy = date.getFullYear();
+  const mm = String(date.getMonth() + 1).padStart(2, "0");
+  const dd = String(date.getDate()).padStart(2, "0");
+  return `${yy}-${mm}-${dd}`;
+}
+
+/** Derive unique week Mondays from available dates, sorted ascending */
+function deriveAvailableWeeks(dates: string[]): string[] {
+  const mondays = new Set<string>();
+  for (const d of dates) {
+    mondays.add(getMondayOfWeek(d));
+  }
+  return Array.from(mondays).sort();
+}
+
 export type { ChartData, DeviceCredentials, DataType, LocationFetchParams } from "@/lib/dataFetchers";
 
 export interface AggregatedHistoryResult {
@@ -37,6 +59,8 @@ export interface AggregatedHistoryResult {
   setSelectedWeekDate: (date: string) => void;
   weekData: ChartData[];
   isLoadingWeek: boolean;
+  /** Available weeks as Monday dates (YYYY-MM-DD), most recent last */
+  availableWeeks: string[];
   selectedYear: string;
   setSelectedYear: (year: string) => void;
   yearData: ChartData[];
@@ -89,9 +113,10 @@ export function useAggregatedHistory(
   // Compute initial date selections from cached dates
   const initialMostRecent = initialDates ? initialDates[initialDates.length - 1] : "";
   const initialYear = initialMostRecent ? initialMostRecent.split("-")[0] : "";
+  const initialWeekMonday = initialMostRecent ? getMondayOfWeek(initialMostRecent) : "";
 
   const [selectedDate, setSelectedDate] = useState<string>(initialMostRecent);
-  const [selectedWeekDate, setSelectedWeekDate] = useState<string>(initialMostRecent);
+  const [selectedWeekDate, setSelectedWeekDate] = useState<string>(initialWeekMonday);
   const [selectedYear, setSelectedYear] = useState<string>(initialYear);
 
   // Check history cache for default params
@@ -131,7 +156,7 @@ export function useAggregatedHistory(
       if (dates.length > 0) {
         const mostRecent = dates[dates.length - 1];
         setSelectedDate(mostRecent);
-        setSelectedWeekDate(mostRecent);
+        setSelectedWeekDate(getMondayOfWeek(mostRecent));
         const year = mostRecent.split("-")[0];
         setSelectedYear(year);
       }
@@ -232,6 +257,11 @@ export function useAggregatedHistory(
     }
   }, [cacheVersion, credKey, getCachedDates, getCachedHistory, selectedDate, selectedWeekDate, selectedYear, dataType]);
 
+  const availableWeeks = useMemo(
+    () => deriveAvailableWeeks(availableDates),
+    [availableDates]
+  );
+
   const availableYears = useMemo(() => {
     const years = new Set<string>();
     availableDates.forEach((date) => {
@@ -253,6 +283,7 @@ export function useAggregatedHistory(
     setSelectedWeekDate,
     weekData,
     isLoadingWeek,
+    availableWeeks,
     selectedYear,
     setSelectedYear,
     yearData,

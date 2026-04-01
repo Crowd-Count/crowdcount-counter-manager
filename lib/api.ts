@@ -22,7 +22,6 @@ import type {
   LocationResponse,
   CreateLocationResponse,
   LocationsForDeviceResponse,
-  ResetSchedule,
   ClosingTime,
   ClosingTimeDay,
   SigningCredentials,
@@ -39,6 +38,14 @@ import {
 import { logSecurityEvent } from "./securityAudit";
 
 export function getApiBaseUrl(): string {
+  if (typeof window !== "undefined") {
+    try {
+      const testing = localStorage.getItem("crowdcount_testing");
+      if (testing === "true") {
+        return "https://api-staging.crowdcount.tech";
+      }
+    } catch {}
+  }
   return "https://api.crowdcount.tech";
 }
 
@@ -1039,59 +1046,6 @@ export async function getLocationAvailableDates(
     }
   );
   return response.dates;
-}
-
-// ── Reset Schedule ──
-
-export async function getResetSchedule(
-  locationId: string,
-  credentials: Array<{ device_id: string; password: string }>,
-  signingDevice: SigningCredentials
-): Promise<ResetSchedule | null> {
-  try {
-    return await apiRequest<ResetSchedule>("/get_reset_schedule", {
-      method: "POST",
-      body: JSON.stringify({ location_id: locationId, credentials }),
-      sign: signingDevice,
-    });
-  } catch {
-    return null;
-  }
-}
-
-export async function setResetSchedule(
-  locationId: string,
-  credentials: Array<{ device_id: string; password: string }>,
-  signingDevice: SigningCredentials,
-  hour: number,
-  minute: number,
-  timezone: string
-): Promise<ResetSchedule> {
-  return apiRequest<ResetSchedule>("/set_reset_schedule", {
-    method: "POST",
-    body: JSON.stringify({
-      location_id: locationId,
-      credentials,
-      reset_hour: hour,
-      reset_minute: minute,
-      timezone,
-    }),
-    sign: signingDevice,
-    idempotent: true,
-  });
-}
-
-export async function deleteResetSchedule(
-  locationId: string,
-  credentials: Array<{ device_id: string; password: string }>,
-  signingDevice: SigningCredentials
-): Promise<void> {
-  await apiRequest("/delete_reset_schedule", {
-    method: "POST",
-    body: JSON.stringify({ location_id: locationId, credentials }),
-    sign: signingDevice,
-    idempotent: true,
-  });
 }
 
 // ── Closing Time ──

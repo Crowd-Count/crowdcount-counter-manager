@@ -3,6 +3,7 @@ import "./globals.css";
 import { DevicesProvider } from "@/contexts/DevicesContext";
 import { LocationsProvider } from "@/contexts/LocationsContext";
 import { DataCacheProvider } from "@/contexts/DataCacheContext";
+import { POSProvider } from "@/contexts/POSContext";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 
 export const metadata: Metadata = {
@@ -21,6 +22,7 @@ export default function RootLayout({
         <ThemeProvider>
           <DevicesProvider>
             <LocationsProvider>
+              <POSProvider>
               <DataCacheProvider>
                 <div className="flex-1">{children}</div>
                 <footer className="border-t py-4 text-center text-sm text-muted-foreground">
@@ -41,6 +43,7 @@ export default function RootLayout({
                   </a>
                 </footer>
               </DataCacheProvider>
+              </POSProvider>
             </LocationsProvider>
           </DevicesProvider>
         </ThemeProvider>
