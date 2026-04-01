@@ -28,6 +28,33 @@ function formatDateForDisplay(dateStr: string): string {
   return date.toLocaleDateString();
 }
 
+/** Format a Monday date as a week range label, e.g. "Mar 24 - Mar 30" or "This Week" */
+function formatWeekLabel(mondayStr: string): string {
+  const [y, m, d] = mondayStr.split("-").map(Number);
+  const monday = new Date(y, m - 1, d);
+  const sunday = new Date(monday);
+  sunday.setDate(sunday.getDate() + 6);
+
+  // Check if this is the current week
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const todayDow = today.getDay(); // 0=Sun
+  const currentMondayOffset = todayDow === 0 ? -6 : 1 - todayDow;
+  const currentMonday = new Date(today);
+  currentMonday.setDate(currentMonday.getDate() + currentMondayOffset);
+  if (
+    monday.getFullYear() === currentMonday.getFullYear() &&
+    monday.getMonth() === currentMonday.getMonth() &&
+    monday.getDate() === currentMonday.getDate()
+  ) {
+    return "This Week";
+  }
+
+  const fmt = (date: Date) =>
+    date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  return `${fmt(monday)} – ${fmt(sunday)}`;
+}
+
 function downloadCsv(data: ChartData[], filename: string, dataType: string) {
   const hasSalesData = data.some((d) => d.salesCount !== undefined);
   const header = `Label,${dataType === "entries" ? "Entries" : "Count"},Average${hasSalesData ? ",Transactions" : ""}`;
@@ -92,6 +119,7 @@ export function HistoryContent({
     setSelectedWeekDate,
     weekData,
     isLoadingWeek,
+    availableWeeks,
     selectedYear,
     setSelectedYear,
     yearData,
@@ -282,13 +310,13 @@ export function HistoryContent({
                       value={selectedWeekDate}
                       onValueChange={setSelectedWeekDate}
                     >
-                      <SelectTrigger className="w-[180px]">
+                      <SelectTrigger className="w-[200px]">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        {availableDates.map((date) => (
-                          <SelectItem key={date} value={date}>
-                            Week of {formatDateForDisplay(date)}
+                        {[...availableWeeks].reverse().map((monday) => (
+                          <SelectItem key={monday} value={monday}>
+                            {formatWeekLabel(monday)}
                           </SelectItem>
                         ))}
                       </SelectContent>
