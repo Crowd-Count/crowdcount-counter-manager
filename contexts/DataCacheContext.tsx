@@ -50,6 +50,7 @@ export function DataCacheProvider({ children }: { children: React.ReactNode }) {
   const historyCache = useRef<Map<string, HistoryCacheEntry>>(new Map());
 
   // TODO: Integrate posTransactionCache to reduce API calls for POS transactions when viewing location insights/history. This will require some adjustments to how we fetch and cache insights data, since POS transactions are currently fetched separately on the insights page.
+  // Note: POS is pulled server side side every 15 mins so no need for aggressive polling or caching just yet (unless we change that?)
   const posTransactionCache = useRef<Map<string, POSTransactionData>>(new Map());
 
   const getCachedInsights = useCallback((credKey: string) => {
