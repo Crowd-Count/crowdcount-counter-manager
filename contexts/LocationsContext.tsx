@@ -107,6 +107,83 @@ function isSuperset<T>(superset: Set<T>, subset: Set<T>): boolean {
   return [...subset].every((x) => superset.has(x));
 }
 
+interface ReconciledLocation {
+  serverId: string;
+  name: string;
+  overcrowdingLimit: number | null;
+  isOnMap: boolean;
+  serverColor: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  currentCount: number | null;
+}
+
+/**
+ * Find or create a server location for a target device set.
+ *
+ * Looks up existing server locations via getLocationsForDevice, finds one
+ * whose device set matches (exact match for on-map, superset for off-map),
+ * and reuses it. If no match, creates a new location and fetches its metadata.
+ *
+ * Falls back to the supplied location's local values if the post-create
+ * getLocation fetch fails.
+ */
+async function reconcileServerLocation(
+  targetDeviceIds: string[],
+  credentials: Array<{ device_id: string; password: string }>,
+  signingDevice: { deviceId: string; password: string },
+  fallbackLoc: StoredLocation,
+  lookupDevice: { deviceId: string; password: string }
+): Promise<ReconciledLocation> {
+  const serverLocations = await api.getLocationsForDevice(lookupDevice.deviceId, lookupDevice.password);
+  const targetSet = new Set(targetDeviceIds);
+
+  const sharedLoc = serverLocations.find((sl) => {
+    const serverSet = new Set(extractDeviceIds(sl.devices));
+    return sl.on_map ? setsEqual(serverSet, targetSet) : isSuperset(serverSet, targetSet);
+  });
+
+  if (sharedLoc) {
+    return {
+      serverId: sharedLoc.location_id,
+      name: sharedLoc.location_name ?? fallbackLoc.name,
+      overcrowdingLimit: sharedLoc.overcrowding_limit,
+      isOnMap: sharedLoc.on_map,
+      serverColor: sharedLoc.location_color ?? fallbackLoc.serverColor,
+      latitude: sharedLoc.location_latitude ?? fallbackLoc.latitude,
+      longitude: sharedLoc.location_longitude ?? fallbackLoc.longitude,
+      currentCount: sharedLoc.current_count,
+    };
+  }
+
+  const newServerId = await api.createLocation(credentials, signingDevice, fallbackLoc.name, fallbackLoc.overcrowdingLimit);
+  try {
+    const serverLoc = await api.getLocation(newServerId, credentials, signingDevice);
+    return {
+      serverId: newServerId,
+      name: serverLoc.location_name ?? fallbackLoc.name,
+      overcrowdingLimit: serverLoc.overcrowding_limit,
+      isOnMap: serverLoc.on_map,
+      serverColor: serverLoc.location_color ?? fallbackLoc.serverColor,
+      latitude: serverLoc.location_latitude ?? fallbackLoc.latitude,
+      longitude: serverLoc.location_longitude ?? fallbackLoc.longitude,
+      currentCount: serverLoc.current_count,
+    };
+  } catch {
+    // Fall back to local values if fetch fails
+    return {
+      serverId: newServerId,
+      name: fallbackLoc.name,
+      overcrowdingLimit: fallbackLoc.overcrowdingLimit,
+      isOnMap: fallbackLoc.isOnMap,
+      serverColor: fallbackLoc.serverColor,
+      latitude: fallbackLoc.latitude,
+      longitude: fallbackLoc.longitude,
+      currentCount: null,
+    };
+  }
+}
+
 export function LocationsProvider({ children }: { children: React.ReactNode }) {
   const { devices, addDevice, removeDevice, updateDeviceOnlineStatus } = useDevices();
   const [storedLocations, setStoredLocations] = useState<StoredLocation[]>([]);
@@ -257,7 +334,8 @@ export function LocationsProvider({ children }: { children: React.ReactNode }) {
     setServerDeviceCounts(newCounts);
   }, []);
 
-  // Poll all non-auto locations
+  // Poll all non-auto locations (for backwards compatibility and migration from device first to location first) 
+  // TODO: remove "non auto" logic soon, doesnt impact anything though just some bloat
   const pollAllLocations = useCallback(async () => {
     const locs = storedLocationsRef.current.filter(
       (l) => !l.isAuto && l.deviceIds.length > 0
@@ -512,7 +590,8 @@ export function LocationsProvider({ children }: { children: React.ReactNode }) {
           ? loc.deviceIds
           : [...loc.deviceIds, newDeviceId];
 
-        // 4. Build credentials from all devices (use devicesRef + new password for the new device)
+        // 4. Build credentials (use devicesRef + new password for the new device since
+        //    state may not have flushed yet from addDevice above)
         const currentDevices = devicesRef.current;
         const creds: Array<{ device_id: string; password: string }> = [];
         for (const sid of combinedDeviceIds) {
@@ -526,65 +605,41 @@ export function LocationsProvider({ children }: { children: React.ReactNode }) {
         if (creds.length === 0) return { success: false, error: "No valid credentials" };
         const signingDevice = { deviceId: creds[0].device_id, password: creds[0].password };
 
-        // 5. iOS-style lookup: find existing location with matching device set
-        const serverLocations = await api.getLocationsForDevice(newDeviceId, password);
-        const combinedSet = new Set(combinedDeviceIds);
-        const sharedLoc = serverLocations.find((sl) => {
-          const serverSet = new Set(extractDeviceIds(sl.devices));
-          return sl.on_map
-            ? setsEqual(serverSet, combinedSet)
-            : isSuperset(serverSet, combinedSet);
-        });
+        // 5. Reconcile with server: find matching server location or create one
+        const reconciled = await reconcileServerLocation(
+          combinedDeviceIds,
+          creds,
+          signingDevice,
+          loc,
+          { deviceId: newDeviceId, password }
+        );
 
-        let newServerId: string;
-        let serverName = loc.name;
-        let serverOvercrowding = loc.overcrowdingLimit;
-        let serverOnMap = loc.isOnMap;
-        let serverColor = loc.serverColor;
-        let serverLat = loc.latitude;
-        let serverLng = loc.longitude;
-
-        if (sharedLoc) {
-          // Match found — use existing server location
-          newServerId = sharedLoc.location_id;
-          serverName = sharedLoc.location_name ?? loc.name;
-          serverOvercrowding = sharedLoc.overcrowding_limit;
-          serverOnMap = sharedLoc.on_map;
-          serverColor = sharedLoc.location_color ?? loc.serverColor;
-          serverLat = sharedLoc.location_latitude ?? loc.latitude;
-          serverLng = sharedLoc.location_longitude ?? loc.longitude;
-        } else {
-          // No match — create new location
-          newServerId = await api.createLocation(creds, signingDevice, loc.name, loc.overcrowdingLimit);
-          try {
-            const serverLoc = await api.getLocation(newServerId, creds, signingDevice);
-            serverName = serverLoc.location_name ?? loc.name;
-            serverOvercrowding = serverLoc.overcrowding_limit;
-            serverOnMap = serverLoc.on_map;
-            serverColor = serverLoc.location_color ?? loc.serverColor;
-            serverLat = serverLoc.location_latitude ?? loc.latitude;
-            serverLng = serverLoc.location_longitude ?? loc.longitude;
-          } catch {
-            // Fall back to local values if fetch fails
-          }
-        }
-
-        // 6. Update target location (by localId) with new server ID + server metadata
+        // 6. Update target location (by localId) with new server ID + server metadata.
         //    Also filter out any other entries with the same new server ID (dedup)
+        //    AND remove standalone auto-locations for the new device in the same pass.
         setStoredLocations((prev) => {
-          const cleaned = prev.filter((l) => l.localId === stableLocalId || l.id !== newServerId);
+          const cleaned = prev.filter((l) =>
+            l.localId === stableLocalId ||
+            (l.id !== reconciled.serverId &&
+              !(l.deviceIds.length === 1 && l.deviceIds[0] === newDeviceId))
+          );
           return cleaned.map((l) =>
             l.localId === stableLocalId
-              ? { ...l, id: newServerId, deviceIds: combinedDeviceIds, isAuto: false, name: serverName, overcrowdingLimit: serverOvercrowding, isOnMap: serverOnMap, serverColor, latitude: serverLat, longitude: serverLng }
+              ? {
+                  ...l,
+                  id: reconciled.serverId,
+                  deviceIds: combinedDeviceIds,
+                  isAuto: false,
+                  name: reconciled.name,
+                  overcrowdingLimit: reconciled.overcrowdingLimit,
+                  isOnMap: reconciled.isOnMap,
+                  serverColor: reconciled.serverColor,
+                  latitude: reconciled.latitude,
+                  longitude: reconciled.longitude,
+                }
               : l
           );
         });
-
-        // 9. Remove standalone locations for the new device (from previous auto-location)
-        //    (any loc where deviceIds.length === 1 && deviceIds[0] === newDeviceId && localId !== target)
-        setStoredLocations((prev) =>
-          prev.filter((l) => !(l.deviceIds.length === 1 && l.deviceIds[0] === newDeviceId && l.localId !== stableLocalId))
-        );
 
         return { success: true };
       } catch (err) {
@@ -624,75 +679,49 @@ export function LocationsProvider({ children }: { children: React.ReactNode }) {
     const signingDevice = { deviceId: creds[0].device_id, password: creds[0].password };
 
     try {
-      // iOS-style lookup: find existing location with remaining device set
-      const serverLocations = await api.getLocationsForDevice(creds[0].device_id, creds[0].password);
-      const remainingSet = new Set(remainingDeviceIds);
-      const sharedLoc = serverLocations.find((sl) => {
-        const serverSet = new Set(extractDeviceIds(sl.devices));
-        return sl.on_map
-          ? setsEqual(serverSet, remainingSet)
-          : isSuperset(serverSet, remainingSet);
-      });
-
-      let newServerId: string;
-      let serverName = loc.name;
-      let serverOvercrowding = loc.overcrowdingLimit;
-      let serverOnMap = loc.isOnMap;
-      let serverColor = loc.serverColor;
-      let serverLat = loc.latitude;
-      let serverLng = loc.longitude;
-      let serverCount: number | null = null;
-
-      if (sharedLoc) {
-        // Match found — use existing server location
-        newServerId = sharedLoc.location_id;
-        serverName = sharedLoc.location_name ?? loc.name;
-        serverOvercrowding = sharedLoc.overcrowding_limit;
-        serverOnMap = sharedLoc.on_map;
-        serverColor = sharedLoc.location_color ?? loc.serverColor;
-        serverLat = sharedLoc.location_latitude ?? loc.latitude;
-        serverLng = sharedLoc.location_longitude ?? loc.longitude;
-        serverCount = sharedLoc.current_count;
-      } else {
-        // No match — create new location
-        newServerId = await api.createLocation(creds, signingDevice, loc.name, loc.overcrowdingLimit);
-        try {
-          const serverLoc = await api.getLocation(newServerId, creds, signingDevice);
-          serverName = serverLoc.location_name ?? loc.name;
-          serverOvercrowding = serverLoc.overcrowding_limit;
-          serverOnMap = serverLoc.on_map;
-          serverColor = serverLoc.location_color ?? loc.serverColor;
-          serverLat = serverLoc.location_latitude ?? loc.latitude;
-          serverLng = serverLoc.location_longitude ?? loc.longitude;
-          serverCount = serverLoc.current_count;
-        } catch {
-          // Fall back to local values if fetch fails
-        }
-      }
+      // Reconcile with server: find matching server location or create one
+      const reconciled = await reconcileServerLocation(
+        remainingDeviceIds,
+        creds,
+        signingDevice,
+        loc,
+        { deviceId: creds[0].device_id, password: creds[0].password }
+      );
 
       // Swap local location to new server ID + remaining devices + server metadata
       setStoredLocations((prev) => {
-        const cleaned = prev.filter((l) => l.localId === stableLocalId || l.id !== newServerId);
+        const cleaned = prev.filter((l) => l.localId === stableLocalId || l.id !== reconciled.serverId);
         return cleaned.map((l) =>
           l.localId === stableLocalId
-            ? { ...l, id: newServerId, deviceIds: remainingDeviceIds, name: serverName, overcrowdingLimit: serverOvercrowding, isOnMap: serverOnMap, serverColor, latitude: serverLat, longitude: serverLng }
+            ? {
+                ...l,
+                id: reconciled.serverId,
+                deviceIds: remainingDeviceIds,
+                name: reconciled.name,
+                overcrowdingLimit: reconciled.overcrowdingLimit,
+                isOnMap: reconciled.isOnMap,
+                serverColor: reconciled.serverColor,
+                latitude: reconciled.latitude,
+                longitude: reconciled.longitude,
+              }
             : l
         );
       });
 
       // Update count for the new server ID + clean up old count
-      if (serverCount !== null) {
+      if (reconciled.currentCount !== null) {
+        const newCount = reconciled.currentCount;
         setLocationCounts((prev) => {
           const next = { ...prev };
           delete next[loc.id]; // Remove old server ID entry
-          next[newServerId] = serverCount;
+          next[reconciled.serverId] = newCount;
           return next;
         });
       }
 
       // Remove device from app — counter is fully gone
       if (device) removeDevice(device.id);
-      return newServerId;
+      return reconciled.serverId;
     } catch (err) {
       logError("Failed to sync location change to server:", err);
       // Still remove device locally even if server sync failed
