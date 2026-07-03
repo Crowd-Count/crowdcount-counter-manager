@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { getLocalDayUTCBounds, todayInTimeZone } from "@/lib/timezone";
 import type { ChartData, AggregatedHistoryResult } from "@/hooks/useAggregatedHistory";
 import { Button } from "@/components/ui/button";
 import {
@@ -29,23 +30,22 @@ function formatDateForDisplay(dateStr: string): string {
 }
 
 /** Format a Monday date as a week range label, e.g. "Mar 24 - Mar 30" or "This Week" */
-function formatWeekLabel(mondayStr: string): string {
+function formatWeekLabel(mondayStr: string, timeZone?: string): string {
   const [y, m, d] = mondayStr.split("-").map(Number);
   const monday = new Date(y, m - 1, d);
   const sunday = new Date(monday);
   sunday.setDate(sunday.getDate() + 6);
 
-  // Check if this is the current week
-  const now = new Date();
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const todayDow = today.getDay(); // 0=Sun
+  // Check if this is the current week in the display zone (pure civil-date math)
+  const [ty, tm, td] = todayInTimeZone(timeZone).split("-").map(Number);
+  const todayMs = Date.UTC(ty, tm - 1, td);
+  const todayDow = new Date(todayMs).getUTCDay(); // 0=Sun
   const currentMondayOffset = todayDow === 0 ? -6 : 1 - todayDow;
-  const currentMonday = new Date(today);
-  currentMonday.setDate(currentMonday.getDate() + currentMondayOffset);
+  const currentMonday = new Date(todayMs + currentMondayOffset * 24 * 60 * 60 * 1000);
   if (
-    monday.getFullYear() === currentMonday.getFullYear() &&
-    monday.getMonth() === currentMonday.getMonth() &&
-    monday.getDate() === currentMonday.getDate()
+    monday.getFullYear() === currentMonday.getUTCFullYear() &&
+    monday.getMonth() === currentMonday.getUTCMonth() &&
+    monday.getDate() === currentMonday.getUTCDate()
   ) {
     return "This Week";
   }
@@ -75,6 +75,8 @@ function downloadCsv(data: ChartData[], filename: string, dataType: string) {
 
 interface HistoryContentProps {
   history: AggregatedHistoryResult;
+  /** IANA timezone the charts are pinned to; browser tz when absent */
+  timeZone?: string;
   filenamePrefix?: string;
   dayDescription?: string;
   weekDescription?: string;
@@ -95,6 +97,7 @@ interface HistoryContentProps {
 
 export function HistoryContent({
   history,
+  timeZone,
   filenamePrefix = "history",
   dayDescription = "Hourly count breakdown",
   weekDescription = "Daily count breakdown",
@@ -132,18 +135,17 @@ export function HistoryContent({
 
   const dataLabel = dataType === "entries" ? "Entries" : "Count";
 
-  // Shift POS UTC hours to local hours
-  const tzOffsetHours = -(new Date().getTimezoneOffset() / 60);
-
-  // Merge POS transaction counts into chart data for the selected day
+  // Merge POS transaction counts into chart data for the selected day.
+  // POS hourlyBreakdown is keyed by UTC hour; map each chart hour back to UTC
+  // with the same minute math the charts use (handles non-whole-hour zones).
   const mergeSalesIntoDay = (chartData: ChartData[]): ChartData[] => {
     const sales = posSalesData?.[selectedDate];
     if (!sales || !showSales) return chartData;
+    const { utcMinutesAtMidnight } = getLocalDayUTCBounds(selectedDate, timeZone);
     return chartData.map((d) => {
-      // label is "0:00", "1:00", etc. — extract local hour
+      // label is "0:00", "1:00", etc. — extract display-zone hour
       const localHour = parseInt(d.label.split(":")[0], 10);
-      // Convert local hour back to UTC to look up POS data
-      const utcHour = ((localHour - tzOffsetHours) % 24 + 24) % 24;
+      const utcHour = Math.floor((localHour * 60 + utcMinutesAtMidnight) / 60) % 24;
       const hourData = sales.hourlyBreakdown[String(utcHour)];
       return {
         ...d,
@@ -316,7 +318,7 @@ export function HistoryContent({
                       <SelectContent>
                         {[...availableWeeks].reverse().map((monday) => (
                           <SelectItem key={monday} value={monday}>
-                            {formatWeekLabel(monday)}
+                            {formatWeekLabel(monday, timeZone)}
                           </SelectItem>
                         ))}
                       </SelectContent>

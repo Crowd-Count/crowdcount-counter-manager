@@ -8,6 +8,7 @@ import { useLocations } from "@/contexts/LocationsContext";
 import { usePOS } from "@/contexts/POSContext";
 import { LOCATION_COLORS, type POSInsightsResponse } from "@/lib/types";
 import * as api from "@/lib/api";
+import { resolveLocationTimezone } from "@/lib/locationTimezone";
 import { fetchPOSInsights } from "@/lib/posApi";
 import { useInsightsData } from "@/hooks/useInsightsData";
 import type { DeviceCredentials } from "@/hooks/useAggregatedHistory";
@@ -41,6 +42,7 @@ export default function LocationInsightsPage() {
       locationId: location.id,
       credentials: locCreds.credentials,
       signingDevice: locCreds.signingDevice,
+      timeZone: resolveLocationTimezone(location),
     };
   }, [location, devices]);
 
@@ -125,6 +127,7 @@ export default function LocationInsightsPage() {
       <main className="container mx-auto px-4 py-6 max-w-6xl">
         <InsightsContent
           data={data}
+          timeZone={locationParams?.timeZone}
           posInsights={posInsights}
           hasPOS={hasPOS}
           onConnectPOS={() => setPosDialogOpen(true)}

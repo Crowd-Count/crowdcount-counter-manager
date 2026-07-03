@@ -13,25 +13,25 @@ import {
   type DataType,
   type LocationFetchParams,
 } from "@/lib/dataFetchers";
-import { formatLocalDate } from "@/lib/timezone";
+import { todayInTimeZone } from "@/lib/timezone";
 import { logError } from "@/lib/logger";
 
-/** Strip any dates after today's local date (belt-and-suspenders for timezone edge cases) */
-function filterFutureDates(dates: string[]): string[] {
-  const today = formatLocalDate();
+/** Strip any dates after today's date in the display zone (belt-and-suspenders for timezone edge cases) */
+function filterFutureDates(dates: string[], timeZone?: string): string[] {
+  const today = todayInTimeZone(timeZone);
   return dates.filter((d) => d <= today);
 }
 
-/** Get the Monday (YYYY-MM-DD) of the week containing a given date string */
+/** Get the Monday (YYYY-MM-DD) of the week containing a given date string (pure civil-date math) */
 function getMondayOfWeek(dateStr: string): string {
   const [y, m, d] = dateStr.split("-").map(Number);
-  const date = new Date(y, m - 1, d);
-  const dow = date.getDay(); // 0=Sun, 1=Mon, ..., 6=Sat
+  const date = new Date(Date.UTC(y, m - 1, d));
+  const dow = date.getUTCDay(); // 0=Sun, 1=Mon, ..., 6=Sat
   const mondayOffset = dow === 0 ? -6 : 1 - dow;
-  date.setDate(date.getDate() + mondayOffset);
-  const yy = date.getFullYear();
-  const mm = String(date.getMonth() + 1).padStart(2, "0");
-  const dd = String(date.getDate()).padStart(2, "0");
+  date.setUTCDate(date.getUTCDate() + mondayOffset);
+  const yy = date.getUTCFullYear();
+  const mm = String(date.getUTCMonth() + 1).padStart(2, "0");
+  const dd = String(date.getUTCDate()).padStart(2, "0");
   return `${yy}-${mm}-${dd}`;
 }
 
@@ -70,7 +70,8 @@ export interface AggregatedHistoryResult {
 
 export function useAggregatedHistory(
   credentials: DeviceCredentials[],
-  locationParams?: LocationFetchParams
+  locationParams?: LocationFetchParams,
+  timeZone?: string
 ): AggregatedHistoryResult {
   const credentialsRef = useRef<DeviceCredentials[]>([]);
   if (credentials.length > 0 && credentialsRef.current.length === 0) {
@@ -83,6 +84,13 @@ export function useAggregatedHistory(
     locationParamsRef.current = locationParams;
   }
   const stableLocationParams = locationParamsRef.current;
+
+  const timeZoneRef = useRef<string | undefined>(undefined);
+  if (timeZone && !timeZoneRef.current) {
+    timeZoneRef.current = timeZone;
+  }
+  // Display zone: the location's own timezone when pinned, browser tz otherwise
+  const tz = stableLocationParams?.timeZone ?? timeZoneRef.current;
 
   const {
     cacheVersion,
@@ -103,7 +111,7 @@ export function useAggregatedHistory(
 
   // Check dates cache synchronously — only use non-empty cached dates, strip future
   const rawCachedDates = credKey ? getCachedDates(credKey) : null;
-  const filteredCachedDates = rawCachedDates ? filterFutureDates(rawCachedDates) : null;
+  const filteredCachedDates = rawCachedDates ? filterFutureDates(rawCachedDates, tz) : null;
   const initialDates = filteredCachedDates && filteredCachedDates.length > 0 ? filteredCachedDates : null;
 
   const [dataType, setDataType] = useState<DataType>("entries");
@@ -121,7 +129,7 @@ export function useAggregatedHistory(
 
   // Check history cache for default params
   const initialHistKey = credKey && initialMostRecent && initialYear
-    ? `${credKey}:${initialMostRecent}:${initialMostRecent}:${initialYear}:population`
+    ? `${credKey}:${tz ?? "browser"}:${initialMostRecent}:${initialMostRecent}:${initialYear}:population`
     : "";
   const initialHistory = initialHistKey ? getCachedHistory(initialHistKey) : null;
 
@@ -145,8 +153,8 @@ export function useAggregatedHistory(
     try {
       const rawDates = stableLocationParams
         ? await fetchLocationAvailableDates(stableLocationParams)
-        : await fetchAvailableDates(stableCredentials);
-      const dates = filterFutureDates(rawDates);
+        : await fetchAvailableDates(stableCredentials, false, tz);
+      const dates = filterFutureDates(rawDates, tz);
       datesFetched.current = true;
       setAvailableDates(dates);
       if (dates.length > 0) {
@@ -165,7 +173,7 @@ export function useAggregatedHistory(
     } finally {
       setIsLoadingDates(false);
     }
-  }, [stableCredentials, stableLocationParams, credKey, hasData, setCachedDates]);
+  }, [stableCredentials, stableLocationParams, credKey, hasData, setCachedDates, tz]);
 
   useEffect(() => {
     if (hasData && !datesFetched.current) {
@@ -177,7 +185,7 @@ export function useAggregatedHistory(
   useEffect(() => {
     if (!hasData || !selectedDate || !selectedWeekDate || !selectedYear) return;
 
-    const histKey = `${credKey}:${selectedDate}:${selectedWeekDate}:${selectedYear}:${dataType}`;
+    const histKey = `${credKey}:${tz ?? "browser"}:${selectedDate}:${selectedWeekDate}:${selectedYear}:${dataType}`;
 
     // Check cache
     const cached = getCachedHistory(histKey);
@@ -199,7 +207,7 @@ export function useAggregatedHistory(
 
     const fetchPromise = stableLocationParams
       ? fetchLocationHistoryCharts(stableLocationParams, selectedDate, selectedWeekDate, selectedYear, dataType)
-      : fetchHistoryCharts(stableCredentials, selectedDate, selectedWeekDate, selectedYear, dataType);
+      : fetchHistoryCharts(stableCredentials, selectedDate, selectedWeekDate, selectedYear, dataType, false, tz);
 
     fetchPromise
       .then((result) => {
@@ -227,7 +235,7 @@ export function useAggregatedHistory(
     return () => {
       cancelled = true;
     };
-  }, [stableCredentials, stableLocationParams, selectedDate, selectedWeekDate, selectedYear, dataType, credKey, hasData, getCachedHistory, setCachedHistory]);
+  }, [stableCredentials, stableLocationParams, selectedDate, selectedWeekDate, selectedYear, dataType, credKey, hasData, getCachedHistory, setCachedHistory, tz]);
 
   // Silently update when cacheVersion changes (background refresh)
   useEffect(() => {
@@ -236,14 +244,14 @@ export function useAggregatedHistory(
     // Update dates — filter future dates as safety net
     const cachedDates = getCachedDates(credKey);
     if (cachedDates) {
-      setAvailableDates(filterFutureDates(cachedDates));
+      setAvailableDates(filterFutureDates(cachedDates, tz));
       datesFetched.current = true;
       setIsLoadingDates(false);
     }
 
     // Update current chart data
     if (selectedDate && selectedWeekDate && selectedYear) {
-      const histKey = `${credKey}:${selectedDate}:${selectedWeekDate}:${selectedYear}:${dataType}`;
+      const histKey = `${credKey}:${tz ?? "browser"}:${selectedDate}:${selectedWeekDate}:${selectedYear}:${dataType}`;
       const cachedHist = getCachedHistory(histKey);
       if (cachedHist) {
         setDayData(cachedHist.dayData);
@@ -255,7 +263,7 @@ export function useAggregatedHistory(
         setIsLoadingYear(false);
       }
     }
-  }, [cacheVersion, credKey, getCachedDates, getCachedHistory, selectedDate, selectedWeekDate, selectedYear, dataType]);
+  }, [cacheVersion, credKey, getCachedDates, getCachedHistory, selectedDate, selectedWeekDate, selectedYear, dataType, tz]);
 
   const availableWeeks = useMemo(
     () => deriveAvailableWeeks(availableDates),

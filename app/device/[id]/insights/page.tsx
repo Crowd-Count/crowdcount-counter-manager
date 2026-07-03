@@ -4,6 +4,8 @@ import { useMemo, useRef } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { useDevices } from "@/contexts/DevicesContext";
+import { useLocations } from "@/contexts/LocationsContext";
+import { resolveLocationTimezone } from "@/lib/locationTimezone";
 import { useInsightsData } from "@/hooks/useInsightsData";
 import type { DeviceCredentials } from "@/hooks/useAggregatedHistory";
 import { InsightsContent } from "@/components/InsightsContent";
@@ -15,7 +17,13 @@ export default function DeviceInsightsPage() {
   const params = useParams();
   const deviceId = params.id as string;
   const { getDevice } = useDevices();
+  const { getLocationForDevice } = useLocations();
   const device = getDevice(deviceId);
+
+  // Pin insights to the timezone of the location containing this counter (if any)
+  const timeZone = resolveLocationTimezone(
+    device ? getLocationForDevice(device.deviceId) : undefined
+  );
 
   const credentialsRef = useRef<{ deviceId: string; password: string } | null>(null);
   if (device && !credentialsRef.current) {
@@ -28,7 +36,7 @@ export default function DeviceInsightsPage() {
     return [stableCredentials];
   }, [stableCredentials]);
 
-  const data = useInsightsData(credentials);
+  const data = useInsightsData(credentials, undefined, timeZone);
 
   if (!device) {
     return (
@@ -67,7 +75,7 @@ export default function DeviceInsightsPage() {
       </header>
 
       <main className="container mx-auto px-4 py-6 max-w-4xl">
-        <InsightsContent data={data} />
+        <InsightsContent data={data} timeZone={timeZone} />
       </main>
     </div>
   );

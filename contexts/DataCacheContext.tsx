@@ -20,6 +20,8 @@ import {
 } from "@/lib/dataFetchers";
 import type { POSTransactionData } from "@/lib/types";
 import * as api from "@/lib/api";
+import { resolveLocationTimezone } from "@/lib/locationTimezone";
+import { todayInTimeZone } from "@/lib/timezone";
 import { logError } from "@/lib/logger";
 
 interface DataCacheContextType {
@@ -108,6 +110,7 @@ export function DataCacheProvider({ children }: { children: React.ReactNode }) {
             locationId: location.id,
             credentials: locCreds.credentials,
             signingDevice: locCreds.signingDevice,
+            timeZone: resolveLocationTimezone(location),
           },
         });
       }
@@ -128,10 +131,9 @@ export function DataCacheProvider({ children }: { children: React.ReactNode }) {
       const insightsPromise = fetchLocationInsights(locationParams, force).catch(() => null);
 
       // Start history fetch immediately (uses "today" as default date)
-      // We don't wait for dates to finish — use current local date as best guess
-      const now = new Date();
-      const todayLocal = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
-      const currentYear = String(now.getFullYear());
+      // We don't wait for dates to finish — use the location's current date as best guess
+      const todayLocal = todayInTimeZone(locationParams.timeZone);
+      const currentYear = todayLocal.slice(0, 4);
 
       const historyPromise = fetchLocationHistoryCharts(
         locationParams, todayLocal, todayLocal, currentYear, "population", force
@@ -148,7 +150,8 @@ export function DataCacheProvider({ children }: { children: React.ReactNode }) {
         insightsCache.current.set(credKey, insights);
       }
       if (popHistory) {
-        const histKey = `${credKey}:${todayLocal}:${todayLocal}:${currentYear}:population`;
+        // Must mirror useAggregatedHistory's histKey format for prefetch hits
+        const histKey = `${credKey}:${locationParams.timeZone ?? "browser"}:${todayLocal}:${todayLocal}:${currentYear}:population`;
         historyCache.current.set(histKey, popHistory);
       }
     } catch (error) {

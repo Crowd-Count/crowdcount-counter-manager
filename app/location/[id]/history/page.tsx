@@ -8,6 +8,8 @@ import { useLocations } from "@/contexts/LocationsContext";
 import { usePOS } from "@/contexts/POSContext";
 import { LOCATION_COLORS, type POSTransactionData } from "@/lib/types";
 import * as api from "@/lib/api";
+import { resolveLocationTimezone } from "@/lib/locationTimezone";
+import { getUtcOffsetMinutes } from "@/lib/timezone";
 import { fetchPOSTransactions } from "@/lib/posApi";
 import {
   useAggregatedHistory,
@@ -44,6 +46,7 @@ export default function LocationHistoryPage() {
       locationId: location.id,
       credentials: locCreds.credentials,
       signingDevice: locCreds.signingDevice,
+      timeZone: resolveLocationTimezone(location),
     };
   }, [location, devices]);
 
@@ -146,7 +149,10 @@ export default function LocationHistoryPage() {
       locationParams.credentials,
       locationParams.signingDevice,
       date,
-      dataType === "entries" ? "entries" : "count"
+      dataType === "entries" ? "entries" : "count",
+      locationParams.timeZone
+        ? getUtcOffsetMinutes(locationParams.timeZone, new Date(`${date}T12:00:00Z`))
+        : undefined
     );
     // Build ChartData[] sorted by time label for CSV
     const allSlots: { label: string; sortKey: number; value: number; average?: number }[] = [];
@@ -240,6 +246,7 @@ export default function LocationHistoryPage() {
       <main className="container mx-auto px-4 py-6 max-w-4xl">
         <HistoryContent
           history={history}
+          timeZone={locationParams?.timeZone}
           filenamePrefix={(location.name || "location").replace(/\s+/g, "-").toLowerCase()}
           dayDescription="Combined hourly count from location counters"
           weekDescription="Combined daily count from location counters"

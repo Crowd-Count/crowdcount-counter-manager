@@ -1,6 +1,16 @@
 // Pure calculation functions for Insights feature
 // Ported from StatisticsCalculator.swift
 
+import { getUtcOffsetMinutes } from "@/lib/timezone";
+
+/** "Now" as a wall clock readable via getUTC* getters: the display zone's wall
+ *  time when a timezone is given, plain UTC otherwise. */
+function wallClockNow(timeZone?: string): Date {
+  const now = new Date();
+  if (!timeZone) return now;
+  return new Date(now.getTime() + getUtcOffsetMinutes(timeZone, now) * 60000);
+}
+
 const DAYS_OF_WEEK = [
   "Monday", "Tuesday", "Wednesday", "Thursday",
   "Friday", "Saturday", "Sunday",
@@ -281,9 +291,11 @@ export function weekendWeekdayEntries(entryData: Record<string, number>): {
 }
 
 /** Pro-rate historical average weekly entries to current day+hour.
- *  Uses UTC time because week data is bucketed by UTC day boundaries. */
-export function proRatedWeekEntries(avgEntryData: Record<string, number>): number {
-  const now = new Date();
+ *  Without a timezone, uses UTC because device week data is bucketed by UTC day
+ *  boundaries; with one, uses the location's wall clock (matching the
+ *  location-offset bucketing the server applies for pinned locations). */
+export function proRatedWeekEntries(avgEntryData: Record<string, number>, timeZone?: string): number {
+  const now = wallClockNow(timeZone);
   const currentHour = now.getUTCHours();
   // JavaScript getUTCDay: 0=Sunday, 1=Monday, ..., 6=Saturday
   const jsDay = now.getUTCDay();
@@ -353,9 +365,10 @@ export function slowestEntryMonth(entryData: Record<string, number>) {
 }
 
 /** Pro-rate historical average yearly entries to current month+day.
- *  Uses UTC time because year data is bucketed by UTC month boundaries. */
-export function proRatedYearEntries(avgEntryData: Record<string, number>): number {
-  const now = new Date();
+ *  Without a timezone, uses UTC because year data is bucketed by UTC month
+ *  boundaries; with one, uses the location's wall clock. */
+export function proRatedYearEntries(avgEntryData: Record<string, number>, timeZone?: string): number {
+  const now = wallClockNow(timeZone);
   const currentMonth = now.getUTCMonth(); // 0-indexed
   const currentDay = now.getUTCDate();
   const daysInMonth = new Date(Date.UTC(now.getUTCFullYear(), currentMonth + 1, 0)).getUTCDate();

@@ -25,6 +25,8 @@ import type { POSInsightsResponse, POSPeriodStats } from "@/lib/types";
 
 interface InsightsContentProps {
   data: InsightsData;
+  /** IANA timezone the insights are pinned to; browser/UTC behavior when absent */
+  timeZone?: string;
   posInsights?: POSInsightsResponse;
   hasPOS?: boolean;
   onConnectPOS?: () => void;
@@ -433,7 +435,7 @@ function TodayInsights({ data, posData, prevPosData, hasPOS, onConnectPOS }: { d
 
 // --- This Week Tab ---
 
-function WeekInsights({ data, posData, prevPosData, hasPOS, onConnectPOS }: { data: InsightsData; posData?: POSPeriodStats; prevPosData?: POSPeriodStats; hasPOS: boolean; onConnectPOS?: () => void }) {
+function WeekInsights({ data, timeZone, posData, prevPosData, hasPOS, onConnectPOS }: { data: InsightsData; timeZone?: string; posData?: POSPeriodStats; prevPosData?: POSPeriodStats; hasPOS: boolean; onConnectPOS?: () => void }) {
   const busiest = calc.busiestDay(data.weekData);
   const slowest = calc.slowestDay(data.weekData);
   const avgOcc = calc.averageWeekOccupancy(data.weekData);
@@ -452,11 +454,11 @@ function WeekInsights({ data, posData, prevPosData, hasPOS, onConnectPOS }: { da
   const slowestE = calc.slowestEntryDay(data.entryWeekData);
   const wwEntries = calc.weekendWeekdayEntries(data.entryWeekData);
 
-  const proRated = calc.proRatedWeekEntries(data.avgEntryWeekData);
+  const proRated = calc.proRatedWeekEntries(data.avgEntryWeekData, timeZone);
   const entriesTrend = calc.vsAveragePercentage(totalEntries, proRated);
 
   const vsTypicalOcc = calc.vsAveragePercentage(avgOcc, fairAvg);
-  const fairEntryAvg = calc.proRatedWeekEntries(data.avgEntryWeekData);
+  const fairEntryAvg = calc.proRatedWeekEntries(data.avgEntryWeekData, timeZone);
   const vsTypicalEntries = calc.vsAveragePercentage(totalEntries, fairEntryAvg);
 
   return (
@@ -559,7 +561,7 @@ function WeekInsights({ data, posData, prevPosData, hasPOS, onConnectPOS }: { da
 
 // --- This Year Tab ---
 
-function YearInsights({ data, posData, prevPosData, hasPOS, onConnectPOS }: { data: InsightsData; posData?: POSPeriodStats; prevPosData?: POSPeriodStats; hasPOS: boolean; onConnectPOS?: () => void }) {
+function YearInsights({ data, timeZone, posData, prevPosData, hasPOS, onConnectPOS }: { data: InsightsData; timeZone?: string; posData?: POSPeriodStats; prevPosData?: POSPeriodStats; hasPOS: boolean; onConnectPOS?: () => void }) {
   const busiest = calc.busiestMonth(data.yearData);
   const slowest = calc.slowestMonth(data.yearData);
   const avgOcc = calc.averageYearOccupancy(data.yearData);
@@ -579,7 +581,7 @@ function YearInsights({ data, posData, prevPosData, hasPOS, onConnectPOS }: { da
 
   const avgEntryYearAvailable = data.avgEntryYearData !== null;
   const proRated = avgEntryYearAvailable
-    ? calc.proRatedYearEntries(data.avgEntryYearData!)
+    ? calc.proRatedYearEntries(data.avgEntryYearData!, timeZone)
     : 0;
   const entriesTrend = avgEntryYearAvailable
     ? calc.vsAveragePercentage(totalEntries, proRated)
@@ -674,7 +676,7 @@ function YearInsights({ data, posData, prevPosData, hasPOS, onConnectPOS }: { da
 
 // --- Main Component ---
 
-export function InsightsContent({ data, posInsights, hasPOS = false, onConnectPOS }: InsightsContentProps) {
+export function InsightsContent({ data, timeZone, posInsights, hasPOS = false, onConnectPOS }: InsightsContentProps) {
   const [period, setPeriod] = useState("today");
 
   if (data.isLoading) {
@@ -709,10 +711,10 @@ export function InsightsContent({ data, posInsights, hasPOS = false, onConnectPO
           <TodayInsights data={data} posData={posInsights?.today} prevPosData={posInsights?.prev_day} hasPOS={hasPOS} onConnectPOS={onConnectPOS} />
         </TabsContent>
         <TabsContent value="week">
-          <WeekInsights data={data} posData={posInsights?.week} prevPosData={posInsights?.prev_week} hasPOS={hasPOS} onConnectPOS={onConnectPOS} />
+          <WeekInsights data={data} timeZone={timeZone} posData={posInsights?.week} prevPosData={posInsights?.prev_week} hasPOS={hasPOS} onConnectPOS={onConnectPOS} />
         </TabsContent>
         <TabsContent value="year">
-          <YearInsights data={data} posData={posInsights?.year} prevPosData={posInsights?.prev_year} hasPOS={hasPOS} onConnectPOS={onConnectPOS} />
+          <YearInsights data={data} timeZone={timeZone} posData={posInsights?.year} prevPosData={posInsights?.prev_year} hasPOS={hasPOS} onConnectPOS={onConnectPOS} />
         </TabsContent>
       </Tabs>
     </div>

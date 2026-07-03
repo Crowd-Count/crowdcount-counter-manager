@@ -3,10 +3,11 @@ import type { SigningCredentials } from "@/lib/api";
 import {
   getLocalDayUTCBounds,
   shiftDayDataToLocal,
-  formatLocalDate,
+  todayInTimeZone,
   getLocalDayOfWeekIndex,
   isDateInCurrentLocalWeek,
   utcDatesToLocalDates,
+  getUtcOffsetMinutes,
 } from "@/lib/timezone";
 import { getOrFetch, forceRefresh, setCached } from "@/lib/apiCache";
 
@@ -21,6 +22,8 @@ export interface LocationFetchParams {
   locationId: string;
   credentials: Array<{ device_id: string; password: string }>;
   signingDevice: SigningCredentials;
+  /** IANA timezone the location's charts are pinned to; browser tz when absent */
+  timeZone?: string;
 }
 
 export type DataType = "population" | "entries";
@@ -55,6 +58,19 @@ export interface HistoryCacheEntry {
 }
 
 // ── Helpers ──
+
+/**
+ * Timezone offset sent to the server for week bucketing, evaluated at noon UTC
+ * of the target date (or now) to avoid day-boundary ambiguity. The server
+ * contract is a single number per request, so a week straddling a DST
+ * transition uses one offset for all 7 days — accepted approximation.
+ * Returns undefined when no timezone is pinned (api falls back to browser offset).
+ */
+function offsetForDate(timeZone: string | undefined, dateStr?: string): number | undefined {
+  if (!timeZone) return undefined;
+  const at = dateStr ? new Date(`${dateStr}T12:00:00Z`) : new Date();
+  return getUtcOffsetMinutes(timeZone, at);
+}
 
 function aggregateRecords(records: Record<string, number>[]): Record<string, number> {
   const result: Record<string, number> = {};
@@ -176,13 +192,13 @@ function cachedApiCall<T>(
 
 export async function fetchInsightsForCredentials(
   credentials: DeviceCredentials[],
-  force = false
+  force = false,
+  timeZone?: string
 ): Promise<InsightsCacheEntry> {
-  const { utcDate1, utcDate2, utcMinutesAtMidnight } = getLocalDayUTCBounds();
+  const { utcDate1, utcDate2, utcMinutesAtMidnight } = getLocalDayUTCBounds(undefined, timeZone);
   const needsSecondDate = utcDate1 !== utcDate2;
-  const localDate = formatLocalDate();
-  const now = new Date();
-  const currentYear = now.getUTCFullYear();
+  const localDate = todayInTimeZone(timeZone);
+  const currentYear = Number(localDate.slice(0, 4));
 
   // Device-level: only fetch actual data, not averages (averages are location-level only)
   const allResults = await Promise.all(
@@ -217,7 +233,7 @@ export async function fetchInsightsForCredentials(
   );
 
   // Filter future local days from current-week data (insights is always "today")
-  const maxIdx = getLocalDayOfWeekIndex();
+  const maxIdx = getLocalDayOfWeekIndex(timeZone);
   const daysOfWeek = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
   function stripFutureDays(rec: Record<string, number>): Record<string, number> {
     const out: Record<string, number> = {};
@@ -247,7 +263,8 @@ export async function fetchInsightsForCredentials(
 
 export async function fetchAvailableDates(
   credentials: DeviceCredentials[],
-  force = false
+  force = false,
+  timeZone?: string
 ): Promise<string[]> {
   const allDatesArrays = await Promise.all(
     credentials.map((cred) =>
@@ -263,7 +280,7 @@ export async function fetchAvailableDates(
     dates.forEach((date) => allDatesSet.add(date));
   });
   const utcDates = Array.from(allDatesSet).sort();
-  return utcDatesToLocalDates(utcDates);
+  return utcDatesToLocalDates(utcDates, timeZone);
 }
 
 export async function fetchHistoryCharts(
@@ -272,10 +289,11 @@ export async function fetchHistoryCharts(
   weekDate: string,
   year: string,
   dataType: DataType,
-  force = false
+  force = false,
+  timeZone?: string
 ): Promise<HistoryCacheEntry> {
   const yearNum = parseInt(year, 10);
-  const { utcDate1, utcDate2, utcMinutesAtMidnight } = getLocalDayUTCBounds(date);
+  const { utcDate1, utcDate2, utcMinutesAtMidnight } = getLocalDayUTCBounds(date, timeZone);
   const needsSecondDate = utcDate1 !== utcDate2;
 
   const getDayFn = dataType === "entries" ? api.getEntryDayData : api.getDayData;
@@ -312,8 +330,8 @@ export async function fetchHistoryCharts(
   const yearResults = allDeviceResults.map((r) => r.year);
 
   // For the current local week, zero out days that haven't started locally yet
-  const maxDayIndex = isDateInCurrentLocalWeek(weekDate)
-    ? getLocalDayOfWeekIndex()
+  const maxDayIndex = isDateInCurrentLocalWeek(weekDate, timeZone)
+    ? getLocalDayOfWeekIndex(timeZone)
     : undefined;
 
   return {
@@ -340,19 +358,18 @@ export async function fetchLocationInsights(
   loc: LocationFetchParams,
   force = false
 ): Promise<InsightsCacheEntry> {
-  const { locationId, credentials, signingDevice } = loc;
-  const { utcDate1, utcDate2, utcMinutesAtMidnight } = getLocalDayUTCBounds();
+  const { locationId, credentials, signingDevice, timeZone } = loc;
+  const { utcDate1, utcDate2, utcMinutesAtMidnight } = getLocalDayUTCBounds(undefined, timeZone);
   const needsSecondDate = utcDate1 !== utcDate2;
-  const localDate = formatLocalDate();
-  const now = new Date();
-  const currentYear = now.getUTCFullYear();
+  const localDate = todayInTimeZone(timeZone);
+  const currentYear = Number(localDate.slice(0, 4));
 
   // Try bundle endpoint first (1 request instead of 16)
   try {
     const bundle = await api.getLocationInsightsBundle(
       locationId, credentials, signingDevice,
       utcDate1, needsSecondDate ? utcDate2 : null,
-      localDate, currentYear
+      localDate, currentYear, offsetForDate(timeZone)
     );
 
     // Seed individual cache entries so per-key invalidation still works
@@ -384,7 +401,7 @@ export async function fetchLocationInsights(
     const avgEntryDay2Data = needsSecondDate ? (bundle.average_entry_day_view_2 ?? {}) : {};
 
     // Filter future local days from current-week data
-    const maxIdx = getLocalDayOfWeekIndex();
+    const maxIdx = getLocalDayOfWeekIndex(timeZone);
     const daysOfWeek = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
     function stripFutureDays(rec: Record<string, number>): Record<string, number> {
       const out: Record<string, number> = {};
@@ -432,10 +449,10 @@ export async function fetchLocationInsights(
     needsSecondDate ? cachedLocationCall("getAverageDayData", locationId, utcDate2, () => api.getLocationAverageDayData(locationId, credentials, signingDevice, utcDate2), force).catch(() => ({})) : Promise.resolve({} as Record<string, number>),
     needsSecondDate ? cachedLocationCall("getEntryDayData", locationId, utcDate2, () => api.getLocationEntryDayData(locationId, credentials, signingDevice, utcDate2), force).catch(() => ({})) : Promise.resolve({} as Record<string, number>),
     needsSecondDate ? cachedLocationCall("getAverageEntryDayData", locationId, utcDate2, () => api.getLocationAverageEntryDayData(locationId, credentials, signingDevice, utcDate2), force).catch(() => ({})) : Promise.resolve({} as Record<string, number>),
-    cachedLocationCall("getWeekData", locationId, localDate, () => api.getLocationWeekData(locationId, credentials, signingDevice, localDate), force).catch(() => ({})),
-    cachedLocationCall("getAverageWeekData", locationId, localDate, () => api.getLocationAverageWeekData(locationId, credentials, signingDevice, localDate), force).catch(() => ({})),
-    cachedLocationCall("getEntryWeekData", locationId, localDate, () => api.getLocationEntryWeekData(locationId, credentials, signingDevice, localDate), force).catch(() => ({})),
-    cachedLocationCall("getAverageEntryWeekData", locationId, localDate, () => api.getLocationAverageEntryWeekData(locationId, credentials, signingDevice, localDate), force).catch(() => ({})),
+    cachedLocationCall("getWeekData", locationId, localDate, () => api.getLocationWeekData(locationId, credentials, signingDevice, localDate, offsetForDate(timeZone, localDate)), force).catch(() => ({})),
+    cachedLocationCall("getAverageWeekData", locationId, localDate, () => api.getLocationAverageWeekData(locationId, credentials, signingDevice, localDate, offsetForDate(timeZone, localDate)), force).catch(() => ({})),
+    cachedLocationCall("getEntryWeekData", locationId, localDate, () => api.getLocationEntryWeekData(locationId, credentials, signingDevice, localDate, offsetForDate(timeZone, localDate)), force).catch(() => ({})),
+    cachedLocationCall("getAverageEntryWeekData", locationId, localDate, () => api.getLocationAverageEntryWeekData(locationId, credentials, signingDevice, localDate, offsetForDate(timeZone, localDate)), force).catch(() => ({})),
     cachedLocationCall("getYearData", locationId, String(currentYear), () => api.getLocationYearData(locationId, credentials, signingDevice, currentYear), force).catch(() => ({})),
     cachedLocationCall("getAverageYearData", locationId, String(currentYear), () => api.getLocationAverageYearData(locationId, credentials, signingDevice, currentYear), force).catch(() => null),
     cachedLocationCall("getEntryYearData", locationId, String(currentYear), () => api.getLocationEntryYearData(locationId, credentials, signingDevice, currentYear), force).catch(() => ({})),
@@ -443,7 +460,7 @@ export async function fetchLocationInsights(
   ]);
 
   // Filter future local days from current-week data
-  const maxIdx = getLocalDayOfWeekIndex();
+  const maxIdx = getLocalDayOfWeekIndex(timeZone);
   const daysOfWeek = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
   function stripFutureDays(rec: Record<string, number>): Record<string, number> {
     const out: Record<string, number> = {};
@@ -481,7 +498,7 @@ export async function fetchLocationAvailableDates(
     () => api.getLocationAvailableDates(locationId, credentials, signingDevice),
     force
   ).catch(() => [] as string[]);
-  return utcDatesToLocalDates(dates);
+  return utcDatesToLocalDates(dates, loc.timeZone);
 }
 
 export async function fetchLocationHistoryCharts(
@@ -492,9 +509,9 @@ export async function fetchLocationHistoryCharts(
   dataType: DataType,
   force = false
 ): Promise<HistoryCacheEntry> {
-  const { locationId, credentials, signingDevice } = loc;
+  const { locationId, credentials, signingDevice, timeZone } = loc;
   const yearNum = parseInt(year, 10);
-  const { utcDate1, utcDate2, utcMinutesAtMidnight } = getLocalDayUTCBounds(date);
+  const { utcDate1, utcDate2, utcMinutesAtMidnight } = getLocalDayUTCBounds(date, timeZone);
   const needsSecondDate = utcDate1 !== utcDate2;
 
   // Try bundle endpoint first (1 request instead of 8)
@@ -503,7 +520,7 @@ export async function fetchLocationHistoryCharts(
     const bundle = await api.getLocationHistoryBundle(
       locationId, credentials, signingDevice,
       utcDate1, needsSecondDate ? utcDate2 : null,
-      weekDate, yearNum, bundleDataType
+      weekDate, yearNum, bundleDataType, offsetForDate(timeZone, weekDate)
     );
 
     // Seed individual cache entries
@@ -538,8 +555,8 @@ export async function fetchLocationHistoryCharts(
     const weekResult = { data: bundle.week_view, avgData: bundle.average_week_view };
     const yearResult = { data: bundle.year_view, avgData: bundle.average_year_view ?? {} };
 
-    const maxDayIndex = isDateInCurrentLocalWeek(weekDate)
-      ? getLocalDayOfWeekIndex()
+    const maxDayIndex = isDateInCurrentLocalWeek(weekDate, timeZone)
+      ? getLocalDayOfWeekIndex(timeZone)
       : undefined;
 
     return {
@@ -570,8 +587,8 @@ export async function fetchLocationHistoryCharts(
     cachedLocationCall(avgDayFnName, locationId, utcDate1, () => getAvgDayFn(locationId, credentials, signingDevice, utcDate1), force).catch(() => ({})),
     needsSecondDate ? cachedLocationCall(dayFnName, locationId, utcDate2, () => getDayFn(locationId, credentials, signingDevice, utcDate2), force).catch(() => ({})) : Promise.resolve({} as Record<string, number>),
     needsSecondDate ? cachedLocationCall(avgDayFnName, locationId, utcDate2, () => getAvgDayFn(locationId, credentials, signingDevice, utcDate2), force).catch(() => ({})) : Promise.resolve({} as Record<string, number>),
-    cachedLocationCall(weekFnName, locationId, weekDate, () => getWeekFn(locationId, credentials, signingDevice, weekDate), force).catch(() => ({})),
-    cachedLocationCall(avgWeekFnName, locationId, weekDate, () => getAvgWeekFn(locationId, credentials, signingDevice, weekDate), force).catch(() => ({})),
+    cachedLocationCall(weekFnName, locationId, weekDate, () => getWeekFn(locationId, credentials, signingDevice, weekDate, offsetForDate(timeZone, weekDate)), force).catch(() => ({})),
+    cachedLocationCall(avgWeekFnName, locationId, weekDate, () => getAvgWeekFn(locationId, credentials, signingDevice, weekDate, offsetForDate(timeZone, weekDate)), force).catch(() => ({})),
     cachedLocationCall(yearFnName, locationId, String(yearNum), () => getYearFn(locationId, credentials, signingDevice, yearNum), force).catch(() => ({})),
     cachedLocationCall(avgYearFnName, locationId, String(yearNum), () => getAvgYearFn(locationId, credentials, signingDevice, yearNum), force).catch(() => null),
   ]);
@@ -583,8 +600,8 @@ export async function fetchLocationHistoryCharts(
   const weekResult = { data: weekD, avgData: weekAvg };
   const yearResult = { data: yearD, avgData: yearAvg ?? {} };
 
-  const maxDayIndex = isDateInCurrentLocalWeek(weekDate)
-    ? getLocalDayOfWeekIndex()
+  const maxDayIndex = isDateInCurrentLocalWeek(weekDate, timeZone)
+    ? getLocalDayOfWeekIndex(timeZone)
     : undefined;
 
   return {

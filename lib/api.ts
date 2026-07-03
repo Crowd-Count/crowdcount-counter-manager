@@ -751,13 +751,14 @@ export async function getLocationWeekData(
   locationId: string,
   credentials: Array<{ device_id: string; password: string }>,
   signingDevice: SigningCredentials,
-  date: string
+  date: string,
+  tzOffsetMinutes?: number
 ): Promise<Record<string, number>> {
   const response = await apiRequest<{ data: Record<string, number> }>(
     "/get_location_week_data",
     {
       method: "POST",
-      body: JSON.stringify({ location_id: locationId, credentials, date, tz_offset_minutes: new Date().getTimezoneOffset() * -1 }),
+      body: JSON.stringify({ location_id: locationId, credentials, date, tz_offset_minutes: tzOffsetMinutes ?? new Date().getTimezoneOffset() * -1 }),
       sign: signingDevice,
     }
   );
@@ -768,13 +769,14 @@ export async function getLocationAverageWeekData(
   locationId: string,
   credentials: Array<{ device_id: string; password: string }>,
   signingDevice: SigningCredentials,
-  date: string
+  date: string,
+  tzOffsetMinutes?: number
 ): Promise<Record<string, number>> {
   const response = await apiRequest<{ data: Record<string, number> }>(
     "/get_location_average_week_data",
     {
       method: "POST",
-      body: JSON.stringify({ location_id: locationId, credentials, date, tz_offset_minutes: new Date().getTimezoneOffset() * -1 }),
+      body: JSON.stringify({ location_id: locationId, credentials, date, tz_offset_minutes: tzOffsetMinutes ?? new Date().getTimezoneOffset() * -1 }),
       sign: signingDevice,
     }
   );
@@ -855,13 +857,14 @@ export async function getLocationEntryWeekData(
   locationId: string,
   credentials: Array<{ device_id: string; password: string }>,
   signingDevice: SigningCredentials,
-  date: string
+  date: string,
+  tzOffsetMinutes?: number
 ): Promise<Record<string, number>> {
   const response = await apiRequest<{ data: Record<string, number> }>(
     "/get_location_entry_week_data",
     {
       method: "POST",
-      body: JSON.stringify({ location_id: locationId, credentials, date, tz_offset_minutes: new Date().getTimezoneOffset() * -1 }),
+      body: JSON.stringify({ location_id: locationId, credentials, date, tz_offset_minutes: tzOffsetMinutes ?? new Date().getTimezoneOffset() * -1 }),
       sign: signingDevice,
     }
   );
@@ -872,13 +875,14 @@ export async function getLocationAverageEntryWeekData(
   locationId: string,
   credentials: Array<{ device_id: string; password: string }>,
   signingDevice: SigningCredentials,
-  date: string
+  date: string,
+  tzOffsetMinutes?: number
 ): Promise<Record<string, number>> {
   const response = await apiRequest<{ data: Record<string, number> }>(
     "/get_location_average_entry_week_data",
     {
       method: "POST",
-      body: JSON.stringify({ location_id: locationId, credentials, date, tz_offset_minutes: new Date().getTimezoneOffset() * -1 }),
+      body: JSON.stringify({ location_id: locationId, credentials, date, tz_offset_minutes: tzOffsetMinutes ?? new Date().getTimezoneOffset() * -1 }),
       sign: signingDevice,
     }
   );
@@ -960,7 +964,8 @@ export async function getLocationInsightsBundle(
   date: string,
   date2: string | null,
   weekDate: string,
-  year: number
+  year: number,
+  tzOffsetMinutes?: number
 ): Promise<InsightsBundleResponse> {
   const body: Record<string, unknown> = {
     location_id: locationId,
@@ -968,7 +973,7 @@ export async function getLocationInsightsBundle(
     date,
     week_date: weekDate,
     year,
-    tz_offset_minutes: new Date().getTimezoneOffset() * -1,
+    tz_offset_minutes: tzOffsetMinutes ?? new Date().getTimezoneOffset() * -1,
   };
   if (date2) body.date2 = date2;
   return apiRequest<InsightsBundleResponse>("/get_location_insights_bundle", {
@@ -986,7 +991,8 @@ export async function getLocationHistoryBundle(
   date2: string | null,
   weekDate: string,
   year: number,
-  dataType: "count" | "entries"
+  dataType: "count" | "entries",
+  tzOffsetMinutes?: number
 ): Promise<HistoryBundleResponse> {
   const body: Record<string, unknown> = {
     location_id: locationId,
@@ -995,7 +1001,7 @@ export async function getLocationHistoryBundle(
     week_date: weekDate,
     year,
     data_type: dataType,
-    tz_offset_minutes: new Date().getTimezoneOffset() * -1,
+    tz_offset_minutes: tzOffsetMinutes ?? new Date().getTimezoneOffset() * -1,
   };
   if (date2) body.date2 = date2;
   return apiRequest<HistoryBundleResponse>("/get_location_history_bundle", {
@@ -1016,7 +1022,8 @@ export async function getLocationDayDataDetailed(
   credentials: Array<{ device_id: string; password: string }>,
   signingDevice: SigningCredentials,
   date: string,
-  dataType: "count" | "entries"
+  dataType: "count" | "entries",
+  tzOffsetMinutes?: number
 ): Promise<DayDataDetailedResponse> {
   return apiRequest<DayDataDetailedResponse>("/get_location_day_data_detailed", {
     method: "POST",
@@ -1025,7 +1032,7 @@ export async function getLocationDayDataDetailed(
       credentials,
       date,
       data_type: dataType,
-      tz_offset_minutes: new Date().getTimezoneOffset() * -1,
+      tz_offset_minutes: tzOffsetMinutes ?? new Date().getTimezoneOffset() * -1,
     }),
     sign: signingDevice,
   });

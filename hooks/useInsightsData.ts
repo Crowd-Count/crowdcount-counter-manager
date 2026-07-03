@@ -65,7 +65,8 @@ const EMPTY_DATA: Omit<InsightsData, "isLoading"> = {
 
 export function useInsightsData(
   credentials: DeviceCredentials[],
-  locationParams?: LocationFetchParams
+  locationParams?: LocationFetchParams,
+  timeZone?: string
 ): InsightsData {
   const credentialsRef = useRef<DeviceCredentials[]>([]);
   if (credentials.length > 0 && credentialsRef.current.length === 0) {
@@ -79,12 +80,19 @@ export function useInsightsData(
   }
   const stableLocationParams = locationParamsRef.current;
 
+  const timeZoneRef = useRef<string | undefined>(undefined);
+  if (timeZone && !timeZoneRef.current) {
+    timeZoneRef.current = timeZone;
+  }
+  // Display zone for the device-credentials path (locations carry their own in params)
+  const tz = timeZoneRef.current;
+
   const { cacheVersion, getCachedInsights, setCachedInsights } = useDataCache();
 
   const credKey = stableLocationParams
     ? `loc:${stableLocationParams.locationId}`
     : stableCredentials.length > 0
-      ? makeCredKey(stableCredentials)
+      ? `${makeCredKey(stableCredentials)}:${tz ?? "browser"}`
       : "";
 
   const hasData = !!stableLocationParams || stableCredentials.length > 0;
@@ -112,7 +120,7 @@ export function useInsightsData(
 
     const fetchPromise = stableLocationParams
       ? fetchLocationInsights(stableLocationParams)
-      : fetchInsightsForCredentials(stableCredentials);
+      : fetchInsightsForCredentials(stableCredentials, false, tz);
 
     fetchPromise
       .then((result) => {
@@ -132,7 +140,7 @@ export function useInsightsData(
     return () => {
       cancelled = true;
     };
-  }, [stableCredentials, stableLocationParams, credKey, hasData, setCachedInsights]);
+  }, [stableCredentials, stableLocationParams, credKey, hasData, setCachedInsights, tz]);
 
   // Silently update when cacheVersion changes (background refresh)
   useEffect(() => {

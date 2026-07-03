@@ -4,7 +4,9 @@ import { useMemo, useRef } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { useDevices } from "@/contexts/DevicesContext";
+import { useLocations } from "@/contexts/LocationsContext";
 import * as api from "@/lib/api";
+import { resolveLocationTimezone } from "@/lib/locationTimezone";
 import {
   useAggregatedHistory,
   type DeviceCredentials,
@@ -19,7 +21,13 @@ export default function HistoryPage() {
   const params = useParams();
   const deviceId = params.id as string;
   const { getDevice } = useDevices();
+  const { getLocationForDevice } = useLocations();
   const device = getDevice(deviceId);
+
+  // Pin charts to the timezone of the location containing this counter (if any)
+  const timeZone = resolveLocationTimezone(
+    device ? getLocationForDevice(device.deviceId) : undefined
+  );
 
   // Store stable credentials to prevent re-fetching when device state updates from polling
   const credentialsRef = useRef<{ deviceId: string; password: string } | null>(null);
@@ -33,7 +41,7 @@ export default function HistoryPage() {
     return [stableCredentials];
   }, [stableCredentials]);
 
-  const history = useAggregatedHistory(credentials);
+  const history = useAggregatedHistory(credentials, undefined, timeZone);
 
   // Handle CSV export
   const handleExport = async () => {
@@ -96,7 +104,7 @@ export default function HistoryPage() {
       </header>
 
       <main className="container mx-auto px-4 py-6 max-w-4xl">
-        <HistoryContent history={history} filenamePrefix={device.deviceId} />
+        <HistoryContent history={history} timeZone={timeZone} filenamePrefix={device.deviceId} />
       </main>
     </div>
   );
