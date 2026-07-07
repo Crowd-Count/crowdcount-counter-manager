@@ -1,6 +1,12 @@
 "use client";
 
-import React, { createContext, useContext, useState, useEffect } from "react";
+import React, {
+  createContext,
+  useContext,
+  useEffect,
+  useState,
+  useSyncExternalStore,
+} from "react";
 
 type Theme = "light" | "dark";
 
@@ -13,18 +19,28 @@ const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
 const STORAGE_KEY = "crowdcount_theme";
 
-export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [theme, setTheme] = useState<Theme>("dark");
-  const [mounted, setMounted] = useState(false);
+// Inert subscription: within this tab the stored theme only changes through
+// toggleTheme below, which updates React state directly.
+const emptySubscribe = () => () => {};
 
-  // Load theme from localStorage on mount
-  useEffect(() => {
-    const stored = localStorage.getItem(STORAGE_KEY) as Theme | null;
-    if (stored === "light" || stored === "dark") {
-      setTheme(stored);
-    }
-    setMounted(true);
-  }, []);
+export function ThemeProvider({ children }: { children: React.ReactNode }) {
+  // localStorage as an external store: server snapshot null (SSR paints the
+  // "dark" default), client snapshot reads the persisted choice right after
+  // hydration — same net behavior as the previous load-on-mount effect.
+  const storedTheme = useSyncExternalStore(
+    emptySubscribe,
+    () => localStorage.getItem(STORAGE_KEY) as Theme | null,
+    () => null
+  );
+  const mounted = useSyncExternalStore(
+    emptySubscribe,
+    () => true,
+    () => false
+  );
+  // In-session override once the user toggles; wins over the stored value.
+  const [override, setOverride] = useState<Theme | null>(null);
+  const theme: Theme =
+    override ?? (storedTheme === "light" || storedTheme === "dark" ? storedTheme : "dark");
 
   // Apply theme to document
   useEffect(() => {
@@ -40,7 +56,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   }, [theme, mounted]);
 
   const toggleTheme = () => {
-    setTheme((prev) => (prev === "dark" ? "light" : "dark"));
+    setOverride(theme === "dark" ? "light" : "dark");
   };
 
   return (

@@ -198,7 +198,9 @@ export function DataCacheProvider({ children }: { children: React.ReactNode }) {
 
   // Refresh immediately when tab becomes visible again
   const runPrefetchRef = useRef(runPrefetch);
-  runPrefetchRef.current = runPrefetch;
+  useEffect(() => {
+    runPrefetchRef.current = runPrefetch;
+  });
   useEffect(() => {
     const handler = () => {
       if (document.visibilityState === "visible" && hasInitialized.current) {

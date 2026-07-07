@@ -73,27 +73,31 @@ export function useAggregatedHistory(
   locationParams?: LocationFetchParams,
   timeZone?: string
 ): AggregatedHistoryResult {
-  const credentialsRef = useRef<DeviceCredentials[]>([]);
-  if (credentials.length > 0 && credentialsRef.current.length === 0) {
-    credentialsRef.current = credentials;
+  // Latch the first non-empty value of each input (useState + render-phase
+  // adjustment — the compiler-legal version of the previous ref-during-render
+  // latch; the committed output is identical).
+  const [stableCredentials, setStableCredentials] = useState<DeviceCredentials[]>(
+    credentials.length > 0 ? credentials : []
+  );
+  if (credentials.length > 0 && stableCredentials.length === 0) {
+    setStableCredentials(credentials);
   }
-  const stableCredentials = credentialsRef.current;
 
-  const locationParamsRef = useRef<LocationFetchParams | undefined>(undefined);
-  if (locationParams && !locationParamsRef.current) {
-    locationParamsRef.current = locationParams;
+  const [stableLocationParams, setStableLocationParams] = useState<
+    LocationFetchParams | undefined
+  >(locationParams);
+  if (locationParams && !stableLocationParams) {
+    setStableLocationParams(locationParams);
   }
-  const stableLocationParams = locationParamsRef.current;
 
-  const timeZoneRef = useRef<string | undefined>(undefined);
-  if (timeZone && !timeZoneRef.current) {
-    timeZoneRef.current = timeZone;
+  const [latchedTz, setLatchedTz] = useState<string | undefined>(timeZone);
+  if (timeZone && !latchedTz) {
+    setLatchedTz(timeZone);
   }
   // Display zone: the location's own timezone when pinned, browser tz otherwise
-  const tz = stableLocationParams?.timeZone ?? timeZoneRef.current;
+  const tz = stableLocationParams?.timeZone ?? latchedTz;
 
   const {
-    cacheVersion,
     getCachedDates,
     setCachedDates,
     getCachedHistory,
@@ -109,101 +113,87 @@ export function useAggregatedHistory(
 
   const hasData = !!stableLocationParams || stableCredentials.length > 0;
 
-  // Check dates cache synchronously — only use non-empty cached dates, strip future
+  // Dates come straight from the cache during render — the DataCache context
+  // bumps cacheVersion (a state change) whenever entries land, so cache
+  // updates (including background refreshes) arrive as ordinary re-renders.
+  // Only non-empty cached dates are used, with future dates stripped.
   const rawCachedDates = credKey ? getCachedDates(credKey) : null;
   const filteredCachedDates = rawCachedDates ? filterFutureDates(rawCachedDates, tz) : null;
-  const initialDates = filteredCachedDates && filteredCachedDates.length > 0 ? filteredCachedDates : null;
+  const cachedDates =
+    filteredCachedDates && filteredCachedDates.length > 0 ? filteredCachedDates : null;
 
   const [dataType, setDataType] = useState<DataType>("entries");
-  const [availableDates, setAvailableDates] = useState<string[]>(initialDates ?? []);
-  const [isLoadingDates, setIsLoadingDates] = useState(!initialDates && hasData);
+  const [fetchedDates, setFetchedDates] = useState<string[] | null>(null);
+  const [datesSettled, setDatesSettled] = useState(false);
 
-  // Compute initial date selections from cached dates
-  const initialMostRecent = initialDates ? initialDates[initialDates.length - 1] : "";
-  const initialYear = initialMostRecent ? initialMostRecent.split("-")[0] : "";
-  const initialWeekMonday = initialMostRecent ? getMondayOfWeek(initialMostRecent) : "";
+  const availableDates = cachedDates ?? fetchedDates ?? [];
+  const isLoadingDates = hasData && !cachedDates && !fetchedDates && !datesSettled;
 
-  const [selectedDate, setSelectedDate] = useState<string>(initialMostRecent);
-  const [selectedWeekDate, setSelectedWeekDate] = useState<string>(initialWeekMonday);
-  const [selectedYear, setSelectedYear] = useState<string>(initialYear);
+  const mostRecent = availableDates.length > 0 ? availableDates[availableDates.length - 1] : "";
 
-  // Check history cache for default params
-  const initialHistKey = credKey && initialMostRecent && initialYear
-    ? `${credKey}:${tz ?? "browser"}:${initialMostRecent}:${initialMostRecent}:${initialYear}:population`
-    : "";
-  const initialHistory = initialHistKey ? getCachedHistory(initialHistKey) : null;
+  const [selectedDate, setSelectedDate] = useState<string>(mostRecent);
+  const [selectedWeekDate, setSelectedWeekDate] = useState<string>(
+    mostRecent ? getMondayOfWeek(mostRecent) : ""
+  );
+  const [selectedYear, setSelectedYear] = useState<string>(
+    mostRecent ? mostRecent.split("-")[0] : ""
+  );
 
-  const [dayData, setDayData] = useState<ChartData[]>(initialHistory?.dayData ?? []);
-  const [isLoadingDay, setIsLoadingDay] = useState(!initialHistory && hasData);
-  const [weekData, setWeekData] = useState<ChartData[]>(initialHistory?.weekData ?? []);
-  const [isLoadingWeek, setIsLoadingWeek] = useState(!initialHistory && hasData);
-  const [yearData, setYearData] = useState<ChartData[]>(initialHistory?.yearData ?? []);
-  const [isLoadingYear, setIsLoadingYear] = useState(!initialHistory && hasData);
+  // Default the selections once dates arrive (render-phase adjustment).
+  if (mostRecent && !selectedDate) {
+    setSelectedDate(mostRecent);
+    setSelectedWeekDate(getMondayOfWeek(mostRecent));
+    setSelectedYear(mostRecent.split("-")[0]);
+  }
 
-  // Track whether initial fetches have been done
-  const datesFetched = useRef(!!initialDates);
-  const chartsFetched = useRef(!!initialHistory);
+  // Guards the dates fetch across re-renders (only touched inside effects).
+  const datesFetchStarted = useRef(false);
 
-  // Load available dates
+  // Load available dates when the cache has none
   const loadAvailableDates = useCallback(async () => {
-    if (!hasData) return;
-    if (datesFetched.current) return;
-
-    setIsLoadingDates(true);
     try {
       const rawDates = stableLocationParams
         ? await fetchLocationAvailableDates(stableLocationParams)
         : await fetchAvailableDates(stableCredentials, false, tz);
       const dates = filterFutureDates(rawDates, tz);
-      datesFetched.current = true;
-      setAvailableDates(dates);
+      setFetchedDates(dates);
       if (dates.length > 0) {
         setCachedDates(credKey, dates);
-      }
-
-      if (dates.length > 0) {
-        const mostRecent = dates[dates.length - 1];
-        setSelectedDate(mostRecent);
-        setSelectedWeekDate(getMondayOfWeek(mostRecent));
-        const year = mostRecent.split("-")[0];
-        setSelectedYear(year);
       }
     } catch (error) {
       logError("Failed to load dates:", error);
     } finally {
-      setIsLoadingDates(false);
+      setDatesSettled(true);
     }
-  }, [stableCredentials, stableLocationParams, credKey, hasData, setCachedDates, tz]);
+  }, [stableCredentials, stableLocationParams, credKey, setCachedDates, tz]);
 
   useEffect(() => {
-    if (hasData && !datesFetched.current) {
-      loadAvailableDates();
-    }
-  }, [hasData, loadAvailableDates]);
+    if (!hasData || cachedDates || datesFetchStarted.current) return;
+    datesFetchStarted.current = true;
+    loadAvailableDates();
+  }, [hasData, cachedDates, loadAvailableDates]);
 
-  // Load chart data — check cache first, then fetch
+  // Chart data: cache is consulted during render; the effect only fetches on
+  // a miss. Cache writes bump the context version, so a completed fetch (or a
+  // background refresh) re-renders straight into the cached branch.
+  const histKey =
+    hasData && selectedDate && selectedWeekDate && selectedYear
+      ? `${credKey}:${tz ?? "browser"}:${selectedDate}:${selectedWeekDate}:${selectedYear}:${dataType}`
+      : "";
+  const cachedHist = histKey ? getCachedHistory(histKey) : null;
+
+  const [fetchedCharts, setFetchedCharts] = useState<{
+    key: string;
+    dayData: ChartData[];
+    weekData: ChartData[];
+    yearData: ChartData[];
+  } | null>(null);
+
   useEffect(() => {
-    if (!hasData || !selectedDate || !selectedWeekDate || !selectedYear) return;
-
-    const histKey = `${credKey}:${tz ?? "browser"}:${selectedDate}:${selectedWeekDate}:${selectedYear}:${dataType}`;
-
-    // Check cache
-    const cached = getCachedHistory(histKey);
-    if (cached) {
-      setDayData(cached.dayData);
-      setWeekData(cached.weekData);
-      setYearData(cached.yearData);
-      setIsLoadingDay(false);
-      setIsLoadingWeek(false);
-      setIsLoadingYear(false);
-      chartsFetched.current = true;
-      return;
-    }
+    if (!histKey || cachedHist) return;
+    if (fetchedCharts?.key === histKey) return;
 
     let cancelled = false;
-    setIsLoadingDay(true);
-    setIsLoadingWeek(true);
-    setIsLoadingYear(true);
 
     const fetchPromise = stableLocationParams
       ? fetchLocationHistoryCharts(stableLocationParams, selectedDate, selectedWeekDate, selectedYear, dataType)
@@ -212,58 +202,46 @@ export function useAggregatedHistory(
     fetchPromise
       .then((result) => {
         if (cancelled) return;
-        chartsFetched.current = true;
-        setDayData(result.dayData);
-        setWeekData(result.weekData);
-        setYearData(result.yearData);
+        setFetchedCharts({
+          key: histKey,
+          dayData: result.dayData,
+          weekData: result.weekData,
+          yearData: result.yearData,
+        });
         setCachedHistory(histKey, result);
       })
       .catch((error) => {
         if (cancelled) return;
         logError("Failed to load chart data:", error);
-        setDayData([]);
-        setWeekData([]);
-        setYearData([]);
-      })
-      .finally(() => {
-        if (cancelled) return;
-        setIsLoadingDay(false);
-        setIsLoadingWeek(false);
-        setIsLoadingYear(false);
+        setFetchedCharts({ key: histKey, dayData: [], weekData: [], yearData: [] });
       });
 
     return () => {
       cancelled = true;
     };
-  }, [stableCredentials, stableLocationParams, selectedDate, selectedWeekDate, selectedYear, dataType, credKey, hasData, getCachedHistory, setCachedHistory, tz]);
+  }, [
+    histKey,
+    cachedHist,
+    fetchedCharts,
+    stableCredentials,
+    stableLocationParams,
+    selectedDate,
+    selectedWeekDate,
+    selectedYear,
+    dataType,
+    setCachedHistory,
+    tz,
+  ]);
 
-  // Silently update when cacheVersion changes (background refresh)
-  useEffect(() => {
-    if (!credKey || cacheVersion === 0) return;
-
-    // Update dates — filter future dates as safety net
-    const cachedDates = getCachedDates(credKey);
-    if (cachedDates) {
-      setAvailableDates(filterFutureDates(cachedDates, tz));
-      datesFetched.current = true;
-      setIsLoadingDates(false);
-    }
-
-    // Update current chart data
-    if (selectedDate && selectedWeekDate && selectedYear) {
-      const histKey = `${credKey}:${tz ?? "browser"}:${selectedDate}:${selectedWeekDate}:${selectedYear}:${dataType}`;
-      const cachedHist = getCachedHistory(histKey);
-      if (cachedHist) {
-        setDayData(cachedHist.dayData);
-        setWeekData(cachedHist.weekData);
-        setYearData(cachedHist.yearData);
-        chartsFetched.current = true;
-        setIsLoadingDay(false);
-        setIsLoadingWeek(false);
-        setIsLoadingYear(false);
-      }
-    }
-  }, [cacheVersion, credKey, getCachedDates, getCachedHistory, selectedDate, selectedWeekDate, selectedYear, dataType, tz]);
+  const chartsForKey = cachedHist ?? (fetchedCharts?.key === histKey ? fetchedCharts : null);
+  const dayData = chartsForKey?.dayData ?? [];
+  const weekData = chartsForKey?.weekData ?? [];
+  const yearData = chartsForKey?.yearData ?? [];
+  const isLoadingCharts = !!histKey && !chartsForKey;
+  // The three chart panes load together (one fetch), so the flags coincide.
+  const isLoadingDay = isLoadingCharts;
+  const isLoadingWeek = isLoadingCharts;
+  const isLoadingYear = isLoadingCharts;
 
   const availableWeeks = useMemo(
     () => deriveAvailableWeeks(availableDates),

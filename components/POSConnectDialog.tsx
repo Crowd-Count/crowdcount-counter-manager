@@ -80,32 +80,44 @@ export default function POSConnectDialog({
     [onOpenChange]
   );
 
-  // Handle OAuth callback: if initialPosAccountId is provided, skip to location picker
+  // Load POS locations for the account. The whole chain (including the
+  // loading flag) runs in promise callbacks, so it is legal to kick off from
+  // effects as well as event handlers; the microtask delay is imperceptible.
+  const loadPosLocations = (accountId: string) =>
+    Promise.resolve()
+      .then(() => {
+        setIsLoading(true);
+        setError("");
+        return listPOSLocations(accountId, sign);
+      })
+      .then((locations) => {
+        setPosLocations(locations);
+        if (locations.length === 1) {
+          setSelectedPosLocationId(locations[0].id);
+        }
+      })
+      .catch((err) => {
+        setError(err instanceof Error ? err.message : "Failed to load POS locations");
+      })
+      .finally(() => {
+        setIsLoading(false);
+      });
+
+  // Handle OAuth callback: if initialPosAccountId is provided, skip straight
+  // to the location picker. State moves during render (sanctioned
+  // adjustment); the fetch fires from the effect below.
+  const [handledOauthId, setHandledOauthId] = useState<string | null>(null);
+  if (open && initialPosAccountId && handledOauthId !== initialPosAccountId) {
+    setHandledOauthId(initialPosAccountId);
+    setPosAccountId(initialPosAccountId);
+    setStep("locations");
+  }
   useEffect(() => {
-    if (open && initialPosAccountId) {
-      setPosAccountId(initialPosAccountId);
-      setStep("locations");
+    if (open && initialPosAccountId && handledOauthId === initialPosAccountId) {
       loadPosLocations(initialPosAccountId);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, initialPosAccountId]);
-
-  // Load POS locations for the account
-  const loadPosLocations = async (accountId: string) => {
-    setIsLoading(true);
-    setError("");
-    try {
-      const locations = await listPOSLocations(accountId, sign);
-      setPosLocations(locations);
-      if (locations.length === 1) {
-        setSelectedPosLocationId(locations[0].id);
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load POS locations");
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  }, [open, initialPosAccountId, handledOauthId]);
 
   // Step: Provider selection → check for existing account, then OAuth
   const handleSelectSquare = async () => {
