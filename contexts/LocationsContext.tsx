@@ -218,9 +218,11 @@ export function LocationsProvider({ children }: { children: React.ReactNode }) {
 
   // Refs for polling to access latest state without re-triggering effects
   const storedLocationsRef = useRef<StoredLocation[]>([]);
-  storedLocationsRef.current = storedLocations;
   const devicesRef = useRef(devices);
-  devicesRef.current = devices;
+  useEffect(() => {
+    storedLocationsRef.current = storedLocations;
+    devicesRef.current = devices;
+  });
 
   // Fetch data for a single location (count + per-device connection status)
   // Returns true if the location fetch succeeded, false otherwise

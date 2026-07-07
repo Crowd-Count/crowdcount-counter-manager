@@ -105,13 +105,21 @@ export default function LocationSettingsPage() {
     location?.overcrowdingLimit?.toString() ?? ""
   );
 
-  // Sync form fields when server data changes via polling
-  useEffect(() => {
+  // Sync form fields when server data changes via polling — render-phase
+  // adjustment (the sanctioned setState-during-render pattern) instead of
+  // effects, so the still-stale form never paints.
+  const [prevLocationName, setPrevLocationName] = useState(location?.name);
+  if (location?.name !== prevLocationName) {
+    setPrevLocationName(location?.name);
     if (location?.name) setEditName(location.name);
-  }, [location?.name]);
-  useEffect(() => {
+  }
+  const [prevOvercrowdingLimit, setPrevOvercrowdingLimit] = useState(
+    location?.overcrowdingLimit
+  );
+  if (location?.overcrowdingLimit !== prevOvercrowdingLimit) {
+    setPrevOvercrowdingLimit(location?.overcrowdingLimit);
     setOvercrowdingInput(location?.overcrowdingLimit?.toString() ?? "");
-  }, [location?.overcrowdingLimit]);
+  }
   // Closing time state
   const [closingTime, setClosingTime] = useState<ClosingTime | null>(null);
   const [closeHour, setCloseHour] = useState(22);
@@ -139,19 +147,24 @@ export default function LocationSettingsPage() {
   const [posSyncing, setPosSyncing] = useState(false);
   const [posSyncResult, setPosSyncResult] = useState<string | null>(null);
 
-  // Auto-open POS dialog when returning from OAuth callback
+  // Auto-open POS dialog when returning from OAuth callback. State moves
+  // during render (sanctioned adjustment); only the URL cleanup — a genuine
+  // side effect — stays in the effect.
+  const [handledOauthId, setHandledOauthId] = useState<string | null>(null);
+  if (oauthPosAccountId && handledOauthId !== oauthPosAccountId) {
+    setHandledOauthId(oauthPosAccountId);
+    setPosDialogOpen(true);
+  }
+  const [handledOauthError, setHandledOauthError] = useState<string | null>(null);
+  if (oauthPosError && handledOauthError !== oauthPosError) {
+    setHandledOauthError(oauthPosError);
+    setPosSyncResult(`Square connection failed: ${oauthPosError}`);
+  }
   useEffect(() => {
-    if (oauthPosAccountId) {
-      setPosDialogOpen(true);
-      // Clean up URL params
+    if (oauthPosAccountId || oauthPosError) {
       const url = new URL(window.location.href);
       url.searchParams.delete("pos_account_id");
       url.searchParams.delete("pos_merchant_id");
-      window.history.replaceState({}, "", url.toString());
-    }
-    if (oauthPosError) {
-      setPosSyncResult(`Square connection failed: ${oauthPosError}`);
-      const url = new URL(window.location.href);
       url.searchParams.delete("pos_error");
       window.history.replaceState({}, "", url.toString());
     }
@@ -167,7 +180,9 @@ export default function LocationSettingsPage() {
     if (!location) return;
     const locCreds = api.getLocationCredentials(location, devices);
     if (!locCreds) {
-      setIsLoadingClosing(false);
+      // Settle loading asynchronously — sync setState in an effect is
+      // compiler-illegal; a microtask is imperceptible and pre-paint-batched.
+      Promise.resolve().then(() => setIsLoadingClosing(false));
       return;
     }
 

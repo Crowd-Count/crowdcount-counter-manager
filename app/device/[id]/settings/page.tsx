@@ -52,28 +52,29 @@ export default function DeviceSettingsPage() {
   const [isResetting, setIsResetting] = useState(false);
 
   // Load direction flipped state
-  const loadDirectionFlipped = useCallback(async () => {
-    if (!device) return;
-    setIsLoadingDirection(true);
-    try {
-      const flipped = await api.getDirectionFlipped(
-        device.deviceId,
-        device.password
-      );
-      setDirectionFlipped(flipped);
-    } catch (error) {
-      logError("Failed to load direction:", error);
-    } finally {
-      setIsLoadingDirection(false);
-    }
-  }, [device]);
-
-  // Load initial data
+  // Load initial data. Inline promise chain: every setState runs in a
+  // .then/.finally callback (async), which the compiler accepts; behavior is
+  // identical to the previous useCallback + async/await version.
+  // isLoadingDirection initializes true; re-loads refresh silently instead of
+  // re-flashing the spinner.
   useEffect(() => {
-    if (device) {
-      loadDirectionFlipped();
-    }
-  }, [device, loadDirectionFlipped]);
+    if (!device) return;
+    let cancelled = false;
+    api
+      .getDirectionFlipped(device.deviceId, device.password)
+      .then((flipped) => {
+        if (!cancelled) setDirectionFlipped(flipped);
+      })
+      .catch((error) => {
+        if (!cancelled) logError("Failed to load direction:", error);
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoadingDirection(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [device]);
 
   if (!device) {
     return (

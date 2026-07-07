@@ -115,7 +115,9 @@ export function DevicesProvider({ children }: { children: React.ReactNode }) {
   }, [devices, isLoading]);
 
   const devicesRef = useRef<DeviceState[]>([]);
-  devicesRef.current = devices;
+  useEffect(() => {
+    devicesRef.current = devices;
+  });
 
   const addDevice = useCallback(
     async (

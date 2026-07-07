@@ -68,26 +68,32 @@ export function useInsightsData(
   locationParams?: LocationFetchParams,
   timeZone?: string
 ): InsightsData {
-  const credentialsRef = useRef<DeviceCredentials[]>([]);
-  if (credentials.length > 0 && credentialsRef.current.length === 0) {
-    credentialsRef.current = credentials;
+  // Latch the first non-empty value of each input so later prop churn doesn't
+  // re-key the fetch. useState + render-phase adjustment is the sanctioned
+  // (and compiler-legal) version of the previous read-a-ref-during-render
+  // latch: React restarts the render synchronously, so the committed output
+  // is identical.
+  const [stableCredentials, setStableCredentials] = useState<DeviceCredentials[]>(
+    credentials.length > 0 ? credentials : []
+  );
+  if (credentials.length > 0 && stableCredentials.length === 0) {
+    setStableCredentials(credentials);
   }
-  const stableCredentials = credentialsRef.current;
 
-  const locationParamsRef = useRef<LocationFetchParams | undefined>(undefined);
-  if (locationParams && !locationParamsRef.current) {
-    locationParamsRef.current = locationParams;
+  const [stableLocationParams, setStableLocationParams] = useState<
+    LocationFetchParams | undefined
+  >(locationParams);
+  if (locationParams && !stableLocationParams) {
+    setStableLocationParams(locationParams);
   }
-  const stableLocationParams = locationParamsRef.current;
 
-  const timeZoneRef = useRef<string | undefined>(undefined);
-  if (timeZone && !timeZoneRef.current) {
-    timeZoneRef.current = timeZone;
-  }
   // Display zone for the device-credentials path (locations carry their own in params)
-  const tz = timeZoneRef.current;
+  const [tz, setTz] = useState<string | undefined>(timeZone);
+  if (timeZone && !tz) {
+    setTz(timeZone);
+  }
 
-  const { cacheVersion, getCachedInsights, setCachedInsights } = useDataCache();
+  const { getCachedInsights, setCachedInsights } = useDataCache();
 
   const credKey = stableLocationParams
     ? `loc:${stableLocationParams.locationId}`
@@ -97,26 +103,24 @@ export function useInsightsData(
 
   const hasData = !!stableLocationParams || stableCredentials.length > 0;
 
-  // Check cache synchronously for initial state
-  const initialCache = credKey ? getCachedInsights(credKey) : null;
-  const [isLoading, setIsLoading] = useState(!initialCache && hasData);
-  const [data, setData] = useState<Omit<InsightsData, "isLoading">>(
-    initialCache ? applyInsightsCache(initialCache) : EMPTY_DATA
-  );
+  // The cache is read during render: the DataCache context bumps cacheVersion
+  // (a state change) whenever entries land, so cache hits — including
+  // background refreshes — flow in as ordinary re-renders instead of being
+  // mirrored into local state from an effect.
+  const cached = credKey ? getCachedInsights(credKey) : null;
 
-  // Track whether we've done the initial fetch
-  const hasFetched = useRef(!!initialCache);
+  const [fetched, setFetched] = useState<Omit<InsightsData, "isLoading"> | null>(null);
+  const [fetchSettled, setFetchSettled] = useState(false);
+
+  // Guards the mount fetch across re-renders (read/written only in the effect).
+  const fetchStarted = useRef(false);
 
   // Fetch on mount if cache miss
   useEffect(() => {
-    if (!hasData) {
-      setIsLoading(false);
-      return;
-    }
-    if (hasFetched.current) return;
+    if (!hasData || cached || fetchStarted.current) return;
+    fetchStarted.current = true;
 
     let cancelled = false;
-    setIsLoading(true);
 
     const fetchPromise = stableLocationParams
       ? fetchLocationInsights(stableLocationParams)
@@ -125,8 +129,7 @@ export function useInsightsData(
     fetchPromise
       .then((result) => {
         if (cancelled) return;
-        hasFetched.current = true;
-        setData(applyInsightsCache(result));
+        setFetched(applyInsightsCache(result));
         setCachedInsights(credKey, result);
       })
       .catch((error) => {
@@ -134,24 +137,16 @@ export function useInsightsData(
         logError("Failed to load insights data:", error);
       })
       .finally(() => {
-        if (!cancelled) setIsLoading(false);
+        if (!cancelled) setFetchSettled(true);
       });
 
     return () => {
       cancelled = true;
     };
-  }, [stableCredentials, stableLocationParams, credKey, hasData, setCachedInsights, tz]);
+  }, [stableCredentials, stableLocationParams, credKey, hasData, cached, setCachedInsights, tz]);
 
-  // Silently update when cacheVersion changes (background refresh)
-  useEffect(() => {
-    if (!credKey || cacheVersion === 0) return;
-    const cached = getCachedInsights(credKey);
-    if (cached) {
-      setData(applyInsightsCache(cached));
-      hasFetched.current = true;
-      setIsLoading(false);
-    }
-  }, [cacheVersion, credKey, getCachedInsights]);
+  const data = cached ? applyInsightsCache(cached) : (fetched ?? EMPTY_DATA);
+  const isLoading = hasData && !cached && !fetched && !fetchSettled;
 
   return {
     isLoading,

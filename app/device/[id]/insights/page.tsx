@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef } from "react";
+import { useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { useDevices } from "@/contexts/DevicesContext";
@@ -25,11 +25,14 @@ export default function DeviceInsightsPage() {
     device ? getLocationForDevice(device.deviceId) : undefined
   );
 
-  const credentialsRef = useRef<{ deviceId: string; password: string } | null>(null);
-  if (device && !credentialsRef.current) {
-    credentialsRef.current = { deviceId: device.deviceId, password: device.password };
+  // (useState + render-phase adjustment — the compiler-legal latch.)
+  const [stableCredentials, setStableCredentials] = useState<{
+    deviceId: string;
+    password: string;
+  } | null>(device ? { deviceId: device.deviceId, password: device.password } : null);
+  if (device && !stableCredentials) {
+    setStableCredentials({ deviceId: device.deviceId, password: device.password });
   }
-  const stableCredentials = credentialsRef.current;
 
   const credentials: DeviceCredentials[] = useMemo(() => {
     if (!stableCredentials) return [];

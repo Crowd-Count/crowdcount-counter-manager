@@ -56,27 +56,34 @@ export function AlertBanner() {
   const [alertExists, setAlertExists] = useState(false);
   const [showDialog, setShowDialog] = useState(false);
 
-  const checkAlert = useCallback(async () => {
-    const exists = await api.checkIfAlert();
-    if (!exists) {
-      setAlertExists(false);
-      setAlertInfo(null);
-      return;
-    }
-    setAlertExists(true);
-    const info = await api.getActiveAlert();
-    if (!info) return;
-    setAlertInfo(info);
-
-    // Auto-show if user hasn't seen this alert
-    if (!hasSeenAlert(info.alertId)) {
-      setShowDialog(true);
-    }
-  }, []);
-
   useEffect(() => {
-    checkAlert();
-  }, [checkAlert]);
+    let cancelled = false;
+    api
+      .checkIfAlert()
+      .then(async (exists) => {
+        if (cancelled) return;
+        if (!exists) {
+          setAlertExists(false);
+          setAlertInfo(null);
+          return;
+        }
+        setAlertExists(true);
+        const info = await api.getActiveAlert();
+        if (cancelled || !info) return;
+        setAlertInfo(info);
+
+        // Auto-show if user hasn't seen this alert
+        if (!hasSeenAlert(info.alertId)) {
+          setShowDialog(true);
+        }
+      })
+      .catch(() => {
+        // Alert check is best-effort; banner simply stays hidden.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const handleDismiss = () => {
     if (alertInfo) {
