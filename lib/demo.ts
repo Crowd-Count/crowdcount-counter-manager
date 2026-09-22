@@ -2,11 +2,14 @@
  * Demo mode — lets visitors click around the real product with a seeded,
  * in-memory fleet and no backend.
  *
- * Detection: a `crowdcount_demo` sessionStorage flag OR a `demo=1` cookie.
- * Both are set on /demo so a cross-site iframe keeps working even when
- * third-party cookies are blocked (sessionStorage survives in-frame
- * navigation) and vice versa. Nothing is written to localStorage: the
- * contexts read/write the demo store instead of encrypted storage.
+ * Detection, in order: an in-memory flag, a `crowdcount_demo` sessionStorage
+ * flag, a `demo=1` cookie, or `?demo=1` on the URL. /demo (a server route)
+ * sets the cookie and redirects to /dashboard?demo=1, so the demo starts even
+ * where the cookie is refused — a third-party iframe with cookies blocked, or
+ * a browser that drops storage in that context. Whichever signal arrives
+ * first latches the in-memory flag, which then carries the session across
+ * client-side navigation. Nothing is written to localStorage: the contexts
+ * read/write the demo store instead of encrypted storage.
  *
  * The mutable "server" state (counts, POS links, closing times, ...) lives in
  * sessionStorage so edits survive reloads and vanish with the tab or on exit.
@@ -33,18 +36,46 @@ export function browserTimezone(): string {
 
 // ── Detection ──
 
-export function isDemoMode(): boolean {
-  if (typeof window === "undefined") return false;
+/**
+ * Latched once any signal is seen. Storage and cookies can both be refused
+ * inside an embedded frame; this survives client-side navigation regardless,
+ * and resets on a full reload (where a signal is needed again).
+ */
+let memoryFlag = false;
+
+function hasSessionFlag(): boolean {
   try {
-    if (sessionStorage.getItem(SESSION_FLAG_KEY) === "1") return true;
-  } catch {}
-  try {
-    return document.cookie
-      .split(";")
-      .some((c) => c.trim() === `${COOKIE_NAME}=1`);
+    return sessionStorage.getItem(SESSION_FLAG_KEY) === "1";
   } catch {
     return false;
   }
+}
+
+function hasCookie(): boolean {
+  try {
+    return document.cookie.split(";").some((c) => c.trim() === `${COOKIE_NAME}=1`);
+  } catch {
+    return false;
+  }
+}
+
+function hasUrlFlag(): boolean {
+  try {
+    return new URLSearchParams(window.location.search).get("demo") === "1";
+  } catch {
+    return false;
+  }
+}
+
+export function isDemoMode(): boolean {
+  if (typeof window === "undefined") return false;
+  if (memoryFlag) return true;
+  if (!hasSessionFlag() && !hasCookie() && !hasUrlFlag()) return false;
+  // Arriving by any route turns the session on and tries to persist it, so a
+  // later reload without the query string still lands in the demo.
+  memoryFlag = true;
+  enableDemoMode();
+  return true;
 }
 
 function cookieSameSite(): string {
@@ -59,6 +90,7 @@ function cookieSameSite(): string {
 }
 
 export function enableDemoMode(): void {
+  memoryFlag = true;
   try {
     sessionStorage.setItem(SESSION_FLAG_KEY, "1");
   } catch {}
@@ -68,6 +100,7 @@ export function enableDemoMode(): void {
 }
 
 export function disableDemoMode(): void {
+  memoryFlag = false;
   state = null;
   try {
     sessionStorage.removeItem(SESSION_FLAG_KEY);
