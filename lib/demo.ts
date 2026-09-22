@@ -48,8 +48,14 @@ export function isDemoMode(): boolean {
 }
 
 function cookieSameSite(): string {
-  // SameSite=None requires Secure; fall back to Lax on plain http (localhost).
-  return window.location.protocol === "https:" ? "SameSite=None; Secure" : "SameSite=Lax";
+  // The demo is embedded in an <iframe> on another site, so its cookie is
+  // third-party: it needs SameSite=None, which requires Secure, plus
+  // Partitioned (CHIPS) or browsers that block third-party cookies drop it.
+  // Neither attribute is valid on plain http (localhost), hence the fallback;
+  // there the sessionStorage flag above carries demo mode on its own.
+  return window.location.protocol === "https:"
+    ? "SameSite=None; Secure; Partitioned"
+    : "SameSite=Lax";
 }
 
 export function enableDemoMode(): void {
