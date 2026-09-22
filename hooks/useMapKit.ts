@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from "react";
 import { logWarn } from "@/lib/logger";
-import { isDemoMode } from "@/lib/demo";
 
 const STAGING_TOKEN =
   "eyJraWQiOiI3RlRSM1gzS1JKIiwidHlwIjoiSldUIiwiYWxnIjoiRVMyNTYifQ.eyJpc3MiOiI0NVQ1NlFCMlBZIiwiaWF0IjoxNzcxMjgzMjU3LCJvcmlnaW4iOiJjb3VudGVyLXN0YWdpbmcuY3Jvd2Rjb3VudC50ZWNoIn0.BcBjf_kgq-zkRgrNhN9ZvJQ1zyVawWLiVHkDZJEHr8rehzV8SGiPl4BgZoe3v-5hbHCWFvBCuPJr5l5o4yXuZA";
@@ -27,13 +26,10 @@ function notifyListeners() {
 function loadMapKit() {
   if (loadState !== "idle") return;
 
-  // Demo mode never touches the network — treat MapKit as unavailable
-  if (isDemoMode()) {
-    loadState = "error";
-    notifyListeners();
-    return;
-  }
-
+  // The demo loads MapKit like any other visit: the on-map card is part of
+  // the product, and a seeded location with real coordinates has a real map
+  // behind it. The token is origin-bound, so off its host (localhost, a
+  // preview) init fails and MapBackground falls back to its gradient.
   loadState = "loading";
 
   const script = document.createElement("script");
