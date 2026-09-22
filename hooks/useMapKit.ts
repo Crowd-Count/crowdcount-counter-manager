@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { logWarn } from "@/lib/logger";
+import { isDemoMode } from "@/lib/demo";
 
 const STAGING_TOKEN =
   "eyJraWQiOiI3RlRSM1gzS1JKIiwidHlwIjoiSldUIiwiYWxnIjoiRVMyNTYifQ.eyJpc3MiOiI0NVQ1NlFCMlBZIiwiaWF0IjoxNzcxMjgzMjU3LCJvcmlnaW4iOiJjb3VudGVyLXN0YWdpbmcuY3Jvd2Rjb3VudC50ZWNoIn0.BcBjf_kgq-zkRgrNhN9ZvJQ1zyVawWLiVHkDZJEHr8rehzV8SGiPl4BgZoe3v-5hbHCWFvBCuPJr5l5o4yXuZA";
@@ -25,6 +26,14 @@ function notifyListeners() {
 
 function loadMapKit() {
   if (loadState !== "idle") return;
+
+  // Demo mode never touches the network — treat MapKit as unavailable
+  if (isDemoMode()) {
+    loadState = "error";
+    notifyListeners();
+    return;
+  }
+
   loadState = "loading";
 
   const script = document.createElement("script");
@@ -56,7 +65,7 @@ function loadMapKit() {
   document.head.appendChild(script);
 }
 
-export function useMapKit(): { isReady: boolean } {
+export function useMapKit(): { isReady: boolean; isUnavailable: boolean } {
   const [, forceUpdate] = useState(0);
 
   useEffect(() => {
@@ -70,5 +79,5 @@ export function useMapKit(): { isReady: boolean } {
     };
   }, []);
 
-  return { isReady: loadState === "ready" };
+  return { isReady: loadState === "ready", isUnavailable: loadState === "error" };
 }

@@ -5,6 +5,7 @@ import { LocationsProvider } from "@/contexts/LocationsContext";
 import { DataCacheProvider } from "@/contexts/DataCacheContext";
 import { POSProvider } from "@/contexts/POSContext";
 import { ThemeProvider } from "@/contexts/ThemeContext";
+import { DemoBadge } from "@/components/DemoBadge";
 
 export const metadata: Metadata = {
   title: "Counter Manager - CrowdCount",
@@ -42,6 +43,7 @@ export default function RootLayout({
                     Terms of Use
                   </a>
                 </footer>
+                <DemoBadge />
               </DataCacheProvider>
               </POSProvider>
             </LocationsProvider>

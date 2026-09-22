@@ -14,7 +14,7 @@ export const MapBackground = memo(function MapBackground({
   latitude,
   longitude,
 }: MapBackgroundProps) {
-  const { isReady } = useMapKit();
+  const { isReady, isUnavailable } = useMapKit();
   const { theme } = useTheme();
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<mapkit.Map | null>(null);
@@ -74,6 +74,18 @@ export const MapBackground = memo(function MapBackground({
         theme === "dark" ? mapkit.Map.ColorSchemes.Dark : mapkit.Map.ColorSchemes.Light;
     }
   }, [theme]);
+
+  // MapKit failed to load (offline, blocked, or demo mode) — a quiet gradient
+  // keeps the on-map card styling intact without a map.
+  if (isUnavailable) {
+    return (
+      <div
+        className="absolute inset-0 z-0 bg-gradient-to-br from-muted via-card to-muted/40"
+        style={{ pointerEvents: "none" }}
+        aria-hidden="true"
+      />
+    );
+  }
 
   if (!isReady) return null;
 
