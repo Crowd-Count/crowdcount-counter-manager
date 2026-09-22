@@ -15,17 +15,15 @@ const nextConfig = {
               "worker-src 'self' blob:",
               "img-src 'self' data: blob: https://cdn.apple-mapkit.com https://*.apple-mapkit.com",
               "font-src 'self' https://fonts.cdnfonts.com",
-              "frame-ancestors 'none'",
+              // Allow embedding (e.g. the /demo route) only from these origins.
+              // X-Frame-Options is intentionally omitted: it cannot express an allowlist.
+              "frame-ancestors 'self' https://elkanbruha.com http://localhost:5173",
               "upgrade-insecure-requests",
             ].join('; '),
           },
           {
             key: 'Strict-Transport-Security',
             value: 'max-age=31536000; includeSubDomains',
-          },
-          {
-            key: 'X-Frame-Options',
-            value: 'DENY',
           },
           {
             key: 'X-Content-Type-Options',
