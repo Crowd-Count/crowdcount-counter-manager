@@ -20,7 +20,16 @@ const COOKIE_MAX_AGE = 12 * 60 * 60; // seconds
 export function GET(req: NextRequest) {
   const secure = (req.headers.get("x-forwarded-proto") ?? req.nextUrl.protocol.replace(":", "")) === "https";
 
-  const res = NextResponse.redirect(new URL("/dashboard?demo=1", req.url));
+  // A RELATIVE Location, resolved by the browser against the address it
+  // actually asked for. NextResponse.redirect() needs an absolute URL, and on
+  // Netlify req.url carries the internal deploy host, so a visitor to
+  // counter.crowdcount.tech/demo gets bounced to
+  // <deploy>--crowdcount-counter-manager.netlify.app — a different origin,
+  // where the cookie just set does not apply.
+  const res = new NextResponse(null, {
+    status: 307,
+    headers: { Location: "/dashboard?demo=1" },
+  });
   res.cookies.set(COOKIE_NAME, "1", {
     path: "/",
     maxAge: COOKIE_MAX_AGE,
