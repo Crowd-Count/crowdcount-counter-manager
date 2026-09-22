@@ -14,6 +14,7 @@ import { encrypt, decrypt, isEncrypted } from "@/lib/secureStorage";
 import { clearSigningKey } from "@/lib/crypto";
 import { logWarn } from "@/lib/logger";
 import { logSecurityEvent } from "@/lib/securityAudit";
+import { isDemoMode, demoLoadStoredDevices, demoSaveStoredDevices } from "@/lib/demo";
 
 interface DevicesContextType {
   devices: DeviceState[];
@@ -42,6 +43,7 @@ function generateId(): string {
 
 async function loadDevicesFromStorage(): Promise<StoredDevice[]> {
   if (typeof window === "undefined") return [];
+  if (isDemoMode()) return demoLoadStoredDevices();
   const stored = localStorage.getItem(STORAGE_KEY);
   if (!stored) return [];
   try {
@@ -60,6 +62,10 @@ async function loadDevicesFromStorage(): Promise<StoredDevice[]> {
 
 async function saveDevicesToStorage(devices: StoredDevice[]): Promise<boolean> {
   if (typeof window === "undefined") return true;
+  if (isDemoMode()) {
+    demoSaveStoredDevices(devices);
+    return true;
+  }
   try {
     const encrypted = await encrypt(JSON.stringify(devices));
     localStorage.setItem(STORAGE_KEY, encrypted);
@@ -108,7 +114,11 @@ export function DevicesProvider({ children }: { children: React.ReactNode }) {
         if (!ok) setStorageError(true);
       });
     } else if (!isLoading && devices.length === 0) {
-      localStorage.removeItem(STORAGE_KEY);
+      if (isDemoMode()) {
+        demoSaveStoredDevices([]);
+      } else {
+        localStorage.removeItem(STORAGE_KEY);
+      }
     }
     // saveDevicesToStorage is async but we don't need to await here —
     // it's a fire-and-forget background save

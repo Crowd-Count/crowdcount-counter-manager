@@ -1,3 +1,11 @@
+// `upgrade-insecure-requests` rewrites every http:// subresource to https://.
+// Chrome exempts localhost from that; Safari does not, so a production build
+// served over plain http there upgrades its own bundles, each one fails TLS,
+// and the page renders unstyled and never finishes booting. Set LOCAL_HTTP=1
+// when running `next start` over http locally to drop the directive — never on
+// a deployment, where serving everything over TLS is the point of it.
+const localHttp = process.env.LOCAL_HTTP === '1';
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   async headers() {
@@ -15,17 +23,15 @@ const nextConfig = {
               "worker-src 'self' blob:",
               "img-src 'self' data: blob: https://cdn.apple-mapkit.com https://*.apple-mapkit.com",
               "font-src 'self' https://fonts.cdnfonts.com",
-              "frame-ancestors 'none'",
-              "upgrade-insecure-requests",
+              // Allow embedding (e.g. the /demo route) only from these origins.
+              // X-Frame-Options is intentionally omitted: it cannot express an allowlist.
+              "frame-ancestors 'self' https://elkanbruha.com http://localhost:5173",
+              ...(localHttp ? [] : ['upgrade-insecure-requests']),
             ].join('; '),
           },
           {
             key: 'Strict-Transport-Security',
             value: 'max-age=31536000; includeSubDomains',
-          },
-          {
-            key: 'X-Frame-Options',
-            value: 'DENY',
           },
           {
             key: 'X-Content-Type-Options',

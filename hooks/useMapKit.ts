@@ -25,6 +25,11 @@ function notifyListeners() {
 
 function loadMapKit() {
   if (loadState !== "idle") return;
+
+  // The demo loads MapKit like any other visit: the on-map card is part of
+  // the product, and a seeded location with real coordinates has a real map
+  // behind it. The token is origin-bound, so off its host (localhost, a
+  // preview) init fails and MapBackground falls back to its gradient.
   loadState = "loading";
 
   const script = document.createElement("script");
@@ -56,7 +61,7 @@ function loadMapKit() {
   document.head.appendChild(script);
 }
 
-export function useMapKit(): { isReady: boolean } {
+export function useMapKit(): { isReady: boolean; isUnavailable: boolean } {
   const [, forceUpdate] = useState(0);
 
   useEffect(() => {
@@ -70,5 +75,5 @@ export function useMapKit(): { isReady: boolean } {
     };
   }, []);
 
-  return { isReady: loadState === "ready" };
+  return { isReady: loadState === "ready", isUnavailable: loadState === "error" };
 }

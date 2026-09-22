@@ -7,6 +7,8 @@ import type {
 } from "./types";
 import { signRequest, generateIdempotencyKey } from "./crypto";
 import { getApiBaseUrl } from "./api";
+import { isDemoMode } from "./demo";
+import { demoRequest } from "./demoApi";
 
 // ───────────────────────── Helper ────────────────────────────────────────
 
@@ -15,6 +17,8 @@ async function posRequest<T>(
   body: Record<string, unknown>,
   sign: SigningCredentials
 ): Promise<T> {
+  if (isDemoMode()) return demoRequest<T>(endpoint, body);
+
   const method = "POST";
   const bodyStr = JSON.stringify(body);
 

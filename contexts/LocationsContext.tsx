@@ -9,11 +9,17 @@ import React, {
   useMemo,
   useRef,
 } from "react";
-import type { StoredLocation, LocationState, LocationColorName } from "@/lib/types";
+import type { StoredDevice, StoredLocation, LocationState, LocationColorName } from "@/lib/types";
 import { useDevices } from "@/contexts/DevicesContext";
 import * as api from "@/lib/api";
 import { encrypt, decrypt, isEncrypted } from "@/lib/secureStorage";
 import { logError, logWarn } from "@/lib/logger";
+import {
+  isDemoMode,
+  demoLoadStoredLocations,
+  demoSaveStoredLocations,
+  demoSaveStoredDevices,
+} from "@/lib/demo";
 
 interface LocationsContextType {
   locations: LocationState[];
@@ -44,6 +50,7 @@ function generateLocalId(): string {
 
 async function loadLocationsFromStorage(): Promise<StoredLocation[]> {
   if (typeof window === "undefined") return [];
+  if (isDemoMode()) return demoLoadStoredLocations();
   const stored = localStorage.getItem(STORAGE_KEY);
   if (!stored) return [];
   try {
@@ -84,12 +91,42 @@ async function loadLocationsFromStorage(): Promise<StoredLocation[]> {
 
 async function saveLocationsToStorage(locations: StoredLocation[]): Promise<void> {
   if (typeof window === "undefined") return;
+  if (isDemoMode()) {
+    demoSaveStoredLocations(locations);
+    return;
+  }
   try {
     const encrypted = await encrypt(JSON.stringify(locations));
     localStorage.setItem(STORAGE_KEY, encrypted);
   } catch {
     logWarn("Failed to encrypt location data — keeping in memory only");
   }
+}
+
+function clearLocationsStorage(): void {
+  if (isDemoMode()) {
+    demoSaveStoredLocations([]);
+  } else {
+    localStorage.removeItem(STORAGE_KEY);
+  }
+}
+
+// Synchronous-as-possible device persistence used by removeLocation, which
+// must land before navigation (React state may not flush first).
+function persistDevicesNow(devices: StoredDevice[]): void {
+  if (isDemoMode()) {
+    demoSaveStoredDevices(devices);
+    return;
+  }
+  if (devices.length === 0) {
+    localStorage.removeItem("crowdcount_devices");
+    return;
+  }
+  // Encrypt before writing — fire-and-forget (React state update also triggers a save)
+  encrypt(JSON.stringify(devices)).then(
+    (enc) => localStorage.setItem("crowdcount_devices", enc),
+    () => {} // On encryption failure, skip write — data stays in memory only
+  );
 }
 
 // Extract device IDs from server response — handles both tuple format ["id", "label"]
@@ -500,7 +537,7 @@ export function LocationsProvider({ children }: { children: React.ReactNode }) {
       //    (React state may not flush before navigation)
       const remainingLocs = currentLocs.filter((l) => l.localId !== loc.localId);
       if (remainingLocs.length === 0) {
-        localStorage.removeItem(STORAGE_KEY);
+        clearLocationsStorage();
       } else {
         await saveLocationsToStorage(remainingLocs);
       }
@@ -513,18 +550,9 @@ export function LocationsProvider({ children }: { children: React.ReactNode }) {
         if (device) deviceIdsToRemove.add(device.id);
       }
       const remainingDevices = currentDevices.filter((d) => !deviceIdsToRemove.has(d.id));
-      if (remainingDevices.length === 0) {
-        localStorage.removeItem("crowdcount_devices");
-      } else {
-        // Encrypt before writing — fire-and-forget (React state update also triggers a save)
-        const devicesJson = JSON.stringify(
-          remainingDevices.map((d) => ({ id: d.id, deviceId: d.deviceId, password: d.password, name: d.name }))
-        );
-        encrypt(devicesJson).then(
-          (enc) => localStorage.setItem("crowdcount_devices", enc),
-          () => {} // On encryption failure, skip write — data stays in memory only
-        );
-      }
+      persistDevicesNow(
+        remainingDevices.map((d) => ({ id: d.id, deviceId: d.deviceId, password: d.password, name: d.name }))
+      );
 
       // 3. Schedule React state updates (will commit on next render)
       setStoredLocations((prev) => prev.filter((l) => l.localId !== loc.localId));

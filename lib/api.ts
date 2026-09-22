@@ -36,6 +36,8 @@ import {
   recordSuccess,
 } from "./rateLimiter";
 import { logSecurityEvent } from "./securityAudit";
+import { isDemoMode } from "./demo";
+import { demoRequest, demoExportCsv } from "./demoApi";
 
 export function getApiBaseUrl(): string {
   if (typeof window !== "undefined") {
@@ -61,6 +63,9 @@ async function apiRequest<T>(
   endpoint: string,
   options: ApiRequestOptions = {}
 ): Promise<T> {
+  // Demo mode: serve fixtures from the in-browser demo store, never hit the network
+  if (isDemoMode()) return demoRequest<T>(endpoint, options.body);
+
   // Enforce client-side rate limit / backoff
   const rateCheck = checkRateLimit(endpoint);
   if (!rateCheck.allowed) {
@@ -129,6 +134,7 @@ async function apiRequest<T>(
 
 // Health check — lightweight ping to verify server availability
 export async function pingServer(): Promise<boolean> {
+  if (isDemoMode()) return true;
   try {
     const response = await fetch(`${getApiBaseUrl()}/ping`, {
       method: "GET",
@@ -1220,6 +1226,8 @@ export async function exportCsv(
   password: string,
   date?: string
 ): Promise<Blob> {
+  if (isDemoMode()) return demoExportCsv(deviceId);
+
   const bodyObj = {
     device_id: deviceId,
     password,
